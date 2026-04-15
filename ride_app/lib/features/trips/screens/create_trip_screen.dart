@@ -36,6 +36,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
 
   // Step 1 – Tempo + Pessoas
   DateTime? _departureDate;
+  final _peoplSearchCtrl = TextEditingController();
 
   // Step 2 – Paradas + Rota
   final List<String> _stopNames = [];
@@ -55,6 +56,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     _numCtrl.dispose();
     _bairroCtrl.dispose();
     _cepCtrl.dispose();
+    _peoplSearchCtrl.dispose();
     super.dispose();
   }
 
@@ -324,7 +326,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
 
   // ── STEP 1: QUANTO TEMPO + PESSOAS ──────────────────────────
   Widget _buildStep1(TripViewModel vm) {
-    final friends = context.watch<SocialViewModel>().friends;
+    final socialVm = context.watch<SocialViewModel>();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -370,60 +372,51 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         const SizedBox(height: 24),
 
         _LabelSection(label: 'Pessoas que viajarão com você'),
-        Text(
-            'Pessoas da sua lista de contatos que estão nesta viagem',
+        Text('Busque por nome ou @username para convidar',
             style: AppTextStyles.bodySmall),
         const SizedBox(height: 12),
 
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.navy,
-            borderRadius: BorderRadius.circular(12),
+        // ── Selected chips ──────────────────────────────────────
+        if (vm.participants.isNotEmpty) ...[
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: vm.participants
+                  .map((p) => _PersonChip(
+                        user: p,
+                        selected: true,
+                        onTap: () => vm.toggleParticipant(p),
+                      ))
+                  .toList(),
+            ),
           ),
-          child: Column(
-            children: [
-              if (friends.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text('Nenhum amigo ainda',
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: Colors.white70)),
-                )
-              else
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: friends
-                        .map((f) => _PersonChip(
-                              user: f,
-                              selected: vm.isParticipant(f),
-                              onTap: () => vm.toggleParticipant(f),
-                            ))
-                        .toList(),
-                  ),
-                ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                height: 40,
-                child: OutlinedButton(
-                  onPressed: () => context.push('/friends'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(
-                        color: Colors.white54, width: 1),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6)),
-                  ),
-                  child: Text('CONVIDAR PESSOAS',
-                      style: AppTextStyles.labelSmall.copyWith(
-                          color: Colors.white,
-                          letterSpacing: 1)),
-                ),
-              ),
-            ],
-          ),
+          const SizedBox(height: 12),
+        ],
+
+        // ── Search bar ──────────────────────────────────────────
+        _ParticipantSearchBar(
+          controller: _peoplSearchCtrl,
+          onChanged: (q) {
+            if (q.isEmpty) {
+              context.read<SocialViewModel>().search('');
+            } else {
+              context.read<SocialViewModel>().search(q);
+            }
+            setState(() {});
+          },
+        ),
+        const SizedBox(height: 8),
+
+        // ── List: friends or search results ─────────────────────
+        _ParticipantList(
+          isSearching: socialVm.isSearching,
+          query: _peoplSearchCtrl.text,
+          users: _peoplSearchCtrl.text.isEmpty
+              ? socialVm.friends
+              : socialVm.searchResults,
+          isLoadingFriends: socialVm.isLoading,
+          isSelected: vm.isParticipant,
+          onToggle: vm.toggleParticipant,
         ),
         const SizedBox(height: 24),
       ],
@@ -1066,6 +1059,182 @@ class _DatePickerBox extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Participant search bar ───────────────────────────────────────────────────
+
+class _ParticipantSearchBar extends StatelessWidget {
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  const _ParticipantSearchBar(
+      {required this.controller, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.inputFill,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        style: AppTextStyles.bodyMedium,
+        decoration: InputDecoration(
+          hintText: 'Buscar por nome ou @username',
+          hintStyle:
+              AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+          prefixIcon:
+              const Icon(Icons.search, color: AppColors.textMuted, size: 20),
+          suffixIcon: controller.text.isNotEmpty
+              ? GestureDetector(
+                  onTap: () {
+                    controller.clear();
+                    onChanged('');
+                  },
+                  child: const Icon(Icons.close,
+                      color: AppColors.textMuted, size: 18),
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Participant list ─────────────────────────────────────────────────────────
+
+class _ParticipantList extends StatelessWidget {
+  final bool isSearching;
+  final bool isLoadingFriends;
+  final String query;
+  final List<UserModel> users;
+  final bool Function(UserModel) isSelected;
+  final void Function(UserModel) onToggle;
+  const _ParticipantList({
+    required this.isSearching,
+    required this.isLoadingFriends,
+    required this.query,
+    required this.users,
+    required this.isSelected,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isSearching || (isLoadingFriends && query.isEmpty)) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Center(
+            child: CircularProgressIndicator(color: AppColors.navy)),
+      );
+    }
+    if (users.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Center(
+          child: Text(
+            query.isEmpty
+                ? 'Você ainda não tem amigos adicionados'
+                : 'Nenhum usuário encontrado',
+            style:
+                AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.divider),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        children: users.map((u) {
+          final selected = isSelected(u);
+          return Column(
+            children: [
+              InkWell(
+                onTap: () => onToggle(u),
+                borderRadius: BorderRadius.circular(10),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 10),
+                  child: Row(
+                    children: [
+                      // Avatar com foto real
+                      CircleAvatar(
+                        radius: 22,
+                        backgroundColor:
+                            AppColors.navy.withOpacity(0.1),
+                        backgroundImage: u.avatarUrl != null
+                            ? NetworkImage(u.avatarUrl!)
+                            : null,
+                        child: u.avatarUrl == null
+                            ? Text(
+                                u.name.isNotEmpty
+                                    ? u.name[0].toUpperCase()
+                                    : '?',
+                                style: AppTextStyles.titleMedium
+                                    .copyWith(color: AppColors.navy),
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(u.name,
+                                style: AppTextStyles.titleMedium,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                            if (u.username.isNotEmpty)
+                              Text('@${u.username}',
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                      color: AppColors.textMuted),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
+                          ],
+                        ),
+                      ),
+                      // Checkbox visual
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: selected
+                              ? AppColors.navy
+                              : Colors.transparent,
+                          border: Border.all(
+                            color: selected
+                                ? AppColors.navy
+                                : AppColors.divider,
+                            width: 2,
+                          ),
+                        ),
+                        child: selected
+                            ? const Icon(Icons.check,
+                                size: 14, color: Colors.white)
+                            : null,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (u != users.last)
+                const Divider(height: 1, indent: 58),
+            ],
+          );
+        }).toList(),
       ),
     );
   }
