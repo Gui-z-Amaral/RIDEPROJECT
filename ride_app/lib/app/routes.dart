@@ -57,11 +57,11 @@ final router = GoRouter(
     ),
     GoRoute(path: '/friends/invites', builder: (_, __) => const InvitesScreen()),
 
+    GoRoute(path: '/trips/create', builder: (_, __) => const CreateTripScreen()),
     GoRoute(
       path: '/trips/:id',
       builder: (_, state) => TripDetailScreen(tripId: state.pathParameters['id']!),
     ),
-    GoRoute(path: '/trips/create', builder: (_, __) => const CreateTripScreen()),
     GoRoute(
       path: '/trips/start',
       builder: (_, state) {
@@ -77,11 +77,11 @@ final router = GoRouter(
       },
     ),
 
+    GoRoute(path: '/rides/create', builder: (_, __) => const CreateRideScreen()),
     GoRoute(
       path: '/rides/:id',
       builder: (_, state) => RideDetailScreen(rideId: state.pathParameters['id']!),
     ),
-    GoRoute(path: '/rides/create', builder: (_, __) => const CreateRideScreen()),
     GoRoute(path: '/rides/schedule', builder: (_, __) => const ScheduleRideScreen()),
     GoRoute(
       path: '/rides/start',
