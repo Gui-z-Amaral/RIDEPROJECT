@@ -1,0 +1,11 @@
+// Renomeie este arquivo para supabase_config.dart e preencha suas credenciais.
+// NUNCA commite o arquivo real (supabase_config.dart) no repositório.
+
+class SupabaseConfig {
+  static const String url = 'https://SEU_PROJETO.supabase.co';
+  static const String anonKey = 'SUA_ANON_KEY_AQUI';
+
+  /// Client ID do tipo "Web application" criado no Google Cloud Console
+  static const String googleWebClientId =
+      'SEU_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
+}

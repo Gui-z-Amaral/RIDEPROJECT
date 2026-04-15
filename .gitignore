@@ -1,0 +1,7 @@
+# Assets / exports do Figma e arquivos temporários
+icons_extracted/
+*.zip
+
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
