@@ -93,6 +93,7 @@ class SupabaseAuthService {
   static Future<UserModel?> updateProfile({
     String? name,
     String? bio,
+    String? city,
     String? motoModel,
     String? motoYear,
     String? avatarUrl,
@@ -103,6 +104,7 @@ class SupabaseAuthService {
     final updates = <String, dynamic>{};
     if (name != null) updates['name'] = name;
     if (bio != null) updates['bio'] = bio;
+    if (city != null) updates['city'] = city;
     if (motoModel != null) updates['moto_model'] = motoModel;
     if (motoYear != null) updates['moto_year'] = motoYear;
     if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
@@ -129,6 +131,7 @@ class SupabaseAuthService {
         username: r['username'] as String? ?? '',
         avatarUrl: r['avatar_url'] as String?,
         bio: r['bio'] as String?,
+        city: r['city'] as String?,
         motoModel: r['moto_model'] as String?,
         motoYear: r['moto_year'] as String?,
         friendsCount: (r['friends_count'] as num?)?.toInt() ?? 0,

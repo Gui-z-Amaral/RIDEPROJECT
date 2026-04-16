@@ -31,6 +31,32 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     Future.microtask(() => context.read<TripViewModel>().loadTripById(widget.tripId));
   }
 
+  Future<void> _confirmDelete(BuildContext context) async {
+    final vm = context.read<TripViewModel>();
+    final trip = vm.selectedTrip;
+    if (trip == null) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Excluir viagem'),
+        content: Text('Deseja excluir "${trip.title}"? Esta ação não pode ser desfeita.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Excluir',
+                  style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirm == true && context.mounted) {
+      await vm.deleteTrip(trip.id);
+      if (context.mounted) context.pop();
+    }
+  }
+
   Future<void> _openMaps(TripModel trip) async {
     final url = trip.buildGoogleMapsUrl();
     final uri = Uri.parse(url);
@@ -56,7 +82,10 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             pinned: true,
             leading: IconButton(icon: const Icon(Icons.arrow_back_ios), onPressed: () => context.pop()),
             actions: [
-              IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () {}),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.white),
+                onPressed: () => _confirmDelete(context),
+              ),
             ],
             flexibleSpace: FlexibleSpaceBar(
               title: Text(trip.title, style: AppTextStyles.headlineSmall),

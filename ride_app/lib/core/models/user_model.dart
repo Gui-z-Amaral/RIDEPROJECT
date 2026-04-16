@@ -4,6 +4,7 @@ class UserModel {
   final String username;
   final String? avatarUrl;
   final String? bio;
+  final String? city;
   final String? motoModel;
   final String? motoYear;
   final List<String> photos;
@@ -18,6 +19,7 @@ class UserModel {
     required this.username,
     this.avatarUrl,
     this.bio,
+    this.city,
     this.motoModel,
     this.motoYear,
     this.photos = const [],
@@ -32,6 +34,7 @@ class UserModel {
     String? username,
     String? avatarUrl,
     String? bio,
+    String? city,
     String? motoModel,
     String? motoYear,
     List<String>? photos,
@@ -45,6 +48,7 @@ class UserModel {
       username: username ?? this.username,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       bio: bio ?? this.bio,
+      city: city ?? this.city,
       motoModel: motoModel ?? this.motoModel,
       motoYear: motoYear ?? this.motoYear,
       photos: photos ?? this.photos,
@@ -61,6 +65,7 @@ class UserModel {
         'username': username,
         'avatar_url': avatarUrl,
         'bio': bio,
+        'city': city,
         'moto_model': motoModel,
         'moto_year': motoYear,
         'photos': photos,
@@ -75,6 +80,7 @@ class UserModel {
         username: map['username'] ?? '',
         avatarUrl: map['avatar_url'],
         bio: map['bio'],
+        city: map['city'],
         motoModel: map['moto_model'],
         motoYear: map['moto_year'],
         photos: List<String>.from(map['photos'] ?? []),

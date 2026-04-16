@@ -8,16 +8,15 @@ import '../shared/widgets/active_session_banner.dart';
 
 class ShellScreen extends StatelessWidget {
   final Widget child;
-
   const ShellScreen({super.key, required this.child});
 
   int _currentIndex(BuildContext context) {
     final location = GoRouterState.of(context).uri.path;
-    if (location.startsWith('/home')) return 0;
-    if (location.startsWith('/profile')) return 1;
-    if (location.startsWith('/trips')) return 2;
-    if (location.startsWith('/friends')) return 3;
-    return 0;
+    if (location.startsWith('/profile')) return 0;
+    if (location.startsWith('/home'))    return 1;
+    if (location.startsWith('/trips'))  return 2;
+    if (location.startsWith('/rides'))  return 3;
+    return 1;
   }
 
   @override
@@ -43,10 +42,9 @@ class ShellScreen extends StatelessWidget {
         onPressed: () => _showCreateMenu(context),
         backgroundColor: AppColors.navy,
         elevation: 4,
-        child: const Icon(Icons.menu, color: Colors.white, size: 26),
+        child: const Icon(Icons.add, color: Colors.white, size: 28),
       ),
-      floatingActionButtonLocation:
-          FloatingActionButtonLocation.centerDocked,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: BottomAppBar(
         shape: const CircularNotchedRectangle(),
         notchMargin: 8,
@@ -56,46 +54,41 @@ class ShellScreen extends StatelessWidget {
           height: 56,
           child: Row(
             children: [
-              // Início
-              Expanded(
-                child: _NavItem(
-                  icon: Icons.home_outlined,
-                  activeIcon: Icons.home,
-                  label: 'Início',
-                  active: idx == 0,
-                  onTap: () => context.go('/home'),
-                ),
-              ),
-              // Perfil
               Expanded(
                 child: _NavItem(
                   icon: Icons.person_outline,
                   activeIcon: Icons.person,
                   label: 'Perfil',
-                  active: idx == 1,
+                  active: idx == 0,
                   onTap: () => context.go('/profile'),
                 ),
               ),
-              // Espaço central para o FAB
-              const Expanded(child: SizedBox()),
-              // Mapa / Viagens
               Expanded(
                 child: _NavItem(
-                  icon: Icons.map_outlined,
-                  activeIcon: Icons.map,
+                  icon: Icons.explore_outlined,
+                  activeIcon: Icons.explore,
                   label: 'Mapa',
+                  active: idx == 1,
+                  onTap: () => context.go('/home'),
+                ),
+              ),
+              const Expanded(child: SizedBox()),
+              Expanded(
+                child: _NavItem(
+                  icon: Icons.flight_takeoff_outlined,
+                  activeIcon: Icons.flight_takeoff,
+                  label: 'Viagens',
                   active: idx == 2,
                   onTap: () => context.go('/trips'),
                 ),
               ),
-              // Amigos
               Expanded(
                 child: _NavItem(
-                  icon: Icons.people_outline,
-                  activeIcon: Icons.people,
-                  label: 'Amigos',
+                  icon: Icons.groups_outlined,
+                  activeIcon: Icons.groups,
+                  label: 'Rolês',
                   active: idx == 3,
-                  onTap: () => context.go('/friends'),
+                  onTap: () => context.go('/rides'),
                 ),
               ),
             ],
@@ -119,8 +112,7 @@ class ShellScreen extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 40,
-              height: 4,
+              width: 40, height: 4,
               decoration: BoxDecoration(
                 color: AppColors.divider,
                 borderRadius: BorderRadius.circular(2),
@@ -225,8 +217,7 @@ class _MenuOption extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 48,
-              height: 48,
+              width: 48, height: 48,
               decoration: BoxDecoration(
                 color: AppColors.navy.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(12),

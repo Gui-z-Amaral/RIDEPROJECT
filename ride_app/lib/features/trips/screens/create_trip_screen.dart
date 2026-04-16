@@ -354,10 +354,11 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                   DateTime.now().add(const Duration(days: 730)),
               builder: (ctx, child) => Theme(
                 data: Theme.of(ctx).copyWith(
-                  colorScheme: const ColorScheme.dark(
-                    primary: AppColors.teal,
-                    surface: AppColors.navy,
-                    onSurface: Colors.white,
+                  colorScheme: const ColorScheme.light(
+                    primary: AppColors.navy,
+                    onPrimary: Colors.white,
+                    surface: Colors.white,
+                    onSurface: AppColors.navy,
                   ),
                 ),
                 child: child!,

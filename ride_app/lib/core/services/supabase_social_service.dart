@@ -205,6 +205,7 @@ class SupabaseSocialService {
         username: r['username'] as String? ?? '',
         avatarUrl: r['avatar_url'] as String?,
         bio: r['bio'] as String?,
+        city: r['city'] as String?,
         motoModel: r['moto_model'] as String?,
         motoYear: r['moto_year'] as String?,
         friendsCount: (r['friends_count'] as num?)?.toInt() ?? 0,

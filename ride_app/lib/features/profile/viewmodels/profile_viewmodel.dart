@@ -24,6 +24,7 @@ class ProfileViewModel extends ChangeNotifier {
   Future<bool> updateProfile({
     String? name,
     String? bio,
+    String? city,
     String? motoModel,
     String? motoYear,
   }) async {
@@ -33,6 +34,7 @@ class ProfileViewModel extends ChangeNotifier {
       final updated = await SupabaseAuthService.updateProfile(
         name: name,
         bio: bio,
+        city: city,
         motoModel: motoModel,
         motoYear: motoYear,
       );
