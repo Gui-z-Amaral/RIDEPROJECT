@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
-import '../../../theme/app_spacing.dart';
 import '../viewmodels/profile_viewmodel.dart';
 import '../../auth/viewmodels/auth_viewmodel.dart';
 import '../../social/viewmodels/social_viewmodel.dart';
 import '../../trips/viewmodels/trip_viewmodel.dart';
+import '../../../core/models/user_model.dart';
+import '../../../core/models/trip_model.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -17,12 +20,214 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  // ── Photo upload ──────────────────────────────────────────
+  Future<void> _pickAndUploadPhoto(BuildContext context) async {
+    final picker = ImagePicker();
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: AppColors.background,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2)),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined, color: AppColors.navy),
+              title: const Text('Câmera'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined, color: AppColors.navy),
+              title: const Text('Galeria'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+
+    final file = await picker.pickImage(source: source, imageQuality: 80);
+    if (file == null || !mounted) return;
+
+    try {
+      final uid = Supabase.instance.client.auth.currentUser!.id;
+      // pasta uid/ garante que a policy de RLS aceite o upload
+      final fileName = '$uid/${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final bytes = await file.readAsBytes();
+      await Supabase.instance.client.storage
+          .from('user-photos')
+          .uploadBinary(fileName, bytes,
+              fileOptions: const FileOptions(contentType: 'image/jpeg'));
+      final url = Supabase.instance.client.storage
+          .from('user-photos')
+          .getPublicUrl(fileName);
+      if (!mounted) return;
+      await context.read<ProfileViewModel>().addPhoto(url);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erro ao enviar foto. Tente novamente.')),
+      );
+    }
+  }
+
+  // ── Trip bottom sheet ─────────────────────────────────────
+  void _showTripSheet(TripModel t) {
+    final myId = Supabase.instance.client.auth.currentUser?.id ?? '';
+    final isOwner = t.creator.id == myId;
+    final parts = t.destination.address?.split(',') ?? [];
+    final city = parts.isNotEmpty ? parts.first.trim() : t.title;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.background,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetCtx) => Padding(
+        padding: EdgeInsets.only(
+          left: 24, right: 24, top: 16,
+          bottom: MediaQuery.of(sheetCtx).padding.bottom + 24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(t.title,
+                style: AppTextStyles.headlineMedium
+                    .copyWith(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            Text(city,
+                style: AppTextStyles.bodySmall
+                    .copyWith(color: AppColors.textSecondary)),
+            const SizedBox(height: 16),
+            _SheetInfoRow(icon: Icons.radio_button_on,
+                color: AppColors.teal,
+                label: t.origin.address ?? t.origin.label ?? 'Origem'),
+            if (t.waypoints.isNotEmpty)
+              ...t.waypoints.map((w) => _SheetInfoRow(
+                  icon: Icons.place, color: AppColors.warning,
+                  label: w.address ?? w.label ?? 'Parada')),
+            _SheetInfoRow(icon: Icons.location_on,
+                color: AppColors.error,
+                label: t.destination.address ?? t.destination.label ?? 'Destino'),
+            if (t.scheduledAt != null) ...[
+              const SizedBox(height: 8),
+              Row(children: [
+                const Icon(Icons.calendar_today, size: 14, color: AppColors.textMuted),
+                const SizedBox(width: 6),
+                Text(
+                  '${t.scheduledAt!.day.toString().padLeft(2, '0')}/${t.scheduledAt!.month.toString().padLeft(2, '0')}/${t.scheduledAt!.year}',
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                ),
+              ]),
+            ],
+            const SizedBox(height: 20),
+            Row(children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  // fecha sheet com o contexto do sheet, depois navega
+                  onPressed: () {
+                    Navigator.pop(sheetCtx);
+                    Future.microtask(() {
+                      if (mounted) context.push('/trips/${t.id}');
+                    });
+                  },
+                  icon: const Icon(Icons.open_in_new, size: 16),
+                  label: const Text('Ver detalhes'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.navy,
+                    side: const BorderSide(color: AppColors.navy),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    // fecha o sheet com o contexto do sheet
+                    Navigator.pop(sheetCtx);
+                    // aguarda a animação de fechamento terminar
+                    await Future.delayed(const Duration(milliseconds: 200));
+                    if (!mounted) return;
+                    // mostra o dialog com o contexto do ProfileScreen
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (dialogCtx) => AlertDialog(
+                        title: Text(isOwner ? 'Excluir viagem' : 'Sair da viagem'),
+                        content: Text(isOwner
+                            ? 'Deseja excluir "${t.title}"?'
+                            : 'Deseja sair de "${t.title}"?'),
+                        actions: [
+                          TextButton(
+                            // usa dialogCtx para fechar o dialog
+                            onPressed: () => Navigator.pop(dialogCtx, false),
+                            child: const Text('Cancelar'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(dialogCtx, true),
+                            child: Text(isOwner ? 'Excluir' : 'Sair',
+                                style: const TextStyle(color: Colors.red)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true && mounted) {
+                      final vm = context.read<TripViewModel>();
+                      if (isOwner) {
+                        await vm.deleteTrip(t.id);
+                      } else {
+                        await vm.leaveTrip(t.id);
+                      }
+                    }
+                  },
+                  icon: Icon(isOwner ? Icons.delete_outline : Icons.exit_to_app, size: 16),
+                  label: Text(isOwner ? 'Excluir' : 'Sair'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade600,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
     Future.microtask(() {
       context.read<ProfileViewModel>().load();
-      context.read<SocialViewModel>().loadFriends();
+      context.read<SocialViewModel>().loadAll();
       context.read<TripViewModel>().loadTrips();
     });
   }
@@ -44,15 +249,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
             backgroundColor: AppColors.background,
             pinned: true,
             automaticallyImplyLeading: false,
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.logout, color: AppColors.navy),
-                onPressed: () async {
-                  await context.read<AuthViewModel>().logout();
-                  if (context.mounted) context.go('/login');
-                },
-              ),
-            ],
+            title: Row(
+              children: [
+                // Botão amigos com badge de pendentes
+                Stack(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.people_outline,
+                          color: AppColors.navy),
+                      onPressed: () => context.push('/friends'),
+                    ),
+                    if (socialVm.pendingCount > 0)
+                      Positioned(
+                        right: 6,
+                        top: 6,
+                        child: Container(
+                          width: 16,
+                          height: 16,
+                          decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle),
+                          child: Center(
+                            child: Text(
+                              '${socialVm.pendingCount}',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const Spacer(),
+                // Buscar / adicionar amigos
+                IconButton(
+                  icon: const Icon(Icons.person_add_outlined,
+                      color: AppColors.navy),
+                  onPressed: () => context.push('/friends/search'),
+                ),
+                // Logout
+                IconButton(
+                  icon: const Icon(Icons.logout, color: AppColors.navy),
+                  onPressed: () async {
+                    await context.read<AuthViewModel>().logout();
+                    if (context.mounted) context.go('/login');
+                  },
+                ),
+              ],
+            ),
           ),
 
           SliverToBoxAdapter(
@@ -109,7 +355,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Row(
                     children: [
                       _StatBox(
-                          value: '${user?.friendsCount ?? 0}',
+                          value: '${socialVm.friends.isNotEmpty ? socialVm.friends.length : (user?.friendsCount ?? 0)}',
                           label: 'Amigos\nadicionados'),
                       const SizedBox(width: 12),
                       _StatBox(value: '0', label: 'Viagens\nconcluídas'),
@@ -166,30 +412,61 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ],
 
                 // ── Seus contatos ─────────────────────────────
-                if (socialVm.friends.isNotEmpty) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Seus Contatos',
-                            style: AppTextStyles.headlineMedium
-                                .copyWith(fontWeight: FontWeight.w800)),
-                        GestureDetector(
-                          onTap: () => context.push('/friends'),
-                          child: Text('Ver todos',
-                              style: AppTextStyles.bodySmall
-                                  .copyWith(color: AppColors.navy)),
-                        ),
-                      ],
-                    ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Seus Contatos',
+                          style: AppTextStyles.headlineMedium
+                              .copyWith(fontWeight: FontWeight.w800)),
+                      GestureDetector(
+                        onTap: () => context.push('/friends'),
+                        child: Text('Ver todos',
+                            style: AppTextStyles.bodySmall
+                                .copyWith(color: AppColors.navy)),
+                      ),
+                    ],
                   ),
+                ),
+                if (socialVm.friends.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: GestureDetector(
+                      onTap: () => context.push('/friends/search'),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: AppColors.divider),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.person_add_outlined,
+                                color: AppColors.navy.withOpacity(0.5),
+                                size: 28),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Nenhum amigo ainda',
+                                    style: AppTextStyles.bodyMedium),
+                                Text('Toque para buscar riders',
+                                    style: AppTextStyles.bodySmall
+                                        .copyWith(color: AppColors.navy)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                else
                   SizedBox(
                     height: 130,
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 24),
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
                       itemCount: socialVm.friends.length,
                       separatorBuilder: (_, __) =>
                           const SizedBox(width: 12),
@@ -197,9 +474,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           _ContactCard(user: socialVm.friends[i]),
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  const Divider(height: 1),
-                ],
+                const SizedBox(height: 20),
+                const Divider(height: 1),
 
                 // ── Suas fotos ────────────────────────────────
                 Padding(
@@ -211,10 +487,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           style: AppTextStyles.headlineMedium
                               .copyWith(fontWeight: FontWeight.w800)),
                       GestureDetector(
-                        onTap: () {},
-                        child: Text('Ver Todas',
-                            style: AppTextStyles.bodySmall
-                                .copyWith(color: AppColors.navy)),
+                        onTap: () => _pickAndUploadPhoto(context),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.add_a_photo_outlined,
+                                color: AppColors.navy, size: 18),
+                            const SizedBox(width: 4),
+                            Text('Adicionar',
+                                style: AppTextStyles.bodySmall
+                                    .copyWith(color: AppColors.navy)),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -222,16 +505,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 if (user?.photos.isEmpty != false)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Container(
-                      height: 80,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: AppColors.divider),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Center(
-                        child: Text('Nenhuma foto adicionada',
-                            style: AppTextStyles.bodySmall
-                                .copyWith(color: AppColors.textMuted)),
+                    child: GestureDetector(
+                      onTap: () => _pickAndUploadPhoto(context),
+                      child: Container(
+                        height: 80,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: AppColors.divider),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.add_a_photo_outlined,
+                                  color: AppColors.navy.withOpacity(0.4),
+                                  size: 28),
+                              const SizedBox(height: 4),
+                              Text('Adicionar fotos',
+                                  style: AppTextStyles.bodySmall
+                                      .copyWith(color: AppColors.textMuted)),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   )
@@ -290,16 +585,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   )
                 else
-                  ...tripVm.trips.take(2).map((t) {
+                  ...tripVm.trips.take(3).map((t) {
                     final parts =
                         t.destination.address?.split(',') ?? [];
                     final city = parts.isNotEmpty
                         ? parts.first.trim()
                         : t.title;
+                    final myId = Supabase.instance.client.auth.currentUser?.id ?? '';
+                    final isOwner = t.creator.id == myId;
                     return Padding(
                       padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
                       child: GestureDetector(
-                        onTap: () => context.push('/trips/${t.id}'),
+                        onTap: () => _showTripSheet(t),
                         child: Container(
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
@@ -319,20 +616,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     Text(city.toUpperCase(),
                                         style: const TextStyle(
                                             color: Colors.white,
-                                            fontWeight:
-                                                FontWeight.w700,
+                                            fontWeight: FontWeight.w700,
                                             fontSize: 13)),
                                     if (t.scheduledAt != null)
                                       Text(
                                         '${t.scheduledAt!.day.toString().padLeft(2, '0')}/${t.scheduledAt!.month.toString().padLeft(2, '0')}/${t.scheduledAt!.year}',
                                         style: TextStyle(
-                                            color: Colors.white
-                                                .withOpacity(0.6),
+                                            color: Colors.white.withOpacity(0.6),
                                             fontSize: 11),
                                       ),
                                   ],
                                 ),
                               ),
+                              Icon(
+                                isOwner ? Icons.delete_outline : Icons.exit_to_app,
+                                color: Colors.white54,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 4),
                               const Icon(Icons.chevron_right,
                                   color: Colors.white54, size: 20),
                             ],
@@ -345,6 +646,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 SizedBox(height: bottomPad + 100),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Sheet info row ───────────────────────────────────────────────────────────
+
+class _SheetInfoRow extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String label;
+  const _SheetInfoRow({required this.icon, required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(label,
+                style: AppTextStyles.bodySmall
+                    .copyWith(color: AppColors.textSecondary),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
           ),
         ],
       ),
@@ -390,7 +720,7 @@ class _StatBox extends StatelessWidget {
 // ─── Contact card ─────────────────────────────────────────────────────────────
 
 class _ContactCard extends StatelessWidget {
-  final dynamic user;
+  final UserModel user;
   const _ContactCard({required this.user});
 
   @override
@@ -409,12 +739,12 @@ class _ContactCard extends StatelessWidget {
             radius: 24,
             backgroundColor: AppColors.navy.withOpacity(0.1),
             backgroundImage: user.avatarUrl != null
-                ? NetworkImage(user.avatarUrl as String)
+                ? NetworkImage(user.avatarUrl!)
                 : null,
             child: user.avatarUrl == null
                 ? Text(
-                    (user.name as String).isNotEmpty
-                        ? (user.name as String)[0].toUpperCase()
+                    user.name.isNotEmpty
+                        ? user.name[0].toUpperCase()
                         : '?',
                     style: const TextStyle(
                         fontSize: 18,
@@ -425,7 +755,7 @@ class _ContactCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            (user.name as String).split(' ').first,
+            user.name.split(' ').first,
             style: AppTextStyles.labelSmall
                 .copyWith(fontWeight: FontWeight.w700),
             maxLines: 1,

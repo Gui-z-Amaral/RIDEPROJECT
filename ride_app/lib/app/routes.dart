@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../features/auth/screens/splash_screen.dart';
 import '../features/auth/screens/onboarding_screen.dart';
@@ -59,10 +58,6 @@ final router = GoRouter(
 
     GoRoute(path: '/trips/create', builder: (_, __) => const CreateTripScreen()),
     GoRoute(
-      path: '/trips/:id',
-      builder: (_, state) => TripDetailScreen(tripId: state.pathParameters['id']!),
-    ),
-    GoRoute(
       path: '/trips/start',
       builder: (_, state) {
         final e = state.extra as Map<String, dynamic>;
@@ -77,11 +72,12 @@ final router = GoRouter(
       },
     ),
 
-    GoRoute(path: '/rides/create', builder: (_, __) => const CreateRideScreen()),
     GoRoute(
-      path: '/rides/:id',
-      builder: (_, state) => RideDetailScreen(rideId: state.pathParameters['id']!),
+      path: '/trips/:id',
+      builder: (_, state) => TripDetailScreen(tripId: state.pathParameters['id']!),
     ),
+
+    GoRoute(path: '/rides/create', builder: (_, __) => const CreateRideScreen()),
     GoRoute(path: '/rides/schedule', builder: (_, __) => const ScheduleRideScreen()),
     GoRoute(
       path: '/rides/start',
@@ -94,6 +90,10 @@ final router = GoRouter(
           placeAddress: e['address'] as String,
         );
       },
+    ),
+    GoRoute(
+      path: '/rides/:id',
+      builder: (_, state) => RideDetailScreen(rideId: state.pathParameters['id']!),
     ),
 
     GoRoute(

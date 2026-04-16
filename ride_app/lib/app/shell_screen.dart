@@ -19,6 +19,7 @@ class ShellScreen extends StatelessWidget {
     return 1;
   }
 
+
   @override
   Widget build(BuildContext context) {
     final idx = _currentIndex(context);
@@ -39,10 +40,10 @@ class ShellScreen extends StatelessWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showCreateMenu(context),
+        onPressed: () => context.go('/home'),
         backgroundColor: AppColors.navy,
         elevation: 4,
-        child: const Icon(Icons.add, color: Colors.white, size: 28),
+        child: const Icon(Icons.home_rounded, color: Colors.white, size: 28),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: BottomAppBar(
@@ -65,11 +66,11 @@ class ShellScreen extends StatelessWidget {
               ),
               Expanded(
                 child: _NavItem(
-                  icon: Icons.explore_outlined,
-                  activeIcon: Icons.explore,
-                  label: 'Mapa',
-                  active: idx == 1,
-                  onTap: () => context.go('/home'),
+                  icon: Icons.add_circle_outline,
+                  activeIcon: Icons.add_circle,
+                  label: 'Criar',
+                  active: false,
+                  onTap: () => _showCreateMenu(context),
                 ),
               ),
               const Expanded(child: SizedBox()),

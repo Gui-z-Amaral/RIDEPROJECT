@@ -71,15 +71,33 @@ class TripModel {
   }
 
   String buildGoogleMapsUrl() {
-    final points = [origin, ...waypoints, destination];
-    final waypts = points.skip(1).take(points.length - 2).toList();
-    final dest = points.last;
-    final orig = points.first;
+    // Usa nome do local se disponível, caso contrário coordenadas
+    String point(LocationModel loc, {String? nameOverride}) {
+      final name = nameOverride ?? loc.label?.trim();
+      if (name != null && name.isNotEmpty) {
+        return Uri.encodeQueryComponent(name);
+      }
+      return '${loc.lat},${loc.lng}';
+    }
 
-    String url =
-        'https://www.google.com/maps/dir/?api=1&origin=${orig.lat},${orig.lng}&destination=${dest.lat},${dest.lng}';
-    if (waypts.isNotEmpty) {
-      final wStr = waypts.map((w) => '${w.lat},${w.lng}').join('%7C');
+    // Combina waypoints de rota + paradas nomeadas como pontos intermediários
+    final allMiddle = <LocationModel>[
+      ...waypoints,
+      ...stops.map((s) => LocationModel(
+            lat: s.location.lat,
+            lng: s.location.lng,
+            label: s.name,
+            address: s.location.address,
+          )),
+    ];
+
+    final orig = point(origin);
+    final dest = point(destination);
+
+    var url =
+        'https://www.google.com/maps/dir/?api=1&origin=$orig&destination=$dest';
+    if (allMiddle.isNotEmpty) {
+      final wStr = allMiddle.map((w) => point(w)).join('%7C');
       url += '&waypoints=$wStr';
     }
     url += '&travelmode=driving';

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
-import '../../../theme/app_spacing.dart';
 import '../viewmodels/profile_viewmodel.dart';
 import '../../../core/utils/extensions.dart';
 
@@ -81,6 +82,37 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
+  Future<void> _pickAvatar() async {
+    final picker = ImagePicker();
+    final file = await picker.pickImage(
+        source: ImageSource.gallery, imageQuality: 85);
+    if (file == null || !mounted) return;
+
+    try {
+      final uid = Supabase.instance.client.auth.currentUser!.id;
+      // Sobrescreve sempre o mesmo arquivo para não acumular versões
+      final path = '$uid/avatar.jpg';
+      final bytes = await file.readAsBytes();
+      await Supabase.instance.client.storage
+          .from('avatars')
+          .uploadBinary(path, bytes,
+              fileOptions: const FileOptions(
+                  contentType: 'image/jpeg', upsert: true));
+      // Adiciona cache-buster para forçar reload da imagem
+      final url = Supabase.instance.client.storage
+              .from('avatars')
+              .getPublicUrl(path) +
+          '?t=${DateTime.now().millisecondsSinceEpoch}';
+      if (!mounted) return;
+      await context.read<ProfileViewModel>().updateProfile(avatarUrl: url);
+      if (mounted) context.showSnack('Foto de perfil atualizada!');
+    } catch (_) {
+      if (mounted) {
+        context.showSnack('Erro ao atualizar foto. Tente novamente.');
+      }
+    }
+  }
+
   Future<void> _save() async {
     final vm = context.read<ProfileViewModel>();
     final ok = await vm.updateProfile(
@@ -144,51 +176,57 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   Center(
                     child: Column(
                       children: [
-                        Stack(
-                          children: [
-                            CircleAvatar(
-                              radius: 52,
-                              backgroundColor:
-                                  AppColors.navy.withOpacity(0.1),
-                              backgroundImage: user?.avatarUrl != null
-                                  ? NetworkImage(user!.avatarUrl!)
-                                  : null,
-                              child: user?.avatarUrl == null
-                                  ? Text(
-                                      (user?.name.isNotEmpty == true)
-                                          ? user!.name[0].toUpperCase()
-                                          : 'U',
-                                      style: const TextStyle(
-                                          fontSize: 36,
-                                          fontWeight: FontWeight.bold,
-                                          color: AppColors.navy),
-                                    )
-                                  : null,
-                            ),
-                            Positioned(
-                              right: 2,
-                              bottom: 2,
-                              child: Container(
-                                width: 28,
-                                height: 28,
-                                decoration: BoxDecoration(
-                                  color: AppColors.navy,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                      color: Colors.white, width: 2),
-                                ),
-                                child: const Icon(Icons.edit,
-                                    size: 14, color: Colors.white),
+                        GestureDetector(
+                          onTap: _pickAvatar,
+                          child: Stack(
+                            children: [
+                              CircleAvatar(
+                                radius: 52,
+                                backgroundColor:
+                                    AppColors.navy.withOpacity(0.1),
+                                backgroundImage: user?.avatarUrl != null
+                                    ? NetworkImage(user!.avatarUrl!)
+                                    : null,
+                                child: user?.avatarUrl == null
+                                    ? Text(
+                                        (user?.name.isNotEmpty == true)
+                                            ? user!.name[0].toUpperCase()
+                                            : 'U',
+                                        style: const TextStyle(
+                                            fontSize: 36,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppColors.navy),
+                                      )
+                                    : null,
                               ),
-                            ),
-                          ],
+                              Positioned(
+                                right: 2,
+                                bottom: 2,
+                                child: Container(
+                                  width: 28,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.navy,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: Colors.white, width: 2),
+                                  ),
+                                  child: const Icon(Icons.edit,
+                                      size: 14, color: Colors.white),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 8),
-                        Text('ALTERAR FOTO DE PERFIL',
-                            style: AppTextStyles.labelSmall.copyWith(
-                                color: AppColors.navy,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.5)),
+                        GestureDetector(
+                          onTap: _pickAvatar,
+                          child: Text('ALTERAR FOTO DE PERFIL',
+                              style: AppTextStyles.labelSmall.copyWith(
+                                  color: AppColors.navy,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.5)),
+                        ),
                       ],
                     ),
                   ),

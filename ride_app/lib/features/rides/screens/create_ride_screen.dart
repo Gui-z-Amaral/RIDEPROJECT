@@ -5,10 +5,9 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../shared/widgets/app_button.dart';
-import '../../../shared/widgets/app_input.dart';
-import '../../../shared/widgets/map_placeholder.dart';
 import '../../../core/models/location_model.dart';
 import '../../../core/models/user_model.dart';
+import '../../../core/services/geocoding_service.dart';
 import '../../../core/utils/extensions.dart';
 import '../viewmodels/ride_viewmodel.dart';
 import '../../social/viewmodels/social_viewmodel.dart';
@@ -23,8 +22,8 @@ class CreateRideScreen extends StatefulWidget {
 
 class _CreateRideScreenState extends State<CreateRideScreen> {
   int _step = 0;
-  final _meetCtrl = TextEditingController();
   final _searchCtrl = TextEditingController();
+  PlaceInfo? _placeInfo; // info extra do ponto de encontro (horários, etc.)
 
   @override
   void initState() {
@@ -35,7 +34,6 @@ class _CreateRideScreenState extends State<CreateRideScreen> {
 
   @override
   void dispose() {
-    _meetCtrl.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -47,6 +45,32 @@ class _CreateRideScreenState extends State<CreateRideScreen> {
     } else {
       context.pop();
     }
+  }
+
+  Future<void> _pickMeetingPoint() async {
+    final result = await context.push<dynamic>('/map/select', extra: {
+      'title': 'Ponto de encontro',
+      'onSelected': null,
+    });
+    if (result == null || !mounted) return;
+
+    LocationModel? loc;
+    PlaceInfo? info;
+    if (result is Map) {
+      loc = result['location'] as LocationModel?;
+      info = result['info'] as PlaceInfo?;
+    } else if (result is LocationModel) {
+      loc = result;
+    }
+    if (loc == null) return;
+
+    final vm = context.read<RideViewModel>();
+    final title = loc.label?.trim().isNotEmpty == true
+        ? loc.label!
+        : (loc.address?.split(',').first.trim() ?? 'Ponto de encontro');
+    vm.setTitle(title);
+    vm.setMeetingPoint(loc);
+    setState(() => _placeInfo = info);
   }
 
   Future<void> _finish() async {
@@ -318,33 +342,68 @@ class _CreateRideScreenState extends State<CreateRideScreen> {
   // ── Step 1: Ponto de encontro ───────────────────────────────────────────────
 
   Widget _buildStep1(RideViewModel vm) {
+    final hasMeeting = vm.meetingPoint != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Onde é o ponto de encontro?',
             style: AppTextStyles.headlineMedium
                 .copyWith(fontWeight: FontWeight.w800)),
+        const SizedBox(height: 4),
+        Text(
+          'Busque pelo nome do lugar ou toque no mapa para selecionar',
+          style: AppTextStyles.bodySmall
+              .copyWith(color: AppColors.textSecondary),
+        ),
         const SizedBox(height: AppSpacing.xl),
-        AppInput(
-          controller: _meetCtrl,
-          label: 'Ponto de encontro',
-          hint: 'Endereço, praça ou ponto de referência',
-          prefixIcon: Icons.location_on,
-          onChanged: (v) => vm.setMeetingPoint(
-              LocationModel(lat: -27.5954, lng: -48.5480, address: v)),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        MapPlaceholder(
-          height: 160,
-          location: vm.meetingPoint,
-          interactive: false,
-        ),
+
+        // ── Card do local selecionado ou botão para selecionar ──
+        if (!hasMeeting)
+          GestureDetector(
+            onTap: _pickMeetingPoint,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              decoration: BoxDecoration(
+                color: AppColors.inputFill,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.divider),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.add_location_alt_outlined,
+                      color: AppColors.navy, size: 36),
+                  const SizedBox(height: 8),
+                  Text('Selecionar ponto de encontro',
+                      style: AppTextStyles.titleMedium
+                          .copyWith(color: AppColors.navy)),
+                  const SizedBox(height: 2),
+                  Text('Busca por nome ou toque no mapa',
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.textMuted)),
+                ],
+              ),
+            ),
+          )
+        else
+          _MeetingPointCard(
+            meeting: vm.meetingPoint!,
+            info: _placeInfo,
+            onClear: () {
+              vm.setMeetingPoint(null);
+              vm.setTitle('');
+              setState(() => _placeInfo = null);
+            },
+            onEdit: _pickMeetingPoint,
+          ),
+
         const SizedBox(height: AppSpacing.xxl),
         AppButton(
           label: 'Próximo',
           icon: Icons.arrow_forward,
           iconTrailing: true,
-          onPressed: _meetCtrl.text.isNotEmpty ? _nextStep : null,
+          onPressed: hasMeeting ? _nextStep : null,
         ),
       ],
     );
@@ -379,8 +438,37 @@ class _CreateRideScreenState extends State<CreateRideScreen> {
                       color: Colors.red, size: 18),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
-                      child: Text(vm.meetingPoint?.address ?? '',
-                          style: AppTextStyles.titleMedium)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          vm.meetingPoint?.label ?? vm.meetingPoint?.address ?? '',
+                          style: AppTextStyles.titleMedium,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if ((vm.meetingPoint?.address ?? '').isNotEmpty &&
+                            vm.meetingPoint?.label != vm.meetingPoint?.address)
+                          Text(
+                            vm.meetingPoint!.address!,
+                            style: AppTextStyles.bodySmall
+                                .copyWith(color: AppColors.textMuted),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        if (_placeInfo?.openNow != null)
+                          Text(
+                            _placeInfo!.openNow! ? '● Aberto agora' : '● Fechado agora',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: _placeInfo!.openNow!
+                                  ? AppColors.success
+                                  : AppColors.error,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
               const Divider(height: AppSpacing.lg),
@@ -486,6 +574,170 @@ class _CreateRideScreenState extends State<CreateRideScreen> {
           onPressed: _finish,
         ),
       ],
+    );
+  }
+}
+
+// ─── Meeting point card ────────────────────────────────────────────────────
+
+class _MeetingPointCard extends StatelessWidget {
+  final LocationModel meeting;
+  final PlaceInfo? info;
+  final VoidCallback onClear;
+  final VoidCallback onEdit;
+
+  const _MeetingPointCard({
+    required this.meeting,
+    required this.info,
+    required this.onClear,
+    required this.onEdit,
+  });
+
+  IconData _icon(String? category) {
+    if (category == null) return Icons.location_on;
+    if (category.contains('Restaurante')) return Icons.restaurant;
+    if (category.contains('Café')) return Icons.coffee;
+    if (category.contains('Bar')) return Icons.local_bar;
+    if (category.contains('Posto')) return Icons.local_gas_station;
+    if (category.contains('Hosped')) return Icons.hotel;
+    if (category.contains('Parque') || category.contains('Natural'))
+      return Icons.park;
+    if (category.contains('Praia')) return Icons.beach_access;
+    return Icons.place;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = meeting.label ?? meeting.address ?? 'Local selecionado';
+    final address = meeting.address;
+    final category = info?.category;
+    final openNow = info?.openNow;
+    final todayHours = info?.todayHours;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.teal.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Cabeçalho ──────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 8, 0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: AppColors.teal.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(_icon(category),
+                      color: AppColors.teal, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name,
+                          style: AppTextStyles.titleMedium,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
+                      if (category != null)
+                        Text(category,
+                            style: AppTextStyles.bodySmall
+                                .copyWith(color: AppColors.textMuted)),
+                      if (address != null && address.isNotEmpty)
+                        Text(address,
+                            style: AppTextStyles.bodySmall
+                                .copyWith(color: AppColors.textSecondary),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close,
+                      size: 18, color: AppColors.textMuted),
+                  onPressed: onClear,
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints(minWidth: 32, minHeight: 32),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Horários ───────────────────────────────────────────
+          if (openNow != null || todayHours != null) ...[
+            const Divider(height: 16, indent: 14, endIndent: 14),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
+              child: Row(
+                children: [
+                  Icon(
+                    openNow == true
+                        ? Icons.check_circle_outline
+                        : Icons.cancel_outlined,
+                    size: 15,
+                    color: openNow == true
+                        ? AppColors.success
+                        : AppColors.error,
+                  ),
+                  const SizedBox(width: 6),
+                  if (openNow != null)
+                    Text(
+                      openNow ? 'Aberto agora' : 'Fechado agora',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: openNow
+                            ? AppColors.success
+                            : AppColors.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  if (todayHours != null) ...[
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '· ${todayHours.contains(':') ? todayHours.split(': ').last : todayHours}',
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.textMuted),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+
+          // ── Botão trocar ───────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+            child: GestureDetector(
+              onTap: onEdit,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.edit_location_alt,
+                      size: 14, color: AppColors.navy),
+                  const SizedBox(width: 4),
+                  Text('Trocar local',
+                      style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.navy,
+                          fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

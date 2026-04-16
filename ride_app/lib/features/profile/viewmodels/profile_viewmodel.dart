@@ -21,12 +21,23 @@ class ProfileViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> addPhoto(String url) async {
+    try {
+      final updated = await SupabaseAuthService.addPhoto(url);
+      if (updated != null) {
+        _user = updated;
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
   Future<bool> updateProfile({
     String? name,
     String? bio,
     String? city,
     String? motoModel,
     String? motoYear,
+    String? avatarUrl,
   }) async {
     _isSaving = true;
     notifyListeners();
@@ -37,6 +48,7 @@ class ProfileViewModel extends ChangeNotifier {
         city: city,
         motoModel: motoModel,
         motoYear: motoYear,
+        avatarUrl: avatarUrl,
       );
       if (updated != null) {
         _user = updated;

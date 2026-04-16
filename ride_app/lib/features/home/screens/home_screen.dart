@@ -1,14 +1,19 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
 import '../../auth/viewmodels/auth_viewmodel.dart';
 import '../../notifications/viewmodels/notifications_viewmodel.dart';
+import '../../social/viewmodels/social_viewmodel.dart';
 import '../viewmodels/home_viewmodel.dart';
 import '../../../core/models/trip_model.dart';
 import '../../../core/models/ride_model.dart';
+import '../../../core/services/places_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,10 +26,36 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() {
-      context.read<HomeViewModel>().load();
+    Future.microtask(() async {
+      // Carrega viagens/rolês primeiro (para usar destino nas recomendações)
+      await context.read<HomeViewModel>().load();
       context.read<NotificationsViewModel>().load();
+      context.read<SocialViewModel>().loadRequests();
+      _fetchLocationAndRecommend();
     });
+  }
+
+  Future<void> _fetchLocationAndRecommend() async {
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.deniedForever ||
+          permission == LocationPermission.denied) return;
+
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.reduced, // rápido, suficiente para recomendações
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+      if (mounted) {
+        context
+            .read<HomeViewModel>()
+            .loadRecommendations(pos.latitude, pos.longitude);
+      }
+    } catch (_) {}
   }
 
   String _greeting() {
@@ -39,6 +70,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final vm = context.watch<HomeViewModel>();
     final user = context.watch<AuthViewModel>().user;
     final unread = context.watch<NotificationsViewModel>().unreadCount;
+    final pendingFriends = context.watch<SocialViewModel>().pendingCount;
     final firstName = (user?.name ?? '').split(' ').first.toUpperCase();
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
@@ -80,6 +112,37 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: AppTextStyles.headlineMedium
                         .copyWith(fontWeight: FontWeight.w800)),
                 const Spacer(),
+                // Friends icon with pending-request badge
+                Stack(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.people_outline,
+                          color: AppColors.navy),
+                      onPressed: () => context.push('/friends/invites'),
+                    ),
+                    if (pendingFriends > 0)
+                      Positioned(
+                        right: 8,
+                        top: 8,
+                        child: Container(
+                          width: 16,
+                          height: 16,
+                          decoration: const BoxDecoration(
+                              color: Colors.red, shape: BoxShape.circle),
+                          child: Center(
+                            child: Text(
+                              pendingFriends > 9 ? '9+' : '$pendingFriends',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                // Notifications icon
                 Stack(
                   children: [
                     IconButton(
@@ -148,7 +211,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.search,
+                          const Icon(Icons.search,
                               color: AppColors.textMuted, size: 20),
                           const SizedBox(width: 8),
                           Text(
@@ -217,37 +280,56 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: AppSpacing.lg),
 
                   // ── ENCONTRE EMPRESAS ─────────────────────────────
-                  _BusinessSection(
-                      onTap: () {}),
+                  _BusinessSection(onTap: () {}),
                   const SizedBox(height: AppSpacing.lg),
 
                   // ── SUGESTÕES PARA VOCÊ ───────────────────────────
-                  _SectionLabel(label: 'SUGESTÕES PARA VOCÊ'),
+                  Row(
+                    children: [
+                      _SectionLabel(label: 'SUGESTÕES PARA VOCÊ'),
+                      const Spacer(),
+                      if (vm.isLoadingRecs)
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.navy,
+                          ),
+                        ),
+                    ],
+                  ),
                   const SizedBox(height: AppSpacing.sm),
                 ],
               ),
             ),
           ),
 
-          // Sugestões (scroll horizontal)
+          // ── Sugestões (scroll horizontal) ─────────────────────────
           SliverToBoxAdapter(
             child: SizedBox(
-              height: 200,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                itemCount: _mockSuggestions.length,
-                separatorBuilder: (_, __) =>
-                    const SizedBox(width: AppSpacing.md),
-                itemBuilder: (_, i) =>
-                    _SuggestionCard(data: _mockSuggestions[i]),
-              ),
+              height: 210,
+              child: vm.isLoadingRecs && vm.recommendations.isEmpty
+                  ? _SuggestionSkeletons()
+                  : vm.recommendations.isEmpty
+                      ? _NoRecommendations()
+                      : ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.lg),
+                          itemCount: vm.recommendations.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(width: AppSpacing.md),
+                          itemBuilder: (_, i) => _SuggestionCard(
+                            place: vm.recommendations[i],
+                          ),
+                        ),
             ),
           ),
 
           SliverToBoxAdapter(
-              child: SizedBox(
-                  height: MediaQuery.of(context).padding.bottom + 100)),
+              child:
+                  SizedBox(height: bottomPad + 100)),
         ],
       ),
     );
@@ -306,7 +388,6 @@ class _NextTripCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image
             ClipRRect(
               borderRadius:
                   const BorderRadius.vertical(top: Radius.circular(14)),
@@ -330,7 +411,6 @@ class _NextTripCard extends StatelessWidget {
                       child: Icon(Icons.landscape,
                           color: Colors.white.withOpacity(0.15), size: 60),
                     ),
-                    // Stops badge
                     Positioned(
                       top: 10,
                       right: 10,
@@ -354,7 +434,6 @@ class _NextTripCard extends StatelessWidget {
                 ),
               ),
             ),
-            // Info
             Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
@@ -388,8 +467,8 @@ class _NextTripCard extends StatelessWidget {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: AppColors.navy.withOpacity(0.1),
-                                border: Border.all(
-                                    color: Colors.white, width: 1.5),
+                                border:
+                                    Border.all(color: Colors.white, width: 1.5),
                               ),
                               child: Center(
                                 child: Text(
@@ -431,8 +510,19 @@ class _NextTripCard extends StatelessWidget {
       '${d.day.toString().padLeft(2, '0')} ${_month(d.month).toUpperCase()}';
 
   String _month(int m) => const [
-        '', 'JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN',
-        'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'
+        '',
+        'JAN',
+        'FEV',
+        'MAR',
+        'ABR',
+        'MAI',
+        'JUN',
+        'JUL',
+        'AGO',
+        'SET',
+        'OUT',
+        'NOV',
+        'DEZ'
       ][m];
 }
 
@@ -454,7 +544,6 @@ class _NextRideCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Título do rolê
           Text(
             ride.title.toUpperCase(),
             style: const TextStyle(
@@ -463,7 +552,6 @@ class _NextRideCard extends StatelessWidget {
                 fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 12),
-          // Horário
           if (ride.scheduledAt != null) ...[
             Text('HORÁRIO:',
                 style: TextStyle(
@@ -480,7 +568,6 @@ class _NextRideCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
-          // Amigos confirmados
           Text('AMIGOS CONFIRMADOS:',
               style: TextStyle(
                   color: Colors.white.withOpacity(0.6),
@@ -676,8 +763,8 @@ class _EmptyCard extends StatelessWidget {
               children: [
                 Text(message, style: AppTextStyles.bodyMedium),
                 Text(hint,
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.navy)),
+                    style:
+                        AppTextStyles.bodySmall.copyWith(color: AppColors.navy)),
               ],
             ),
           ],
@@ -687,64 +774,128 @@ class _EmptyCard extends StatelessWidget {
   }
 }
 
-// ─── Suggestion card ──────────────────────────────────────────────────────────
+// ─── Skeleton de sugestões (loading) ─────────────────────────────────────────
 
-class _SuggestionData {
-  final String name;
-  final String location;
-  final double rating;
-  final List<Color> gradient;
-  const _SuggestionData(
-      {required this.name,
-      required this.location,
-      required this.rating,
-      required this.gradient});
+class _SuggestionSkeletons extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      itemCount: 3,
+      separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
+      itemBuilder: (_, __) => Container(
+        width: 160,
+        decoration: BoxDecoration(
+          color: AppColors.inputFill,
+          borderRadius: BorderRadius.circular(14),
+        ),
+      ),
+    );
+  }
 }
 
-final _mockSuggestions = [
-  _SuggestionData(
-    name: 'Divina Itália',
-    location: 'Aranauga, SC',
-    rating: 4.8,
-    gradient: [const Color(0xFF6B4E35), const Color(0xFF3D2B1F)],
-  ),
-  _SuggestionData(
-    name: 'Mirante do Vale',
-    location: 'Gramado, RS',
-    rating: 4.6,
-    gradient: [AppColors.navy, AppColors.mediumBlue],
-  ),
-  _SuggestionData(
-    name: 'Café Serra',
-    location: 'Canela, RS',
-    rating: 4.5,
-    gradient: [const Color(0xFF2D5016), const Color(0xFF4A7C25)],
-  ),
-  _SuggestionData(
-    name: 'Praia do Rosa',
-    location: 'Imbituba, SC',
-    rating: 4.9,
-    gradient: [AppColors.teal, const Color(0xFF0891B2)],
-  ),
-];
+// ─── Sem recomendações ────────────────────────────────────────────────────────
+
+class _NoRecommendations extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.divider),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.location_off_outlined,
+                color: AppColors.textMuted.withOpacity(0.5), size: 28),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Ative a localização para ver sugestões perto de você',
+                style:
+                    AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Suggestion card (real data) ─────────────────────────────────────────────
 
 class _SuggestionCard extends StatelessWidget {
-  final _SuggestionData data;
-  const _SuggestionCard({required this.data});
+  final PlaceRecommendation place;
+  const _SuggestionCard({required this.place});
+
+  // Gradiente por tipo quando não há foto
+  List<Color> get _gradient {
+    switch (place.type) {
+      case 'restaurant':
+      case 'cafe':
+        return [const Color(0xFF6B4E35), const Color(0xFF3D2B1F)];
+      case 'gas_station':
+        return [AppColors.navy, AppColors.mediumBlue];
+      case 'lodging':
+        return [const Color(0xFF4A1D6B), const Color(0xFF2D0D4E)];
+      default:
+        return [AppColors.navy, AppColors.mediumBlue];
+    }
+  }
+
+  // Badge de razão da recomendação
+  String get _reasonLabel {
+    switch (place.reason) {
+      case RecommendationReason.nearbyRestaurant:
+      case RecommendationReason.nearbyFuel:
+        return '📍 ${place.distanceLabel}';
+      case RecommendationReason.nearestFuel:
+        return '⛽ Mais próximo';
+      case RecommendationReason.nearestLodging:
+        return '🏨 Mais próximo';
+      case RecommendationReason.tripBased:
+        return '🗺️ ${place.tripContext ?? 'Sua viagem'}';
+    }
+  }
+
+  IconData get _typeIcon {
+    switch (place.type) {
+      case 'restaurant':
+        return Icons.restaurant;
+      case 'cafe':
+        return Icons.coffee;
+      case 'gas_station':
+        return Icons.local_gas_station;
+      case 'lodging':
+        return Icons.hotel;
+      default:
+        return Icons.place;
+    }
+  }
+
+  Future<void> _openMaps() async {
+    final uri = Uri.parse(place.googleMapsUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final hasPhoto = place.photoUrl.isNotEmpty;
+
     return GestureDetector(
-      onTap: () {},
+      onTap: _openMaps,
       child: Container(
         width: 160,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
-          gradient: LinearGradient(
-            colors: data.gradient,
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
           boxShadow: [
             BoxShadow(
                 color: Colors.black.withOpacity(0.1),
@@ -752,65 +903,168 @@ class _SuggestionCard extends StatelessWidget {
                 offset: const Offset(0, 2))
           ],
         ),
-        child: Stack(
-          children: [
-            // Background icon
-            Positioned(
-              top: 16,
-              right: 10,
-              child: Icon(Icons.place,
-                  color: Colors.white.withOpacity(0.1), size: 60),
-            ),
-            // Content
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  // Rating
-                  Row(
-                    children: [
-                      const Icon(Icons.star, color: Colors.amber, size: 14),
-                      const SizedBox(width: 3),
-                      Text(
-                        data.rating.toStringAsFixed(1),
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // ── Fundo: foto ou gradiente ──────────────────────────
+              if (hasPhoto)
+                CachedNetworkImage(
+                  imageUrl: place.photoUrl,
+                  fit: BoxFit.cover,
+                  errorWidget: (_, __, ___) => Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: _gradient,
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                    ],
+                    ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    data.name,
+                )
+              else
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: _gradient,
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Center(
+                    child: Icon(_typeIcon,
+                        color: Colors.white.withOpacity(0.12), size: 70),
+                  ),
+                ),
+
+              // ── Overlay escuro no rodapé ──────────────────────────
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  height: 110,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.transparent, Colors.black87],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                  ),
+                ),
+              ),
+
+              // ── Badge tipo (topo esquerdo) ────────────────────────
+              Positioned(
+                top: 10,
+                left: 10,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    place.typeLabel,
                     style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800),
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    data.location,
-                    style: TextStyle(
-                        color: Colors.white.withOpacity(0.8), fontSize: 11),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Ver detalhes',
-                    style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
-                        fontSize: 11,
-                        decoration: TextDecoration.underline,
-                        decorationColor: Colors.white.withOpacity(0.9)),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ],
+
+              // ── Aberto agora (topo direito) ───────────────────────
+              if (place.isOpenNow)
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                        color: Color(0xFF22C55E), shape: BoxShape.circle),
+                  ),
+                ),
+
+              // ── Conteúdo (rodapé) ─────────────────────────────────
+              Positioned(
+                bottom: 10,
+                left: 10,
+                right: 10,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Rating
+                    if (place.rating != null)
+                      Row(
+                        children: [
+                          const Icon(Icons.star, color: Colors.amber, size: 12),
+                          const SizedBox(width: 3),
+                          Text(
+                            place.rating!.toStringAsFixed(1),
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700),
+                          ),
+                          if (place.userRatingsTotal != null) ...[
+                            const SizedBox(width: 3),
+                            Text(
+                              '(${_fmt(place.userRatingsTotal!)})',
+                              style: TextStyle(
+                                  color: Colors.white.withOpacity(0.7),
+                                  fontSize: 9),
+                            ),
+                          ],
+                        ],
+                      ),
+                    const SizedBox(height: 3),
+                    // Nome
+                    Text(
+                      place.name,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          height: 1.2),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 3),
+                    // Reason badge
+                    Text(
+                      _reasonLabel,
+                      style: TextStyle(
+                          color: Colors.white.withOpacity(0.85), fontSize: 10),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+                    // Ver no Maps
+                    Text(
+                      'Ver no Maps →',
+                      style: TextStyle(
+                          color: Colors.white.withOpacity(0.9),
+                          fontSize: 10,
+                          decoration: TextDecoration.underline,
+                          decorationColor: Colors.white.withOpacity(0.9)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  String _fmt(int n) {
+    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}k';
+    return '$n';
   }
 }

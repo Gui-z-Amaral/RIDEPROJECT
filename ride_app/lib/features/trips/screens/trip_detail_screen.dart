@@ -28,7 +28,12 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => context.read<TripViewModel>().loadTripById(widget.tripId));
+    // Synchronously clear stale error/trip so the first build shows
+    // LoadingWidget regardless of previous navigation state.
+    context.read<TripViewModel>().clearForLoad();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<TripViewModel>().loadTripById(widget.tripId);
+    });
   }
 
   Future<void> _confirmDelete(BuildContext context) async {
@@ -53,7 +58,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     );
     if (confirm == true && context.mounted) {
       await vm.deleteTrip(trip.id);
-      if (context.mounted) context.pop();
+      if (context.mounted) context.go('/home');
     }
   }
 
@@ -68,10 +73,53 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<TripViewModel>();
-    final trip = vm.selectedTrip;
+    // Só considera a viagem válida se o ID bate com o que foi solicitado
+    final trip = vm.selectedTrip?.id == widget.tripId ? vm.selectedTrip : null;
 
-    if (vm.isLoading || trip == null) {
-      return Scaffold(appBar: AppBar(), body: const LoadingWidget());
+    // Mostra loading enquanto: ainda carregando, ou viagem ainda não chegou (e não há erro)
+    if (vm.isLoading || (trip == null && !vm.hasError)) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.background,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios, color: AppColors.navy),
+            onPressed: () => context.go('/home'),
+          ),
+        ),
+        body: const LoadingWidget(),
+      );
+    }
+
+    if (trip == null) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.background,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios, color: AppColors.navy),
+            onPressed: () => context.go('/home'),
+          ),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: AppColors.error),
+              const SizedBox(height: 16),
+              Text(
+                'Não foi possível carregar a viagem.',
+                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => context.read<TripViewModel>().loadTripById(widget.tripId),
+                child: const Text('Tentar novamente', style: TextStyle(color: AppColors.navy)),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     return Scaffold(

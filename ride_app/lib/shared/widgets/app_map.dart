@@ -156,7 +156,7 @@ class _AppMapState extends State<AppMap> {
               initialCameraPosition: CameraPosition(target: _center, zoom: widget.zoom),
               markers: _markers,
               polylines: _polylines,
-              myLocationEnabled: true,
+              myLocationEnabled: widget.interactive,
               myLocationButtonEnabled: widget.interactive,
               mapToolbarEnabled: false,
               zoomControlsEnabled: widget.interactive,

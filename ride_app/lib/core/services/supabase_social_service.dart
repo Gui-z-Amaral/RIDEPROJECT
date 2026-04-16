@@ -35,10 +35,46 @@ class SupabaseSocialService {
   }
 
   static Future<void> sendFriendRequest(String toUserId) async {
-    await _db.from('friend_requests').insert({
+    // Upsert: ignora caso já exista pedido pendente para evitar duplicate-key error
+    await _db.from('friend_requests').upsert({
       'from_user_id': _uid,
       'to_user_id': toUserId,
-    });
+      'status': 'pending',
+    }, onConflict: 'from_user_id,to_user_id');
+
+    // Busca o ID do pedido que acabou de ser criado/atualizado
+    final row = await _db
+        .from('friend_requests')
+        .select('id')
+        .eq('from_user_id', _uid)
+        .eq('to_user_id', toUserId)
+        .maybeSingle();
+    final requestId = row?['id'] as String?;
+
+    // Busca o nome de quem enviou
+    final sender = await _db
+        .from('profiles')
+        .select('name')
+        .eq('id', _uid)
+        .maybeSingle();
+    final senderName = sender?['name'] as String? ?? 'Alguém';
+
+    // Cria notificação para o destinatário (best-effort)
+    if (requestId != null) {
+      try {
+        await _db.from('notifications').insert({
+          'user_id': toUserId,
+          'type': 'friend_request',
+          'title': 'Novo pedido de amizade',
+          'body': '$senderName quer se conectar com você',
+          'data': {
+            'requestId': requestId,
+            'fromUserId': _uid,
+            'fromName': senderName,
+          },
+        });
+      } catch (_) {}
+    }
   }
 
   static Future<List<FriendRequestModel>> getReceivedRequests() async {

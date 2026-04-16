@@ -1,14 +1,17 @@
 import 'dart:convert';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
+import 'package:geolocator/geolocator.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../core/models/location_model.dart';
 import '../../../core/models/trip_model.dart';
 import '../../../core/models/user_model.dart';
+import '../../../core/services/geocoding_service.dart';
 import '../../social/viewmodels/social_viewmodel.dart';
 import '../viewmodels/trip_viewmodel.dart';
 import '../../../core/utils/extensions.dart';
@@ -33,6 +36,14 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   double? _destLat;
   double? _destLng;
   bool _lookingUpCep = false;
+  PlaceInfo? _destInfo; // info extra do destino (foto, horários, etc.)
+
+  // Ponto de partida/encontro (opcional — padrão = localização atual)
+  LocationModel? _departurePoint;
+
+  // Localização atual (origem da viagem — default)
+  double? _originLat;
+  double? _originLng;
 
   // Step 1 – Tempo + Pessoas
   DateTime? _departureDate;
@@ -48,6 +59,28 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     context.read<TripViewModel>().resetForm();
     Future.microtask(
         () => context.read<SocialViewModel>().loadFriends());
+    _fetchOriginLocation();
+  }
+
+  Future<void> _fetchOriginLocation() async {
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.deniedForever ||
+          permission == LocationPermission.denied) return;
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.reduced,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+      if (mounted) setState(() {
+        _originLat = pos.latitude;
+        _originLng = pos.longitude;
+      });
+    } catch (_) {}
   }
 
   @override
@@ -60,15 +93,30 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     super.dispose();
   }
 
+  // ── Selecionar ponto de partida/encontro (opcional) ─────────
+  Future<void> _pickDepartureFromMap() async {
+    final result = await context.push<dynamic>('/map/select', extra: {
+      'title': 'Ponto de partida / encontro',
+      'onSelected': null,
+    });
+    if (result == null || !mounted) return;
+    LocationModel? loc;
+    if (result is Map) loc = result['location'] as LocationModel?;
+    else if (result is LocationModel) loc = result;
+    if (loc != null) setState(() => _departurePoint = loc);
+  }
+
   // ── CEP lookup via ViaCEP (grátis) ──────────────────────────
   Future<void> _lookupCep(String cep) async {
     final clean = cep.replaceAll(RegExp(r'\D'), '');
     if (clean.length != 8) return;
+    if (!mounted) return;
     setState(() => _lookingUpCep = true);
     try {
       final res = await http
           .get(Uri.parse('https://viacep.com.br/ws/$clean/json/'))
           .timeout(const Duration(seconds: 6));
+      if (!mounted) return;
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         if (data['erro'] != true) {
@@ -84,7 +132,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         }
       }
     } catch (_) {}
-    setState(() => _lookingUpCep = false);
+    if (mounted) setState(() => _lookingUpCep = false);
   }
 
   // ── Navigation ───────────────────────────────────────────────
@@ -107,10 +155,11 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         '${_ruaCtrl.text.trim()}, ${_numCtrl.text.trim()}, ${_bairroCtrl.text.trim()}, CEP ${_cepCtrl.text.trim()}';
 
     vm.setTitle(_destinoLabel.isNotEmpty ? _destinoLabel : 'Minha Viagem');
-    vm.setOrigin(LocationModel(
-      lat: _destLat ?? -27.5954,
-      lng: _destLng ?? -48.5480,
-      label: 'Origem',
+    // Usa o ponto de partida definido pelo usuário, ou a localização atual
+    vm.setOrigin(_departurePoint ?? LocationModel(
+      lat: _originLat ?? -27.5954,
+      lng: _originLng ?? -48.5480,
+      label: 'Localização atual',
     ));
     vm.setDestination(LocationModel(
       lat: _destLat ?? -27.5954,
@@ -175,6 +224,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
 
   // ── STEP 0: PARA ONDE VOCÊ VAI? ─────────────────────────────
   Widget _buildStep0() {
+    final photoUrl = _destInfo?.photoUrl;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -190,6 +240,88 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
           style: AppTextStyles.bodyMedium,
         ),
         const SizedBox(height: 20),
+
+        // ── Foto do destino ──────────────────────────────────────
+        if (photoUrl != null) ...[
+          GestureDetector(
+            onTap: () => _pickDestinationFromMap(),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Stack(
+                children: [
+                  CachedNetworkImage(
+                    imageUrl: photoUrl,
+                    width: double.infinity,
+                    height: 180,
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) => Container(
+                      height: 180,
+                      color: AppColors.inputFill,
+                      child: const Center(
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: AppColors.navy),
+                      ),
+                    ),
+                    errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                  ),
+                  // Gradient overlay with place name
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(14, 32, 14, 12),
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Colors.transparent, Colors.black87],
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _destInfo!.name,
+                            style: AppTextStyles.labelLarge.copyWith(
+                                color: Colors.white, fontSize: 15),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if ((_destInfo!.category ?? '').isNotEmpty)
+                            Text(
+                              _destInfo!.category!,
+                              style: AppTextStyles.bodySmall
+                                  .copyWith(color: Colors.white70),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Tap to change label
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        'Trocar destino',
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
 
         // Destino button
         _LabelSection(label: 'DESTINO'),
@@ -301,6 +433,122 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
           ),
         ),
         const SizedBox(height: 24),
+
+        // ── Ponto de partida / encontro (opcional) ───────────────
+        _LabelSection(label: 'PONTO DE PARTIDA'),
+        Text(
+          'Defina um ponto de encontro ou use sua localização atual',
+          style: AppTextStyles.bodySmall,
+        ),
+        const SizedBox(height: 12),
+
+        if (_departurePoint != null) ...[
+          // Card showing the selected departure point
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.navy.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.navy.withOpacity(0.25)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.trip_origin,
+                    color: AppColors.navy, size: 22),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _departurePoint!.label?.isNotEmpty == true
+                            ? _departurePoint!.label!
+                            : 'Ponto selecionado',
+                        style: AppTextStyles.labelLarge
+                            .copyWith(fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if ((_departurePoint!.address ?? '').isNotEmpty)
+                        Text(
+                          _departurePoint!.address!,
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.textMuted),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () =>
+                      setState(() => _departurePoint = null),
+                  child: const Icon(Icons.close,
+                      color: AppColors.textMuted, size: 20),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: _pickDepartureFromMap,
+            icon: const Icon(Icons.edit_location_alt_outlined,
+                size: 18),
+            label: const Text('Trocar ponto'),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.navy,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 0),
+            ),
+          ),
+        ] else ...[
+          // Default: current device location
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.inputFill,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.my_location,
+                    color: AppColors.textMuted, size: 22),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Localização atual (padrão)',
+                    style: AppTextStyles.bodyMedium
+                        .copyWith(color: AppColors.textMuted),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: OutlinedButton.icon(
+              onPressed: _pickDepartureFromMap,
+              icon: const Icon(Icons.add_location_alt_outlined,
+                  size: 18),
+              label: Text(
+                'DEFINIR PONTO DE ENCONTRO',
+                style: AppTextStyles.labelLarge
+                    .copyWith(color: AppColors.navy, fontSize: 12),
+              ),
+              style: OutlinedButton.styleFrom(
+                side:
+                    const BorderSide(color: AppColors.navy),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(height: 24),
       ],
     );
   }
@@ -310,18 +558,47 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       'title': 'Busque o destino no mapa',
       'onSelected': null,
     });
-    if (result != null && result is LocationModel) {
-      setState(() {
-        _destLat = result.lat;
-        _destLng = result.lng;
-        if (result.address != null && _destinoLabel.isEmpty) {
-          _destinoLabel = result.address!;
-        }
-        if (result.address != null) {
-          _ruaCtrl.text = result.address!.split(',').first.trim();
-        }
-      });
+    if (result == null || !mounted) return;
+
+    LocationModel? loc;
+    PlaceInfo? info;
+    if (result is Map) {
+      loc = result['location'] as LocationModel?;
+      info = result['info'] as PlaceInfo?;
+    } else if (result is LocationModel) {
+      loc = result;
     }
+    if (loc == null) return;
+
+    setState(() {
+      _destLat = loc!.lat;
+      _destLng = loc.lng;
+      final name = loc.label?.trim();
+      final addr = loc.address?.trim();
+      _destinoLabel =
+          (name != null && name.isNotEmpty) ? name : (addr ?? _destinoLabel);
+      _destInfo = info;
+
+      // Auto-preenche campos de endereço com dados estruturados da API
+      if (info != null) {
+        if ((info.streetName ?? '').isNotEmpty) {
+          _ruaCtrl.text = info.streetName!;
+          _numCtrl.text = info.streetNumber ?? '';
+        } else if (addr != null && addr.isNotEmpty) {
+          _ruaCtrl.text = addr.split(',').first.trim();
+        }
+        if ((info.neighborhood ?? '').isNotEmpty) {
+          _bairroCtrl.text = info.neighborhood!;
+        }
+        if ((info.postalCode ?? '').isNotEmpty) {
+          final cep = info.postalCode!;
+          _cepCtrl.text =
+              cep.length == 8 ? '${cep.substring(0, 5)}-${cep.substring(5)}' : cep;
+        }
+      } else if (addr != null && addr.isNotEmpty) {
+        _ruaCtrl.text = addr.split(',').first.trim();
+      }
+    });
   }
 
   // ── STEP 1: QUANTO TEMPO + PESSOAS ──────────────────────────

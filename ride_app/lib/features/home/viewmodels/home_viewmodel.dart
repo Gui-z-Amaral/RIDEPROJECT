@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/trip_model.dart';
 import '../../../core/models/ride_model.dart';
-import '../../../core/models/stop_model.dart';
 import '../../../core/services/supabase_trip_service.dart';
 import '../../../core/services/supabase_ride_service.dart';
+import '../../../core/services/places_service.dart';
 
 class HomeViewModel extends ChangeNotifier {
   List<TripModel> _upcomingTrips = [];
   List<RideModel> _upcomingRides = [];
-  List<StopModel> _suggestedStops = [];
+  List<PlaceRecommendation> _recommendations = [];
   bool _isLoading = false;
+  bool _isLoadingRecs = false;
 
   List<TripModel> get upcomingTrips => _upcomingTrips;
   List<RideModel> get upcomingRides => _upcomingRides;
-  List<StopModel> get suggestedStops => _suggestedStops;
+  List<PlaceRecommendation> get recommendations => _recommendations;
   bool get isLoading => _isLoading;
+  bool get isLoadingRecs => _isLoadingRecs;
 
   Future<void> load() async {
     _isLoading = true;
@@ -25,19 +27,54 @@ class HomeViewModel extends ChangeNotifier {
         SupabaseRideService.getRides(),
       ]);
       _upcomingTrips = (results[0] as List<TripModel>)
-          .where((t) => t.status == TripStatus.planned || t.status == TripStatus.active)
+          .where((t) =>
+              t.status == TripStatus.planned ||
+              t.status == TripStatus.active)
           .take(5)
           .toList();
       _upcomingRides = (results[1] as List<RideModel>)
-          .where((r) => r.status != RideStatus.completed && r.status != RideStatus.cancelled)
+          .where((r) =>
+              r.status != RideStatus.completed &&
+              r.status != RideStatus.cancelled)
           .take(5)
           .toList();
-      _suggestedStops = [];
     } catch (_) {
       _upcomingTrips = [];
       _upcomingRides = [];
     }
     _isLoading = false;
+    notifyListeners();
+  }
+
+  /// Carrega recomendações de lugares com base na localização do usuário.
+  /// Usa o destino da próxima viagem planejada para sugerir lugares no destino.
+  Future<void> loadRecommendations(double lat, double lng) async {
+    _isLoadingRecs = true;
+    notifyListeners();
+    try {
+      String? tripDestName;
+      double? tripDestLat;
+      double? tripDestLng;
+
+      if (_upcomingTrips.isNotEmpty) {
+        final dest = _upcomingTrips.first.destination;
+        tripDestLat = dest.lat;
+        tripDestLng = dest.lng;
+        final raw = (dest.label ?? dest.address ?? '').split(',').first.trim();
+        if (raw.isNotEmpty) tripDestName = raw;
+      }
+
+      _recommendations = await PlacesService.getRecommendations(
+        lat: lat,
+        lng: lng,
+        tripDestLat: tripDestLat,
+        tripDestLng: tripDestLng,
+        tripDestName: tripDestName,
+      );
+    } catch (_) {
+      _recommendations = [];
+    }
+    _isLoadingRecs = false;
     notifyListeners();
   }
 }

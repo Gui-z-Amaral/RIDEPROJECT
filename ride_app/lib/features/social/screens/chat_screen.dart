@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../shared/widgets/app_avatar.dart';
-import '../../../core/services/mock_data.dart';
 import '../viewmodels/social_viewmodel.dart';
 import '../../../core/utils/extensions.dart';
 
@@ -45,27 +45,28 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<SocialViewModel>();
-    final friend = MockData.users.firstWhere((u) => u.id == widget.userId, orElse: () => MockData.users.first);
+    final myId = Supabase.instance.client.auth.currentUser?.id ?? '';
+    final friend = vm.friends.where((u) => u.id == widget.userId).firstOrNull;
 
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(icon: const Icon(Icons.arrow_back_ios), onPressed: () => context.pop()),
         title: Row(
           children: [
-            AppAvatar(name: friend.name, imageUrl: friend.avatarUrl, size: 36, showOnline: true, isOnline: friend.isOnline),
-            const SizedBox(width: AppSpacing.md),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(friend.name, style: AppTextStyles.titleLarge),
-                Text(friend.isOnline ? 'Online' : 'Offline', style: AppTextStyles.labelSmall.copyWith(color: friend.isOnline ? AppColors.online : AppColors.textMuted)),
-              ],
-            ),
+            if (friend != null) ...[
+              AppAvatar(name: friend.name, imageUrl: friend.avatarUrl, size: 36, showOnline: true, isOnline: friend.isOnline),
+              const SizedBox(width: AppSpacing.md),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(friend.name, style: AppTextStyles.titleLarge),
+                  Text(friend.isOnline ? 'Online' : 'Offline', style: AppTextStyles.labelSmall.copyWith(color: friend.isOnline ? AppColors.online : AppColors.textMuted)),
+                ],
+              ),
+            ] else
+              Text('Chat', style: AppTextStyles.titleLarge),
           ],
         ),
-        actions: [
-          IconButton(icon: const Icon(Icons.call_outlined), onPressed: () => context.push('/calls/voice/${friend.id}')),
-        ],
       ),
       body: Column(
         children: [
@@ -76,7 +77,7 @@ class _ChatScreenState extends State<ChatScreen> {
               itemCount: vm.messages.length,
               itemBuilder: (_, i) {
                 final msg = vm.messages[i];
-                final isMe = msg.senderId == 'u1';
+                final isMe = msg.senderId == myId;
                 return _ChatBubble(content: msg.content, isMe: isMe, time: msg.sentAt.formattedTime);
               },
             ),

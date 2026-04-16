@@ -19,10 +19,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() {
-      context.read<SocialViewModel>().loadFriends();
-      context.read<SocialViewModel>().loadRequests();
-    });
+    Future.microtask(() => context.read<SocialViewModel>().loadAll());
   }
 
   @override
@@ -33,6 +30,12 @@ class _FriendsScreenState extends State<FriendsScreen> {
       appBar: AppBar(
         title: const Text('Amigos'),
         automaticallyImplyLeading: false,
+        leading: context.canPop()
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => context.pop(),
+              )
+            : null,
         actions: [
           if (vm.pendingCount > 0)
             Stack(

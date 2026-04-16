@@ -42,10 +42,15 @@ class SocialViewModel extends ChangeNotifier {
         SupabaseSocialService.getReceivedRequests(),
         SupabaseSocialService.getSentRequests(),
       ]);
-      _receivedRequests = results[0] as List<FriendRequestModel>;
-      _sentRequests = results[1] as List<FriendRequestModel>;
+      _receivedRequests = results[0];
+      _sentRequests = results[1];
       notifyListeners();
     } catch (_) {}
+  }
+
+  /// Loads friends and pending requests in parallel.
+  Future<void> loadAll() async {
+    await Future.wait([loadFriends(), loadRequests()]);
   }
 
   Future<void> search(String query) async {

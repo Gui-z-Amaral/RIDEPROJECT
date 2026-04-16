@@ -9,6 +9,7 @@ class TripViewModel extends ChangeNotifier {
   TripModel? _selectedTrip;
   bool _isLoading = false;
   bool _isSaving = false;
+  bool _hasError = false;
 
   // Form state
   String _title = '';
@@ -23,6 +24,7 @@ class TripViewModel extends ChangeNotifier {
   TripModel? get selectedTrip => _selectedTrip;
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
+  bool get hasError => _hasError;
   String get title => _title;
   LocationModel? get origin => _origin;
   LocationModel? get destination => _destination;
@@ -45,10 +47,15 @@ class TripViewModel extends ChangeNotifier {
 
   Future<void> loadTripById(String id) async {
     _isLoading = true;
+    _hasError = false;
+    _selectedTrip = null;
     notifyListeners();
     try {
       _selectedTrip = await SupabaseTripService.getTripById(id);
-    } catch (_) {}
+      if (_selectedTrip == null) _hasError = true;
+    } catch (_) {
+      _hasError = true;
+    }
     _isLoading = false;
     notifyListeners();
   }
@@ -90,6 +97,15 @@ class TripViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Resets detail state synchronously (no notifyListeners) so the very
+  /// first build of TripDetailScreen always shows LoadingWidget instead of
+  /// a stale error/trip from a previous navigation.
+  void clearForLoad() {
+    _hasError = false;
+    _selectedTrip = null;
+    // intentionally no notifyListeners — loadTripById will call it
+  }
+
   Future<TripModel?> saveTrip() async {
     if (_title.isEmpty || _origin == null || _destination == null) return null;
     _isSaving = true;
@@ -125,6 +141,14 @@ class TripViewModel extends ChangeNotifier {
   Future<void> deleteTrip(String id) async {
     try {
       await SupabaseTripService.deleteTrip(id);
+      _trips = _trips.where((t) => t.id != id).toList();
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> leaveTrip(String id) async {
+    try {
+      await SupabaseTripService.leaveTrip(id);
       _trips = _trips.where((t) => t.id != id).toList();
       notifyListeners();
     } catch (_) {}

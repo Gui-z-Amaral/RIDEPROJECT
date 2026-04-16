@@ -90,6 +90,15 @@ class SupabaseAuthService {
   }
 
   // ── Update profile ─────────────────────────────────────────
+  static Future<UserModel?> addPhoto(String url) async {
+    final u = currentAuthUser;
+    if (u == null) return null;
+    final profile = await _fetchProfile(u.id);
+    final updated = [...(profile?.photos ?? []), url];
+    await _db.from('profiles').update({'photos': updated}).eq('id', u.id);
+    return _fetchProfile(u.id);
+  }
+
   static Future<UserModel?> updateProfile({
     String? name,
     String? bio,
@@ -134,6 +143,7 @@ class SupabaseAuthService {
         city: r['city'] as String?,
         motoModel: r['moto_model'] as String?,
         motoYear: r['moto_year'] as String?,
+        photos: List<String>.from(r['photos'] as List? ?? []),
         friendsCount: (r['friends_count'] as num?)?.toInt() ?? 0,
         tripsCount: (r['trips_count'] as num?)?.toInt() ?? 0,
         isOnline: r['is_online'] as bool? ?? false,

@@ -66,14 +66,25 @@ class SupabaseTripService {
 
     final tripId = tripRow['id'] as String;
 
-    // Add creator as participant
+    // Add creator as participant; try to batch-add others.
+    // If RLS prevents inserting rows for other users, fall back to
+    // inserting just the creator so the trip save always succeeds.
     final allParticipants = [_uid, ...participantIds.where((id) => id != _uid)];
-    await _db.from('trip_participants').insert(
-      allParticipants.map((id) => {'trip_id': tripId, 'user_id': id}).toList(),
-    );
+    try {
+      await _db.from('trip_participants').insert(
+        allParticipants.map((id) => {'trip_id': tripId, 'user_id': id}).toList(),
+      );
+    } catch (_) {
+      // Batch failed (likely RLS restriction) — ensure at least creator is added
+      await _db.from('trip_participants').insert(
+        {'trip_id': tripId, 'user_id': _uid},
+      );
+    }
 
-    // Update trips_count for creator
-    await _db.rpc('update_trips_count', params: {'p_user_id': _uid});
+    // Update trips_count for creator (best-effort — RPC may not exist)
+    try {
+      await _db.rpc('update_trips_count', params: {'p_user_id': _uid});
+    } catch (_) {}
 
     return (await getTripById(tripId))!;
   }
