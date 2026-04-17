@@ -58,11 +58,18 @@ class SupabaseRideService {
 
     final rideId = rideRow['id'] as String;
 
-    // Add creator + invited participants
+    // Add creator + invited participants.
+    // If batch insert fails (RLS restriction), fall back to creator-only.
     final allParticipants = [_uid, ...participantIds.where((id) => id != _uid)];
-    await _db.from('ride_participants').insert(
-      allParticipants.map((id) => {'ride_id': rideId, 'user_id': id}).toList(),
-    );
+    try {
+      await _db.from('ride_participants').insert(
+        allParticipants.map((id) => {'ride_id': rideId, 'user_id': id}).toList(),
+      );
+    } catch (_) {
+      await _db.from('ride_participants').insert(
+        {'ride_id': rideId, 'user_id': _uid},
+      );
+    }
 
     return (await getRideById(rideId))!;
   }

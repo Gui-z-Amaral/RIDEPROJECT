@@ -174,10 +174,14 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     if (!mounted) return;
     if (trip != null) {
       context.showSnack('Viagem criada com sucesso!');
-      context.go('/trips/${trip.id}');
+      context.pushReplacement('/trips/${trip.id}');
     } else {
-      context.showSnack('Erro ao criar viagem. Tente novamente.',
-          isError: true);
+      context.showSnack(
+        vm.saveError != null
+            ? 'Erro ao criar viagem: ${vm.saveError}'
+            : 'Erro ao criar viagem. Tente novamente.',
+        isError: true,
+      );
     }
   }
 

@@ -7,9 +7,12 @@ import 'app/app.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarDividerColor: Colors.transparent,
   ));
 
   SystemChrome.setPreferredOrientations([

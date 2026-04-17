@@ -82,7 +82,9 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
-          Container(
+          SafeArea(
+            top: false,
+            child: Container(
             decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.divider)), color: AppColors.surface),
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
             child: Row(
@@ -113,6 +115,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ],
             ),
+          ),
           ),
         ],
       ),

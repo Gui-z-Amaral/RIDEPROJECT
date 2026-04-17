@@ -76,11 +76,19 @@ class _CreateRideScreenState extends State<CreateRideScreen> {
   Future<void> _finish() async {
     final vm = context.read<RideViewModel>();
     final ride = await vm.saveRide();
-    if (ride != null && mounted) {
+    if (!mounted) return;
+    if (ride != null) {
       context.read<ActiveSessionViewModel>().startSession(
           id: ride.id, title: ride.title, isRide: true);
       context.showSnack('Rolê criado!');
       context.go('/session/waiting/${ride.id}');
+    } else {
+      context.showSnack(
+        vm.saveError != null
+            ? 'Erro ao criar rolê: ${vm.saveError}'
+            : 'Erro ao criar rolê. Tente novamente.',
+        isError: true,
+      );
     }
   }
 

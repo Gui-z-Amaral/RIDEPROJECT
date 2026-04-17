@@ -76,8 +76,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     // Só considera a viagem válida se o ID bate com o que foi solicitado
     final trip = vm.selectedTrip?.id == widget.tripId ? vm.selectedTrip : null;
 
-    // Mostra loading enquanto: ainda carregando, ou viagem ainda não chegou (e não há erro)
-    if (vm.isLoading || (trip == null && !vm.hasError)) {
+    // Mostra loading enquanto: carregando detalhes, ou viagem ainda não chegou (e sem erro)
+    if (vm.isLoadingDetail || (trip == null && !vm.hasError)) {
       return Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(

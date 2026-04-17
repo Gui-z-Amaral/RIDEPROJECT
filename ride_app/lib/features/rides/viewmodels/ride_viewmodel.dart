@@ -9,6 +9,7 @@ class RideViewModel extends ChangeNotifier {
   RideModel? _selectedRide;
   bool _isLoading = false;
   bool _isSaving = false;
+  String? _saveError;
 
   // Form state
   String _title = '';
@@ -21,6 +22,7 @@ class RideViewModel extends ChangeNotifier {
   RideModel? get selectedRide => _selectedRide;
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
+  String? get saveError => _saveError;
   String get title => _title;
   LocationModel? get meetingPoint => _meetingPoint;
   List<UserModel> get participants => _participants;
@@ -78,6 +80,7 @@ class RideViewModel extends ChangeNotifier {
   Future<RideModel?> saveRide() async {
     if (_title.isEmpty || _meetingPoint == null) return null;
     _isSaving = true;
+    _saveError = null;
     notifyListeners();
     try {
       final ride = await SupabaseRideService.createRide(
@@ -92,7 +95,8 @@ class RideViewModel extends ChangeNotifier {
       _isSaving = false;
       notifyListeners();
       return ride;
-    } catch (_) {
+    } catch (e) {
+      _saveError = e.toString();
       _isSaving = false;
       notifyListeners();
       return null;

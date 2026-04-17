@@ -7,9 +7,17 @@ import '../../../core/services/supabase_trip_service.dart';
 class TripViewModel extends ChangeNotifier {
   List<TripModel> _trips = [];
   TripModel? _selectedTrip;
+
+  // ── List operations (loadTrips) ────────────────────────────
   bool _isLoading = false;
+
+  // ── Detail operations (loadTripById) ───────────────────────
+  // Kept separate so loadTrips() never clobbers the detail loading state.
+  bool _isLoadingDetail = false;
+  bool _detailError = false;
+
   bool _isSaving = false;
-  bool _hasError = false;
+  String? _saveError;
 
   // Form state
   String _title = '';
@@ -23,8 +31,11 @@ class TripViewModel extends ChangeNotifier {
   List<TripModel> get trips => _trips;
   TripModel? get selectedTrip => _selectedTrip;
   bool get isLoading => _isLoading;
+  bool get isLoadingDetail => _isLoadingDetail;
   bool get isSaving => _isSaving;
-  bool get hasError => _hasError;
+  String? get saveError => _saveError;
+  // hasError kept for any external callers; maps to the detail flag.
+  bool get hasError => _detailError;
   String get title => _title;
   LocationModel? get origin => _origin;
   LocationModel? get destination => _destination;
@@ -46,17 +57,17 @@ class TripViewModel extends ChangeNotifier {
   }
 
   Future<void> loadTripById(String id) async {
-    _isLoading = true;
-    _hasError = false;
+    _isLoadingDetail = true;
+    _detailError = false;
     _selectedTrip = null;
     notifyListeners();
     try {
       _selectedTrip = await SupabaseTripService.getTripById(id);
-      if (_selectedTrip == null) _hasError = true;
+      if (_selectedTrip == null) _detailError = true;
     } catch (_) {
-      _hasError = true;
+      _detailError = true;
     }
-    _isLoading = false;
+    _isLoadingDetail = false;
     notifyListeners();
   }
 
@@ -97,18 +108,22 @@ class TripViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Resets detail state synchronously (no notifyListeners) so the very
-  /// first build of TripDetailScreen always shows LoadingWidget instead of
-  /// a stale error/trip from a previous navigation.
+  /// Resets detail state and immediately enters loading mode.
+  /// Called from TripDetailScreen.initState() before the first build.
+  /// Sets _isLoadingDetail = true so the first build always shows the
+  /// LoadingWidget, regardless of any previous navigation state.
+  /// Uses the separate detail flags so loadTrips() can never interfere.
   void clearForLoad() {
-    _hasError = false;
+    _isLoadingDetail = true;
+    _detailError = false;
     _selectedTrip = null;
-    // intentionally no notifyListeners — loadTripById will call it
+    notifyListeners();
   }
 
   Future<TripModel?> saveTrip() async {
     if (_title.isEmpty || _origin == null || _destination == null) return null;
     _isSaving = true;
+    _saveError = null;
     notifyListeners();
     try {
       final trip = await SupabaseTripService.createTrip(
@@ -124,7 +139,8 @@ class TripViewModel extends ChangeNotifier {
       _isSaving = false;
       notifyListeners();
       return trip;
-    } catch (_) {
+    } catch (e) {
+      _saveError = e.toString();
       _isSaving = false;
       notifyListeners();
       return null;

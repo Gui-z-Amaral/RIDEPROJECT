@@ -99,11 +99,11 @@ class ShellScreen extends StatelessWidget {
     );
   }
 
-  void _showCreateMenu(BuildContext context) {
-    showModalBottomSheet(
+  Future<void> _showCreateMenu(BuildContext context) async {
+    final route = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) => Container(
+      builder: (sheetCtx) => Container(
         decoration: const BoxDecoration(
           color: AppColors.background,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -127,26 +127,24 @@ class ShellScreen extends StatelessWidget {
               icon: Icons.route,
               title: 'Nova Viagem',
               subtitle: 'Planeje um roteiro com destino e paradas',
-              onTap: () {
-                Navigator.pop(context);
-                context.push('/trips/create');
-              },
+              onTap: () => Navigator.pop(sheetCtx, '/trips/create'),
             ),
             const SizedBox(height: 12),
             _MenuOption(
               icon: Icons.groups,
               title: 'Novo Rolê',
               subtitle: 'Crie um rolê e convide seus amigos',
-              onTap: () {
-                Navigator.pop(context);
-                context.push('/rides/create');
-              },
+              onTap: () => Navigator.pop(sheetCtx, '/rides/create'),
             ),
             const SizedBox(height: 8),
           ],
         ),
       ),
     );
+    if (route == null || !context.mounted) return;
+    await Future.delayed(const Duration(milliseconds: 350));
+    if (!context.mounted) return;
+    context.push(route);
   }
 }
 

@@ -83,13 +83,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // ── Trip bottom sheet ─────────────────────────────────────
-  void _showTripSheet(TripModel t) {
+  Future<void> _showTripSheet(TripModel t) async {
     final myId = Supabase.instance.client.auth.currentUser?.id ?? '';
     final isOwner = t.creator.id == myId;
     final parts = t.destination.address?.split(',') ?? [];
     final city = parts.isNotEmpty ? parts.first.trim() : t.title;
 
-    showModalBottomSheet(
+    // O sheet retorna 'view' ou 'delete' — a ação só roda APÓS o sheet
+    // estar totalmente fechado, evitando barreira residual na tela.
+    final action = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: AppColors.background,
       shape: const RoundedRectangleBorder(
@@ -145,13 +147,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Row(children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  // fecha sheet com o contexto do sheet, depois navega
-                  onPressed: () {
-                    Navigator.pop(sheetCtx);
-                    Future.microtask(() {
-                      if (mounted) context.push('/trips/${t.id}');
-                    });
-                  },
+                  onPressed: () => Navigator.pop(sheetCtx, 'view'),
                   icon: const Icon(Icons.open_in_new, size: 16),
                   label: const Text('Ver detalhes'),
                   style: OutlinedButton.styleFrom(
@@ -166,43 +162,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () async {
-                    // fecha o sheet com o contexto do sheet
-                    Navigator.pop(sheetCtx);
-                    // aguarda a animação de fechamento terminar
-                    await Future.delayed(const Duration(milliseconds: 200));
-                    if (!mounted) return;
-                    // mostra o dialog com o contexto do ProfileScreen
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (dialogCtx) => AlertDialog(
-                        title: Text(isOwner ? 'Excluir viagem' : 'Sair da viagem'),
-                        content: Text(isOwner
-                            ? 'Deseja excluir "${t.title}"?'
-                            : 'Deseja sair de "${t.title}"?'),
-                        actions: [
-                          TextButton(
-                            // usa dialogCtx para fechar o dialog
-                            onPressed: () => Navigator.pop(dialogCtx, false),
-                            child: const Text('Cancelar'),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(dialogCtx, true),
-                            child: Text(isOwner ? 'Excluir' : 'Sair',
-                                style: const TextStyle(color: Colors.red)),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirm == true && mounted) {
-                      final vm = context.read<TripViewModel>();
-                      if (isOwner) {
-                        await vm.deleteTrip(t.id);
-                      } else {
-                        await vm.leaveTrip(t.id);
-                      }
-                    }
-                  },
+                  onPressed: () => Navigator.pop(sheetCtx, 'delete'),
                   icon: Icon(isOwner ? Icons.delete_outline : Icons.exit_to_app, size: 16),
                   label: Text(isOwner ? 'Excluir' : 'Sair'),
                   style: ElevatedButton.styleFrom(
@@ -220,6 +180,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
     );
+
+    if (!mounted || action == null) return;
+
+    if (action == 'view') {
+      // Wait for the bottom sheet dismiss animation to fully complete
+      // before pushing the new route, to avoid the barrier overlay staying visible.
+      await Future.delayed(const Duration(milliseconds: 350));
+      if (!mounted) return;
+      context.push('/trips/${t.id}');
+      return;
+    }
+
+    // action == 'delete'
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: Text(isOwner ? 'Excluir viagem' : 'Sair da viagem'),
+        content: Text(isOwner
+            ? 'Deseja excluir "${t.title}"?'
+            : 'Deseja sair de "${t.title}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: Text(isOwner ? 'Excluir' : 'Sair',
+                style: const TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true && mounted) {
+      final vm = context.read<TripViewModel>();
+      if (isOwner) {
+        await vm.deleteTrip(t.id);
+      } else {
+        await vm.leaveTrip(t.id);
+      }
+    }
   }
 
   @override
