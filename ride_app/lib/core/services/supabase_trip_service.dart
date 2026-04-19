@@ -107,6 +107,23 @@ class SupabaseTripService {
         .eq('creator_id', _uid);
   }
 
+  // ── Confirmar / recusar participação ──────────────────────
+  static Future<void> confirmParticipation(String tripId) async {
+    await _db
+        .from('trip_participants')
+        .update({'status': 'confirmed'})
+        .eq('trip_id', tripId)
+        .eq('user_id', _uid);
+  }
+
+  static Future<void> declineParticipation(String tripId) async {
+    await _db
+        .from('trip_participants')
+        .update({'status': 'declined'})
+        .eq('trip_id', tripId)
+        .eq('user_id', _uid);
+  }
+
   // ── Entrar / sair da viagem ────────────────────────────────
   static Future<void> joinTrip(String tripId) async {
     await _db.from('trip_participants').upsert({

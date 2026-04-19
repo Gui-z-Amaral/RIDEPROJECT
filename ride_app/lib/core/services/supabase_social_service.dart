@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
 import '../models/friend_request_model.dart';
@@ -22,14 +23,21 @@ class SupabaseSocialService {
         .eq('friend_id', _uid)
         .timeout(const Duration(seconds: 10), onTimeout: () => []);
 
+    final seen = <String>{};
     final friends = <UserModel>[];
     for (final row in asUser as List) {
       final p = row['profiles'] as Map<String, dynamic>?;
-      if (p != null) friends.add(_rowToUser(p));
+      if (p != null) {
+        final u = _rowToUser(p);
+        if (seen.add(u.id)) friends.add(u);
+      }
     }
     for (final row in asFriend as List) {
       final p = row['profiles'] as Map<String, dynamic>?;
-      if (p != null) friends.add(_rowToUser(p));
+      if (p != null) {
+        final u = _rowToUser(p);
+        if (seen.add(u.id)) friends.add(u);
+      }
     }
     return friends;
   }
@@ -165,36 +173,44 @@ class SupabaseSocialService {
         .eq('chat_id', chatId)
         .order('sent_at');
 
-    return (rows as List).map((r) {
-      final sender = r['sender'] as Map<String, dynamic>? ?? {};
-      return MessageModel(
-        id: r['id'] as String,
-        senderId: r['sender_id'] as String,
-        senderName: sender['name'] as String? ?? '',
-        senderAvatar: sender['avatar_url'] as String?,
-        content: r['content'] as String,
-        sentAt: DateTime.parse(r['sent_at'] as String),
-        isRead: r['is_read'] as bool? ?? false,
-        chatId: chatId,
-      );
-    }).toList();
+    return (rows as List).map((r) => _rowToMessage(r, chatId)).toList();
   }
 
-  static Future<MessageModel> sendMessage(String chatId, String content) async {
+  static Future<MessageModel> sendMessage(String chatId, String content,
+      {String? imageUrl}) async {
     final row = await _db.from('messages').insert({
       'chat_id': chatId,
       'sender_id': _uid,
       'content': content,
+      if (imageUrl != null) 'image_url': imageUrl,
     }).select('*, sender:profiles!messages_sender_id_fkey(name, avatar_url)').single();
 
-    final sender = row['sender'] as Map<String, dynamic>? ?? {};
+    return _rowToMessage(row, chatId);
+  }
+
+  static Future<String> uploadChatImage(
+      String chatId, Uint8List bytes, String extension) async {
+    final path =
+        'chat/$chatId/${DateTime.now().millisecondsSinceEpoch}.$extension';
+    await _db.storage.from('chat-images').uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(contentType: 'image/$extension', upsert: false),
+        );
+    return _db.storage.from('chat-images').getPublicUrl(path);
+  }
+
+  static MessageModel _rowToMessage(Map<String, dynamic> r, String chatId) {
+    final sender = r['sender'] as Map<String, dynamic>? ?? {};
     return MessageModel(
-      id: row['id'] as String,
-      senderId: _uid,
+      id: r['id'] as String,
+      senderId: r['sender_id'] as String,
       senderName: sender['name'] as String? ?? '',
       senderAvatar: sender['avatar_url'] as String?,
-      content: content,
-      sentAt: DateTime.parse(row['sent_at'] as String),
+      content: r['content'] as String? ?? '',
+      imageUrl: r['image_url'] as String?,
+      sentAt: DateTime.parse(r['sent_at'] as String),
+      isRead: r['is_read'] as bool? ?? false,
       chatId: chatId,
     );
   }
@@ -214,7 +230,6 @@ class SupabaseSocialService {
               value: chatId),
           callback: (payload) async {
             final newRow = payload.newRecord;
-            // Fetch sender name
             final profile = await _db
                 .from('profiles')
                 .select('name, avatar_url')
@@ -225,7 +240,8 @@ class SupabaseSocialService {
               senderId: newRow['sender_id'] as String,
               senderName: profile?['name'] as String? ?? '',
               senderAvatar: profile?['avatar_url'] as String?,
-              content: newRow['content'] as String,
+              content: newRow['content'] as String? ?? '',
+              imageUrl: newRow['image_url'] as String?,
               sentAt: DateTime.parse(newRow['sent_at'] as String),
               chatId: chatId,
             ));

@@ -3,6 +3,47 @@ import 'location_model.dart';
 
 enum RideStatus { scheduled, waiting, active, completed, cancelled }
 
+class RideHistoryEntry {
+  final String rideId;
+  final String title;
+  final String meetingName;
+  final RideStatus status;
+  final DateTime createdAt;
+  final DateTime? startedAt;
+  final DateTime? joinedAt;
+  final DateTime? leftAt;
+
+  const RideHistoryEntry({
+    required this.rideId,
+    required this.title,
+    required this.meetingName,
+    required this.status,
+    required this.createdAt,
+    this.startedAt,
+    this.joinedAt,
+    this.leftAt,
+  });
+
+  bool get isActive =>
+      leftAt == null &&
+      (status == RideStatus.active || status == RideStatus.waiting);
+
+  Duration? get duration {
+    if (leftAt == null) return null;
+    final start = startedAt ?? joinedAt ?? createdAt;
+    return leftAt!.difference(start);
+  }
+
+  String get durationLabel {
+    final d = duration;
+    if (d == null) return '';
+    final h = d.inHours;
+    final m = d.inMinutes % 60;
+    if (h > 0) return '${h}h ${m}min';
+    return '${m}min';
+  }
+}
+
 class RideModel {
   final String id;
   final String title;
@@ -13,6 +54,7 @@ class RideModel {
   final DateTime? scheduledAt;
   final bool isImmediate;
   final DateTime createdAt;
+  final DateTime? startedAt;
 
   const RideModel({
     required this.id,
@@ -24,6 +66,7 @@ class RideModel {
     this.scheduledAt,
     this.isImmediate = false,
     required this.createdAt,
+    this.startedAt,
   });
 
   String buildGoogleMapsUrl(LocationModel origin) {

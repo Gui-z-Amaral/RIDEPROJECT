@@ -102,11 +102,23 @@ final router = GoRouter(
     ),
     GoRoute(
       path: '/session/active/:id',
-      builder: (_, state) => ActiveMapScreen(sessionId: state.pathParameters['id']!),
+      builder: (_, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return ActiveMapScreen(
+          sessionId: state.pathParameters['id']!,
+          isRide: extra?['isRide'] as bool? ?? true,
+        );
+      },
     ),
     GoRoute(
       path: '/session/confirm/:id',
-      builder: (_, state) => GuestConfirmScreen(sessionId: state.pathParameters['id']!),
+      builder: (_, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return GuestConfirmScreen(
+          sessionId: state.pathParameters['id']!,
+          isRide: extra?['isRide'] as bool? ?? true,
+        );
+      },
     ),
 
     GoRoute(

@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../core/services/geocoding_service.dart';
+import '../../../core/models/ride_model.dart';
+import '../viewmodels/ride_viewmodel.dart';
 
 const _rideAccent = Color(0xFF9C6FE4);
 
@@ -226,18 +230,18 @@ class _RidesListScreenState extends State<RidesListScreen> {
   }
 
   void _showHistory(BuildContext context) {
+    context.read<RideViewModel>().loadHistory();
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surface,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius:
             BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusXl)),
       ),
-      builder: (_) => _HistorySheet(
-        title: 'Histórico de rolês',
-        icon: Icons.groups_outlined,
-        newLabel: 'Novo rolê',
+      builder: (_) => _RideHistorySheet(
         onCreateNew: () { Navigator.pop(context); context.push('/rides/create'); },
+        onRejoin: (rideId) { Navigator.pop(context); context.push('/session/active/$rideId', extra: {'isRide': true}); },
       ),
     );
   }
@@ -467,52 +471,224 @@ class _PlaceInfoPanel extends StatelessWidget {
   }
 }
 
-class _HistorySheet extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final String newLabel;
+class _RideHistorySheet extends StatelessWidget {
   final VoidCallback onCreateNew;
-  const _HistorySheet({required this.title, required this.icon, required this.newLabel, required this.onCreateNew});
+  final void Function(String rideId) onRejoin;
+
+  const _RideHistorySheet({required this.onCreateNew, required this.onRejoin});
+
+  String _formatDate(DateTime? dt) {
+    if (dt == null) return '—';
+    return DateFormat('dd/MM/yy HH:mm').format(dt);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+    return Consumer<RideViewModel>(
+      builder: (ctx, vm, _) {
+        final active = vm.activeUserRides;
+        final hist = vm.history;
+
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.6,
+          minChildSize: 0.4,
+          maxChildSize: 0.9,
+          builder: (_, scrollCtrl) => Column(
+            children: [
+              // Handle + header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 0),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 40, height: 4,
+                      decoration: BoxDecoration(
+                          color: AppColors.divider,
+                          borderRadius: BorderRadius.circular(2)),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    Row(
+                      children: [
+                        const Icon(Icons.groups_outlined, color: _rideAccent),
+                        const SizedBox(width: AppSpacing.sm),
+                        Text('Rolês', style: AppTextStyles.headlineSmall),
+                        const Spacer(),
+                        TextButton.icon(
+                          onPressed: onCreateNew,
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Novo rolê'),
+                          style: TextButton.styleFrom(
+                              foregroundColor: _rideAccent),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 16, color: AppColors.divider),
+              Expanded(
+                child: vm.isHistoryLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(color: _rideAccent))
+                    : (active.isEmpty && hist.isEmpty)
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(AppSpacing.xl),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.groups_outlined,
+                                      color: AppColors.textMuted, size: 48),
+                                  const SizedBox(height: AppSpacing.md),
+                                  Text('Nenhum rolê ainda',
+                                      style: AppTextStyles.titleMedium.copyWith(
+                                          color: AppColors.textMuted)),
+                                ],
+                              ),
+                            ),
+                          )
+                        : ListView(
+                            controller: scrollCtrl,
+                            padding: EdgeInsets.only(
+                                bottom: bottomPad + AppSpacing.lg),
+                            children: [
+                              if (active.isNotEmpty) ...[
+                                _SectionHeader(
+                                    label: 'Em andamento',
+                                    color: _rideAccent),
+                                ...active.map((e) => _ActiveRideTile(
+                                      entry: e,
+                                      onRejoin: () => onRejoin(e.rideId),
+                                    )),
+                              ],
+                              if (hist.isNotEmpty) ...[
+                                _SectionHeader(
+                                    label: 'Histórico',
+                                    color: AppColors.textMuted),
+                                ...hist.map((e) => _HistoryTile(
+                                      entry: e,
+                                      formatDate: _formatDate,
+                                    )),
+                              ],
+                            ],
+                          ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _SectionHeader({required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(
-        left: AppSpacing.lg, right: AppSpacing.lg, top: AppSpacing.lg,
-        bottom: MediaQuery.of(context).padding.bottom + AppSpacing.lg,
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
+      child: Text(label.toUpperCase(),
+          style: AppTextStyles.labelSmall.copyWith(
+              color: color, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
+    );
+  }
+}
+
+class _ActiveRideTile extends StatelessWidget {
+  final RideHistoryEntry entry;
+  final VoidCallback onRejoin;
+  const _ActiveRideTile({required this.entry, required this.onRejoin});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg, vertical: AppSpacing.xs),
+      leading: Container(
+        width: 44, height: 44,
+        decoration: BoxDecoration(
+            color: _rideAccent.withOpacity(0.12), shape: BoxShape.circle),
+        child: const Icon(Icons.groups, color: _rideAccent, size: 22),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+      title: Text(entry.title, style: AppTextStyles.titleMedium),
+      subtitle: Text(entry.meetingName,
+          style: AppTextStyles.bodySmall
+              .copyWith(color: AppColors.textMuted),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis),
+      trailing: ElevatedButton(
+        onPressed: onRejoin,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _rideAccent,
+          foregroundColor: Colors.white,
+          padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          shape: RoundedRectangleBorder(
+              borderRadius:
+                  BorderRadius.circular(AppSpacing.radiusFull)),
+          elevation: 0,
+        ),
+        child: Text('Voltar',
+            style: AppTextStyles.labelSmall
+                .copyWith(color: Colors.white, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+}
+
+class _HistoryTile extends StatelessWidget {
+  final RideHistoryEntry entry;
+  final String Function(DateTime?) formatDate;
+  const _HistoryTile({required this.entry, required this.formatDate});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg, vertical: AppSpacing.xs),
+      leading: Container(
+        width: 44, height: 44,
+        decoration: BoxDecoration(
+            color: AppColors.surfaceVariant, shape: BoxShape.circle),
+        child: const Icon(Icons.groups_outlined,
+            color: AppColors.textMuted, size: 22),
+      ),
+      title: Text(entry.title, style: AppTextStyles.titleMedium),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(width: 40, height: 4,
-              decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: AppSpacing.lg),
-          Row(
-            children: [
-              Icon(icon, color: AppColors.teal),
+          Text(entry.meetingName,
+              style: AppTextStyles.bodySmall
+                  .copyWith(color: AppColors.textMuted),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 2),
+          Row(children: [
+            const Icon(Icons.calendar_today_outlined,
+                size: 11, color: AppColors.textMuted),
+            const SizedBox(width: 4),
+            Text(formatDate(entry.startedAt ?? entry.createdAt),
+                style: AppTextStyles.labelSmall
+                    .copyWith(color: AppColors.textMuted)),
+            if (entry.durationLabel.isNotEmpty) ...[
               const SizedBox(width: AppSpacing.sm),
-              Text(title, style: AppTextStyles.headlineSmall),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: onCreateNew,
-                icon: const Icon(Icons.add, size: 18),
-                label: Text(newLabel),
-                style: TextButton.styleFrom(foregroundColor: AppColors.teal),
-              ),
+              const Icon(Icons.timer_outlined,
+                  size: 11, color: AppColors.textMuted),
+              const SizedBox(width: 4),
+              Text(entry.durationLabel,
+                  style: AppTextStyles.labelSmall
+                      .copyWith(color: AppColors.textMuted)),
             ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          ...List.generate(3, (i) => ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(color: AppColors.teal.withOpacity(0.1), shape: BoxShape.circle),
-              child: Icon(icon, color: AppColors.teal, size: 18),
-            ),
-            title: Text('Registro #${i + 1}', style: AppTextStyles.titleMedium),
-            subtitle: Text('Florianópolis, SC', style: AppTextStyles.bodySmall),
-            trailing: const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 18),
-          )),
+          ]),
         ],
       ),
     );

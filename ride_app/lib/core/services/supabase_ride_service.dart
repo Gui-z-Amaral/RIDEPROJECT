@@ -14,7 +14,7 @@ class SupabaseRideService {
         .select('''
           *,
           creator:profiles!rides_creator_id_fkey(*),
-          participants:ride_participants(user:profiles(*))
+          participants:ride_participants(user:profiles(*), left_at)
         ''')
         .order('created_at', ascending: false);
 
@@ -28,13 +28,50 @@ class SupabaseRideService {
         .select('''
           *,
           creator:profiles!rides_creator_id_fkey(*),
-          participants:ride_participants(user:profiles(*))
+          participants:ride_participants(user:profiles(*), left_at)
         ''')
         .eq('id', id)
         .maybeSingle();
 
     if (row == null) return null;
     return _rowToRide(row);
+  }
+
+  // ── Histórico de rolês do usuário ──────────────────────────
+  static Future<List<RideHistoryEntry>> getRideHistory() async {
+    final rows = await _db
+        .from('ride_participants')
+        .select('''
+          joined_at, left_at,
+          ride:rides!inner(
+            id, title, status, started_at, created_at,
+            meeting_label, meeting_address
+          )
+        ''')
+        .eq('user_id', _uid)
+        .order('created_at', ascending: false);
+
+    return (rows as List).map((r) {
+      final ride = r['ride'] as Map<String, dynamic>;
+      return RideHistoryEntry(
+        rideId: ride['id'] as String,
+        title: ride['title'] as String,
+        meetingName: (ride['meeting_label'] as String?)?.isNotEmpty == true
+            ? ride['meeting_label'] as String
+            : (ride['meeting_address'] as String? ?? ''),
+        status: _parseStatus(ride['status'] as String?),
+        startedAt: ride['started_at'] != null
+            ? DateTime.parse(ride['started_at'] as String)
+            : null,
+        createdAt: DateTime.parse(ride['created_at'] as String),
+        joinedAt: r['joined_at'] != null
+            ? DateTime.parse(r['joined_at'] as String)
+            : null,
+        leftAt: r['left_at'] != null
+            ? DateTime.parse(r['left_at'] as String)
+            : null,
+      );
+    }).toList();
   }
 
   // ── Criar rolê ─────────────────────────────────────────────
@@ -76,9 +113,13 @@ class SupabaseRideService {
 
   // ── Atualizar status ───────────────────────────────────────
   static Future<void> updateStatus(String rideId, RideStatus status) async {
+    final update = <String, dynamic>{'status': status.name};
+    if (status == RideStatus.active) {
+      update['started_at'] = DateTime.now().toIso8601String();
+    }
     await _db
         .from('rides')
-        .update({'status': status.name})
+        .update(update)
         .eq('id', rideId)
         .eq('creator_id', _uid);
   }
@@ -92,9 +133,47 @@ class SupabaseRideService {
   }
 
   static Future<void> leaveRide(String rideId) async {
+    // Soft-delete: guarda o timestamp de saída para o histórico
     await _db
         .from('ride_participants')
-        .delete()
+        .update({'left_at': DateTime.now().toIso8601String()})
+        .eq('ride_id', rideId)
+        .eq('user_id', _uid);
+  }
+
+  // ── Localização em tempo real ──────────────────────────────
+  static Future<void> upsertLocation(
+      String rideId, double lat, double lng) async {
+    await _db.from('ride_locations').upsert({
+      'ride_id': rideId,
+      'user_id': _uid,
+      'lat': lat,
+      'lng': lng,
+      'updated_at': DateTime.now().toIso8601String(),
+    }, onConflict: 'ride_id,user_id');
+  }
+
+  static Future<List<Map<String, dynamic>>> getLocations(
+      String rideId) async {
+    return await _db
+        .from('ride_locations')
+        .select('user_id, lat, lng')
+        .eq('ride_id', rideId);
+  }
+
+  // ── Confirmar / recusar participação ──────────────────────
+  static Future<void> confirmParticipation(String rideId) async {
+    await _db
+        .from('ride_participants')
+        .update({'status': 'confirmed'})
+        .eq('ride_id', rideId)
+        .eq('user_id', _uid);
+  }
+
+  static Future<void> declineParticipation(String rideId) async {
+    await _db
+        .from('ride_participants')
+        .update({'status': 'declined'})
         .eq('ride_id', rideId)
         .eq('user_id', _uid);
   }
@@ -124,7 +203,9 @@ class SupabaseRideService {
         label: r['meeting_label'] as String?,
       ),
       creator: _rowToUser(creatorRow),
+      // Filtra participantes que já saíram (left_at != null)
       participants: participantRows
+          .where((p) => p['left_at'] == null)
           .map((p) => _rowToUser(p['user'] as Map<String, dynamic>? ?? {}))
           .toList(),
       status: _parseStatus(r['status'] as String?),
@@ -133,6 +214,9 @@ class SupabaseRideService {
           : null,
       isImmediate: r['is_immediate'] as bool? ?? false,
       createdAt: DateTime.parse(r['created_at'] as String),
+      startedAt: r['started_at'] != null
+          ? DateTime.parse(r['started_at'] as String)
+          : null,
     );
   }
 

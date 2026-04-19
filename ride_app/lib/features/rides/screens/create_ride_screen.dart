@@ -79,7 +79,11 @@ class _CreateRideScreenState extends State<CreateRideScreen> {
     if (!mounted) return;
     if (ride != null) {
       context.read<ActiveSessionViewModel>().startSession(
-          id: ride.id, title: ride.title, isRide: true);
+        id: ride.id,
+        title: ride.title,
+        isRide: true,
+        participants: ride.participants,
+      );
       context.showSnack('Rolê criado!');
       context.go('/session/waiting/${ride.id}');
     } else {

@@ -1,24 +1,69 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../shared/widgets/app_button.dart';
-import '../viewmodels/active_session_viewmodel.dart';
+import '../../../core/services/supabase_ride_service.dart';
+import '../../../core/services/supabase_trip_service.dart';
 
-class GuestConfirmScreen extends StatelessWidget {
+class GuestConfirmScreen extends StatefulWidget {
   final String sessionId;
-  const GuestConfirmScreen({super.key, required this.sessionId});
+  final bool isRide;
+
+  const GuestConfirmScreen({
+    super.key,
+    required this.sessionId,
+    this.isRide = true,
+  });
+
+  @override
+  State<GuestConfirmScreen> createState() => _GuestConfirmScreenState();
+}
+
+class _GuestConfirmScreenState extends State<GuestConfirmScreen> {
+  bool _isLoading = false;
+
+  Future<void> _confirm() async {
+    setState(() => _isLoading = true);
+    try {
+      if (widget.isRide) {
+        await SupabaseRideService.confirmParticipation(widget.sessionId);
+      } else {
+        await SupabaseTripService.confirmParticipation(widget.sessionId);
+      }
+    } catch (_) {}
+    // Entra na sessão ativa diretamente — funciona mesmo com rolê já em andamento
+    if (mounted) {
+      context.go('/session/active/${widget.sessionId}',
+          extra: {'isRide': widget.isRide});
+    }
+  }
+
+  Future<void> _decline() async {
+    setState(() => _isLoading = true);
+    try {
+      if (widget.isRide) {
+        await SupabaseRideService.declineParticipation(widget.sessionId);
+      } else {
+        await SupabaseTripService.declineParticipation(widget.sessionId);
+      }
+    } catch (_) {}
+    if (mounted) context.pop();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final vm = context.watch<ActiveSessionViewModel>();
+    final typeLabel = widget.isRide ? 'Rolê' : 'Viagem';
 
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(colors: [AppColors.deepNavy, AppColors.darkNavy], begin: Alignment.topCenter, end: Alignment.bottomCenter),
+          gradient: LinearGradient(
+            colors: [AppColors.deepNavy, AppColors.darkNavy],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
         ),
         child: SafeArea(
           child: Padding(
@@ -27,30 +72,35 @@ class GuestConfirmScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  width: 120, height: 120,
+                  width: 120,
+                  height: 120,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: AppColors.teal.withOpacity(0.12),
                     border: Border.all(color: AppColors.teal, width: 2),
                   ),
-                  child: const Icon(Icons.notifications_active, color: AppColors.teal, size: 56),
+                  child: const Icon(Icons.notifications_active,
+                      color: AppColors.teal, size: 56),
                 ),
                 const SizedBox(height: AppSpacing.xxl),
-                Text(vm.isRide ? 'Convite para Rolê' : 'Convite para Viagem', style: AppTextStyles.displaySmall, textAlign: TextAlign.center),
+                Text(
+                  'Convite para $typeLabel',
+                  style: AppTextStyles.displaySmall,
+                  textAlign: TextAlign.center,
+                ),
                 const SizedBox(height: AppSpacing.lg),
                 Text(
-                  '"${vm.sessionTitle}" está prestes a começar!\nVocê confirma participação?',
-                  style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textSecondary),
+                  'Você foi convidado para participar!\nConfirma presença?',
+                  style: AppTextStyles.bodyLarge
+                      .copyWith(color: AppColors.textSecondary),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: AppSpacing.xxxl),
                 AppButton(
                   label: 'Confirmar participação',
                   icon: Icons.check_circle,
-                  onPressed: () {
-                    vm.confirmParticipant('u1');
-                    context.go('/session/waiting/$sessionId');
-                  },
+                  isLoading: _isLoading,
+                  onPressed: _isLoading ? null : _confirm,
                 ),
                 const SizedBox(height: AppSpacing.md),
                 AppButton(
@@ -58,10 +108,7 @@ class GuestConfirmScreen extends StatelessWidget {
                   variant: AppButtonVariant.outline,
                   color: AppColors.error,
                   textColor: AppColors.error,
-                  onPressed: () {
-                    vm.removeParticipant('u1');
-                    context.pop();
-                  },
+                  onPressed: _isLoading ? null : _decline,
                 ),
               ],
             ),

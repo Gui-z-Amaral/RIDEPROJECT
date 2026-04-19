@@ -256,6 +256,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                           id: trip.id,
                           title: trip.title,
                           isRide: false,
+                          participants: trip.participants,
                         );
                         context.push('/session/waiting/${trip.id}');
                       },

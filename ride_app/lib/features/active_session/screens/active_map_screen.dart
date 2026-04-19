@@ -11,7 +11,8 @@ import '../viewmodels/active_session_viewmodel.dart';
 
 class ActiveMapScreen extends StatefulWidget {
   final String sessionId;
-  const ActiveMapScreen({super.key, required this.sessionId});
+  final bool isRide;
+  const ActiveMapScreen({super.key, required this.sessionId, this.isRide = true});
 
   @override
   State<ActiveMapScreen> createState() => _ActiveMapScreenState();
@@ -21,6 +22,19 @@ class _ActiveMapScreenState extends State<ActiveMapScreen> {
   bool _showParticipants = true;
   bool _showAddDestination = false;
   final _destCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<ActiveSessionViewModel>().startActiveTracking(
+          widget.sessionId,
+          isRide: widget.isRide,
+        );
+      }
+    });
+  }
 
   @override
   void dispose() { _destCtrl.dispose(); super.dispose(); }

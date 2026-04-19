@@ -10,6 +10,9 @@ class RideViewModel extends ChangeNotifier {
   bool _isLoading = false;
   bool _isSaving = false;
   String? _saveError;
+  List<RideHistoryEntry> _history = [];
+  List<RideHistoryEntry> _activeUserRides = [];
+  bool _isHistoryLoading = false;
 
   // Form state
   String _title = '';
@@ -23,6 +26,9 @@ class RideViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
   String? get saveError => _saveError;
+  List<RideHistoryEntry> get history => _history;
+  List<RideHistoryEntry> get activeUserRides => _activeUserRides;
+  bool get isHistoryLoading => _isHistoryLoading;
   String get title => _title;
   LocationModel? get meetingPoint => _meetingPoint;
   List<UserModel> get participants => _participants;
@@ -101,6 +107,21 @@ class RideViewModel extends ChangeNotifier {
       notifyListeners();
       return null;
     }
+  }
+
+  Future<void> loadHistory() async {
+    _isHistoryLoading = true;
+    notifyListeners();
+    try {
+      final all = await SupabaseRideService.getRideHistory();
+      _activeUserRides = all.where((e) => e.isActive).toList();
+      _history = all.where((e) => !e.isActive).toList();
+    } catch (_) {
+      _activeUserRides = [];
+      _history = [];
+    }
+    _isHistoryLoading = false;
+    notifyListeners();
   }
 
   Future<void> startRide(String id) async {
