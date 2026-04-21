@@ -3,20 +3,25 @@ import '../../../core/models/trip_model.dart';
 import '../../../core/models/ride_model.dart';
 import '../../../core/services/supabase_trip_service.dart';
 import '../../../core/services/supabase_ride_service.dart';
+import '../../../core/services/supabase_social_service.dart';
 import '../../../core/services/places_service.dart';
 
 class HomeViewModel extends ChangeNotifier {
   List<TripModel> _upcomingTrips = [];
   List<RideModel> _upcomingRides = [];
   List<PlaceRecommendation> _recommendations = [];
+  List<FriendTripStory> _friendStories = [];
   bool _isLoading = false;
   bool _isLoadingRecs = false;
+  bool _isLoadingStories = false;
 
   List<TripModel> get upcomingTrips => _upcomingTrips;
   List<RideModel> get upcomingRides => _upcomingRides;
   List<PlaceRecommendation> get recommendations => _recommendations;
+  List<FriendTripStory> get friendStories => _friendStories;
   bool get isLoading => _isLoading;
   bool get isLoadingRecs => _isLoadingRecs;
+  bool get isLoadingStories => _isLoadingStories;
 
   Future<void> load() async {
     _isLoading = true;
@@ -43,6 +48,18 @@ class HomeViewModel extends ChangeNotifier {
       _upcomingRides = [];
     }
     _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> loadFriendsStories() async {
+    _isLoadingStories = true;
+    notifyListeners();
+    try {
+      _friendStories = await SupabaseSocialService.getFriendsRecentTrips();
+    } catch (_) {
+      _friendStories = [];
+    }
+    _isLoadingStories = false;
     notifyListeners();
   }
 

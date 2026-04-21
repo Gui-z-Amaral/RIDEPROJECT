@@ -7,6 +7,11 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../shared/widgets/app_avatar.dart';
+import '../../../core/models/user_model.dart';
+import '../../../core/services/supabase_ride_service.dart';
+import '../../../core/services/supabase_notification_service.dart';
+import '../../auth/viewmodels/auth_viewmodel.dart';
+import '../../social/viewmodels/social_viewmodel.dart';
 import '../viewmodels/active_session_viewmodel.dart';
 
 class ActiveMapScreen extends StatefulWidget {
@@ -198,9 +203,11 @@ class _ActiveMapScreenState extends State<ActiveMapScreen> {
                       children: [
                         _ControlBtn(icon: Icons.add_location_alt, label: 'Destino', onTap: () => setState(() => _showAddDestination = !_showAddDestination)),
                         const SizedBox(width: AppSpacing.sm),
-                        _ControlBtn(icon: Icons.person_add, label: 'Convidar', onTap: () {}),
-                        const SizedBox(width: AppSpacing.sm),
-                        _ControlBtn(icon: Icons.route, label: 'Rota', onTap: () {}),
+                        _ControlBtn(
+                          icon: Icons.person_add,
+                          label: 'Convidar',
+                          onTap: () => _showInviteSheet(context, vm),
+                        ),
                         const SizedBox(width: AppSpacing.sm),
                         _ControlBtn(
                           icon: Icons.exit_to_app,
@@ -218,6 +225,76 @@ class _ActiveMapScreenState extends State<ActiveMapScreen> {
         ),
       ),
     );
+  }
+
+  void _showInviteSheet(BuildContext context, ActiveSessionViewModel vm) {
+    final socialVm = context.read<SocialViewModel>();
+    if (socialVm.friends.isEmpty && !socialVm.isLoading) {
+      socialVm.loadFriends();
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusXl)),
+      ),
+      builder: (_) => _InviteSheet(
+        alreadyInIds: vm.participants.map((p) => p.user.id).toSet(),
+        sessionTitle: vm.sessionTitle,
+        isRide: vm.isRide,
+        onInvite: (users) => _inviteUsers(context, vm, users),
+      ),
+    );
+  }
+
+  Future<void> _inviteUsers(
+    BuildContext context,
+    ActiveSessionViewModel vm,
+    List<UserModel> users,
+  ) async {
+    if (users.isEmpty) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final creatorName =
+        context.read<AuthViewModel>().user?.name ?? 'Alguém';
+
+    try {
+      if (vm.isRide) {
+        await SupabaseRideService.inviteParticipants(
+            vm.sessionId, users.map((u) => u.id).toList());
+      }
+      await SupabaseNotificationService.sendInviteNotifications(
+        userIds: users.map((u) => u.id).toList(),
+        type: vm.isRide ? 'ride_invite' : 'trip_invite',
+        title: vm.isRide ? 'Convite para rolê' : 'Convite para viagem',
+        body: '$creatorName te convidou para "${vm.sessionTitle}"',
+        data: {
+          'rideId': vm.isRide ? vm.sessionId : null,
+          'tripId': vm.isRide ? null : vm.sessionId,
+          'place': vm.sessionTitle,
+        },
+      );
+      vm.addInvitedParticipants(users);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(users.length == 1
+              ? '${users.first.name} foi convidado'
+              : '${users.length} amigos convidados'),
+          backgroundColor: AppColors.teal,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Erro ao convidar: $e'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   void _showLeaveDialog(BuildContext context, ActiveSessionViewModel vm) {
@@ -495,6 +572,223 @@ class _VoiceChannelPanel extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.lg),
         ],
+      ),
+    );
+  }
+}
+
+class _InviteSheet extends StatefulWidget {
+  final Set<String> alreadyInIds;
+  final String sessionTitle;
+  final bool isRide;
+  final Future<void> Function(List<UserModel>) onInvite;
+
+  const _InviteSheet({
+    required this.alreadyInIds,
+    required this.sessionTitle,
+    required this.isRide,
+    required this.onInvite,
+  });
+
+  @override
+  State<_InviteSheet> createState() => _InviteSheetState();
+}
+
+class _InviteSheetState extends State<_InviteSheet> {
+  final Set<String> _selected = {};
+  bool _sending = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final socialVm = context.watch<SocialViewModel>();
+    final available = socialVm.friends
+        .where((u) => !widget.alreadyInIds.contains(u.id))
+        .toList();
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.7,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      builder: (_, scrollCtrl) => Padding(
+        padding: EdgeInsets.only(
+          left: AppSpacing.lg,
+          right: AppSpacing.lg,
+          top: AppSpacing.lg,
+          bottom: bottomPad + AppSpacing.lg,
+        ),
+        child: Column(
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Row(
+              children: [
+                const Icon(Icons.person_add, color: AppColors.teal),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    widget.isRide
+                        ? 'Convidar para o rolê'
+                        : 'Convidar para a viagem',
+                    style: AppTextStyles.headlineSmall,
+                  ),
+                ),
+                if (_selected.isNotEmpty)
+                  Text('${_selected.length} selecionado(s)',
+                      style: AppTextStyles.labelSmall
+                          .copyWith(color: AppColors.teal)),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Expanded(
+              child: socialVm.isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(color: AppColors.teal))
+                  : available.isEmpty
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(AppSpacing.xl),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.people_outline,
+                                    color: AppColors.textMuted, size: 48),
+                                const SizedBox(height: AppSpacing.md),
+                                Text(
+                                  socialVm.friends.isEmpty
+                                      ? 'Você ainda não tem amigos'
+                                      : 'Todos os amigos já foram convidados',
+                                  style: AppTextStyles.bodyMedium.copyWith(
+                                      color: AppColors.textMuted),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          controller: scrollCtrl,
+                          itemCount: available.length,
+                          itemBuilder: (_, i) {
+                            final u = available[i];
+                            final isSelected = _selected.contains(u.id);
+                            return GestureDetector(
+                              onTap: () => setState(() {
+                                if (isSelected) {
+                                  _selected.remove(u.id);
+                                } else {
+                                  _selected.add(u.id);
+                                }
+                              }),
+                              child: Container(
+                                margin: const EdgeInsets.only(
+                                    bottom: AppSpacing.sm),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.md,
+                                    vertical: AppSpacing.sm),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? AppColors.teal.withOpacity(0.1)
+                                      : AppColors.card,
+                                  borderRadius: BorderRadius.circular(
+                                      AppSpacing.radiusMd),
+                                  border: Border.all(
+                                      color: isSelected
+                                          ? AppColors.teal
+                                          : AppColors.divider),
+                                ),
+                                child: Row(
+                                  children: [
+                                    AppAvatar(
+                                        name: u.name,
+                                        imageUrl: u.avatarUrl,
+                                        size: 40),
+                                    const SizedBox(width: AppSpacing.md),
+                                    Expanded(
+                                      child: Text(u.name,
+                                          style: AppTextStyles.titleMedium),
+                                    ),
+                                    AnimatedContainer(
+                                      duration:
+                                          const Duration(milliseconds: 200),
+                                      width: 26, height: 26,
+                                      decoration: BoxDecoration(
+                                        color: isSelected
+                                            ? AppColors.teal
+                                            : Colors.transparent,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                            color: isSelected
+                                                ? AppColors.teal
+                                                : AppColors.divider,
+                                            width: 2),
+                                      ),
+                                      child: isSelected
+                                          ? const Icon(Icons.check,
+                                              size: 16,
+                                              color: AppColors.deepNavy)
+                                          : null,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _selected.isEmpty || _sending
+                    ? null
+                    : () async {
+                        setState(() => _sending = true);
+                        final users = socialVm.friends
+                            .where((u) => _selected.contains(u.id))
+                            .toList();
+                        await widget.onInvite(users);
+                        if (mounted) Navigator.pop(context);
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.teal,
+                  foregroundColor: AppColors.deepNavy,
+                  disabledBackgroundColor:
+                      AppColors.teal.withOpacity(0.3),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.circular(AppSpacing.radiusFull),
+                  ),
+                  elevation: 0,
+                ),
+                child: _sending
+                    ? const SizedBox(
+                        width: 22, height: 22,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2.5, color: AppColors.deepNavy),
+                      )
+                    : Text(
+                        _selected.isEmpty
+                            ? 'Selecione amigos'
+                            : 'Convidar ${_selected.length} amigo(s)',
+                        style: AppTextStyles.titleMedium.copyWith(
+                            color: AppColors.deepNavy,
+                            fontWeight: FontWeight.bold),
+                      ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

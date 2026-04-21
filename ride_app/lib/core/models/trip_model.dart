@@ -91,11 +91,10 @@ class TripModel {
           )),
     ];
 
-    final orig = point(origin);
     final dest = point(destination);
 
     var url =
-        'https://www.google.com/maps/dir/?api=1&origin=$orig&destination=$dest';
+        'https://www.google.com/maps/dir/?api=1&destination=$dest';
     if (allMiddle.isNotEmpty) {
       final wStr = allMiddle.map((w) => point(w)).join('%7C');
       url += '&waypoints=$wStr';

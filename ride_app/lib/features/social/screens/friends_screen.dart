@@ -71,6 +71,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
                     final friend = vm.friends[i];
                     return FriendTile(
                       user: friend,
+                      onTap: () => context.push(
+                          '/profile/${friend.id}',
+                          extra: friend),
                       actions: const [FriendTileAction.chat],
                       onAction: () => context.push('/friends/chat/${friend.id}'),
                     );

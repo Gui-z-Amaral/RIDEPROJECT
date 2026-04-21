@@ -49,9 +49,8 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   DateTime? _departureDate;
   final _peoplSearchCtrl = TextEditingController();
 
-  // Step 2 – Paradas + Rota
+  // Step 2 – Paradas
   final List<String> _stopNames = [];
-  RouteType _routeType = RouteType.none;
 
   @override
   void initState() {
@@ -168,7 +167,6 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       label: _destinoLabel,
     ));
     vm.setScheduledAt(_departureDate);
-    vm.setRouteType(_routeType);
 
     final trip = await vm.saveTrip();
     if (!mounted) return;
@@ -794,19 +792,6 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         ),
 
         const SizedBox(height: 24),
-
-        _LabelSection(label: 'ROTAS'),
-        Text('Selecione uma das rotas sugeridas por nós',
-            style: AppTextStyles.bodySmall),
-        const SizedBox(height: 12),
-
-        ..._routeOptions.map((opt) => _RouteOption(
-              label: opt.label,
-              selected: _routeType == opt.type,
-              onTap: () => setState(() => _routeType = opt.type),
-            )),
-
-        const SizedBox(height: 24),
       ],
     );
   }
@@ -950,29 +935,6 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
           const SizedBox(height: 20),
         ],
 
-        // Rota
-        _LabelSection(label: 'ROTA SELECIONADA'),
-        Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            border: Border.all(color: AppColors.divider),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.route,
-                  color: AppColors.navy, size: 20),
-              const SizedBox(width: 10),
-              Text(
-                _routeType == RouteType.none
-                    ? 'Padrão'
-                    : _routeType.label,
-                style: AppTextStyles.titleMedium,
-              ),
-            ],
-          ),
-        ),
         const SizedBox(height: 32),
       ],
     );
@@ -984,33 +946,6 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
     ];
     return '${d.day.toString().padLeft(2, '0')} de ${months[d.month]} de ${d.year}';
-  }
-}
-
-// ── Route options ──────────────────────────────────────────────────────────────
-
-class _RouteOpt {
-  final String label;
-  final RouteType type;
-  const _RouteOpt(this.label, this.type);
-}
-
-const _routeOptions = [
-  _RouteOpt('rota gastronômica', RouteType.gastronomic),
-  _RouteOpt('rota panorâmica', RouteType.scenic),
-  _RouteOpt('rota litorânea', RouteType.safest),
-  _RouteOpt('rota mais curta', RouteType.shortest),
-];
-
-extension on RouteType {
-  String get label {
-    switch (this) {
-      case RouteType.gastronomic: return 'Rota Gastronômica';
-      case RouteType.scenic: return 'Rota Panorâmica';
-      case RouteType.safest: return 'Rota Litorânea';
-      case RouteType.shortest: return 'Rota Mais Curta';
-      case RouteType.none: return 'Padrão';
-    }
   }
 }
 

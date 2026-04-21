@@ -25,7 +25,6 @@ class TripViewModel extends ChangeNotifier {
   LocationModel? _destination;
   List<LocationModel> _waypoints = [];
   List<UserModel> _participants = [];
-  RouteType _routeType = RouteType.none;
   DateTime? _scheduledAt;
 
   List<TripModel> get trips => _trips;
@@ -41,7 +40,6 @@ class TripViewModel extends ChangeNotifier {
   LocationModel? get destination => _destination;
   List<LocationModel> get waypoints => _waypoints;
   List<UserModel> get participants => _participants;
-  RouteType get routeType => _routeType;
   DateTime? get scheduledAt => _scheduledAt;
 
   Future<void> loadTrips() async {
@@ -56,16 +54,24 @@ class TripViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  String? _detailErrorMessage;
+  String? get detailErrorMessage => _detailErrorMessage;
+
   Future<void> loadTripById(String id) async {
     _isLoadingDetail = true;
     _detailError = false;
+    _detailErrorMessage = null;
     _selectedTrip = null;
     notifyListeners();
     try {
       _selectedTrip = await SupabaseTripService.getTripById(id);
-      if (_selectedTrip == null) _detailError = true;
-    } catch (_) {
+      if (_selectedTrip == null) {
+        _detailError = true;
+        _detailErrorMessage = 'Viagem não encontrada.';
+      }
+    } catch (e) {
       _detailError = true;
+      _detailErrorMessage = e.toString();
     }
     _isLoadingDetail = false;
     notifyListeners();
@@ -75,7 +81,6 @@ class TripViewModel extends ChangeNotifier {
   void setTitle(String v) { _title = v; notifyListeners(); }
   void setOrigin(LocationModel? v) { _origin = v; notifyListeners(); }
   void setDestination(LocationModel? v) { _destination = v; notifyListeners(); }
-  void setRouteType(RouteType v) { _routeType = v; notifyListeners(); }
   void setScheduledAt(DateTime? v) { _scheduledAt = v; notifyListeners(); }
 
   void addWaypoint(LocationModel loc) {
@@ -103,7 +108,6 @@ class TripViewModel extends ChangeNotifier {
     _destination = null;
     _waypoints = [];
     _participants = [];
-    _routeType = RouteType.none;
     _scheduledAt = null;
     notifyListeners();
   }
@@ -116,8 +120,9 @@ class TripViewModel extends ChangeNotifier {
   void clearForLoad() {
     _isLoadingDetail = true;
     _detailError = false;
+    _detailErrorMessage = null;
     _selectedTrip = null;
-    notifyListeners();
+    // Intentionally no notifyListeners() — called from initState
   }
 
   Future<TripModel?> saveTrip() async {
@@ -131,7 +136,6 @@ class TripViewModel extends ChangeNotifier {
         origin: _origin!,
         destination: _destination!,
         participantIds: _participants.map((u) => u.id).toList(),
-        routeType: _routeType,
         scheduledAt: _scheduledAt,
       );
       _trips = [trip, ..._trips];

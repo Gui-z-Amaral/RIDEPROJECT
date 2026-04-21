@@ -1,4 +1,5 @@
 import 'package:go_router/go_router.dart';
+import '../core/models/user_model.dart';
 import '../features/auth/screens/splash_screen.dart';
 import '../features/auth/screens/onboarding_screen.dart';
 import '../features/auth/screens/login_screen.dart';
@@ -7,6 +8,7 @@ import '../features/home/screens/home_screen.dart';
 import '../features/profile/screens/profile_screen.dart';
 import '../features/profile/screens/edit_profile_screen.dart';
 import '../features/social/screens/friends_screen.dart';
+import '../features/social/screens/friend_profile_screen.dart';
 import '../features/social/screens/search_users_screen.dart';
 import '../features/social/screens/chat_screen.dart';
 import '../features/social/screens/invites_screen.dart';
@@ -55,6 +57,13 @@ final router = GoRouter(
       builder: (_, state) => ChatScreen(userId: state.pathParameters['userId']!),
     ),
     GoRoute(path: '/friends/invites', builder: (_, __) => const InvitesScreen()),
+    GoRoute(
+      path: '/profile/:userId',
+      builder: (_, state) {
+        final user = state.extra as UserModel;
+        return FriendProfileScreen(user: user);
+      },
+    ),
 
     GoRoute(path: '/trips/create', builder: (_, __) => const CreateTripScreen()),
     GoRoute(

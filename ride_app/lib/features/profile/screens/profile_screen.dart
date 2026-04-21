@@ -726,7 +726,9 @@ class _ContactCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GestureDetector(
+      onTap: () => context.push('/profile/${user.id}', extra: user),
+      child: Container(
       width: 120,
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -789,6 +791,7 @@ class _ContactCard extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ),  // Container
+    );  // GestureDetector
   }
 }

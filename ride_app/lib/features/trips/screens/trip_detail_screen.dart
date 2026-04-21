@@ -28,11 +28,10 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   @override
   void initState() {
     super.initState();
-    // Synchronously clear stale error/trip so the first build shows
-    // LoadingWidget regardless of previous navigation state.
     context.read<TripViewModel>().clearForLoad();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) context.read<TripViewModel>().loadTripById(widget.tripId);
+      if (!mounted) return;
+      context.read<TripViewModel>().loadTripById(widget.tripId);
     });
   }
 
@@ -82,6 +81,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         backgroundColor: AppColors.background,
         appBar: AppBar(
           backgroundColor: AppColors.background,
+          surfaceTintColor: Colors.transparent,
+          scrolledUnderElevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios, color: AppColors.navy),
             onPressed: () => context.go('/home'),
@@ -96,6 +97,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         backgroundColor: AppColors.background,
         appBar: AppBar(
           backgroundColor: AppColors.background,
+          surfaceTintColor: Colors.transparent,
+          scrolledUnderElevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios, color: AppColors.navy),
             onPressed: () => context.go('/home'),
@@ -123,12 +126,16 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     }
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
             expandedHeight: 160,
             pinned: true,
-            leading: IconButton(icon: const Icon(Icons.arrow_back_ios), onPressed: () => context.pop()),
+            backgroundColor: AppColors.navy,
+            foregroundColor: Colors.white,
+            surfaceTintColor: Colors.transparent,
+            leading: IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.white), onPressed: () => context.pop()),
             actions: [
               IconButton(
                 icon: const Icon(Icons.delete_outline, color: Colors.white),
@@ -155,8 +162,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                   Row(
                     children: [
                       _InfoChip(label: trip.statusLabel, color: AppColors.teal),
-                      const SizedBox(width: AppSpacing.sm),
-                      _InfoChip(label: trip.routeTypeLabel, color: AppColors.lightCyan),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.lg),

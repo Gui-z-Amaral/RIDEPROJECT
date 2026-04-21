@@ -285,6 +285,15 @@ class ActiveSessionViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void addInvitedParticipants(List<UserModel> users) {
+    for (final u in users) {
+      if (_participants.every((p) => p.user.id != u.id)) {
+        _participants.add(SessionParticipant(user: u));
+      }
+    }
+    notifyListeners();
+  }
+
   void updateParticipantLocation(String userId, double lat, double lng) {
     _setParticipantLocation(userId, lat, lng);
     notifyListeners();

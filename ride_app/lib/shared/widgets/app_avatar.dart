@@ -68,7 +68,7 @@ class AppAvatar extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isOnline ? AppColors.online : AppColors.offline,
-                border: const BorderSide(color: AppColors.background, width: 1.5) as Border?,
+                border: Border.all(color: AppColors.background, width: 1.5),
               ),
             ),
           ),

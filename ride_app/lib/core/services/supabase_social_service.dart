@@ -4,42 +4,56 @@ import '../models/user_model.dart';
 import '../models/friend_request_model.dart';
 import '../models/message_model.dart';
 
+class FriendTripStory {
+  final UserModel friend;
+  final String tripId;
+  final String tripTitle;
+  final String destination;
+
+  const FriendTripStory({
+    required this.friend,
+    required this.tripId,
+    required this.tripTitle,
+    required this.destination,
+  });
+}
+
 class SupabaseSocialService {
   static SupabaseClient get _db => Supabase.instance.client;
   static String get _uid => _db.auth.currentUser!.id;
 
   // ── Friends ────────────────────────────────────────────────
   static Future<List<UserModel>> getFriends() async {
-    // friendships has user_id + friend_id (bidirectional)
+    // Separate queries — no PostgREST joins to avoid RLS hangs
     final asUser = await _db
         .from('friendships')
-        .select('friend_id, profiles!friendships_friend_id_fkey(*)')
+        .select('friend_id')
         .eq('user_id', _uid)
         .timeout(const Duration(seconds: 10), onTimeout: () => []);
 
     final asFriend = await _db
         .from('friendships')
-        .select('user_id, profiles!friendships_user_id_fkey(*)')
+        .select('user_id')
         .eq('friend_id', _uid)
         .timeout(const Duration(seconds: 10), onTimeout: () => []);
 
-    final seen = <String>{};
-    final friends = <UserModel>[];
+    final friendIds = <String>{};
     for (final row in asUser as List) {
-      final p = row['profiles'] as Map<String, dynamic>?;
-      if (p != null) {
-        final u = _rowToUser(p);
-        if (seen.add(u.id)) friends.add(u);
-      }
+      friendIds.add(row['friend_id'] as String);
     }
     for (final row in asFriend as List) {
-      final p = row['profiles'] as Map<String, dynamic>?;
-      if (p != null) {
-        final u = _rowToUser(p);
-        if (seen.add(u.id)) friends.add(u);
-      }
+      friendIds.add(row['user_id'] as String);
     }
-    return friends;
+
+    if (friendIds.isEmpty) return [];
+
+    final profiles = await _db
+        .from('profiles')
+        .select()
+        .inFilter('id', friendIds.toList())
+        .timeout(const Duration(seconds: 10), onTimeout: () => []);
+
+    return (profiles as List).map((p) => _rowToUser(p)).toList();
   }
 
   static Future<void> sendFriendRequest(String toUserId) async {
@@ -88,15 +102,29 @@ class SupabaseSocialService {
   static Future<List<FriendRequestModel>> getReceivedRequests() async {
     final rows = await _db
         .from('friend_requests')
-        .select('*, from_profile:profiles!friend_requests_from_user_id_fkey(*)')
+        .select('id, from_user_id, created_at')
         .eq('to_user_id', _uid)
-        .eq('status', 'pending');
+        .eq('status', 'pending')
+        .timeout(const Duration(seconds: 10), onTimeout: () => []);
 
-    return (rows as List).map((r) {
-      final fromProfile = r['from_profile'] as Map<String, dynamic>;
+    if ((rows as List).isEmpty) return [];
+
+    final fromIds = rows.map((r) => r['from_user_id'] as String).toList();
+    final profiles = await _db
+        .from('profiles')
+        .select()
+        .inFilter('id', fromIds)
+        .timeout(const Duration(seconds: 10), onTimeout: () => []);
+
+    final profileMap = {
+      for (final p in profiles as List) (p['id'] as String): _rowToUser(p),
+    };
+
+    return rows.map((r) {
+      final fromId = r['from_user_id'] as String;
       return FriendRequestModel(
         id: r['id'] as String,
-        from: _rowToUser(fromProfile),
+        from: profileMap[fromId] ?? UserModel(id: fromId, name: '', username: ''),
         to: UserModel(id: _uid, name: '', username: ''),
         status: FriendRequestStatus.pending,
         createdAt: DateTime.parse(r['created_at'] as String),
@@ -107,16 +135,30 @@ class SupabaseSocialService {
   static Future<List<FriendRequestModel>> getSentRequests() async {
     final rows = await _db
         .from('friend_requests')
-        .select('*, to_profile:profiles!friend_requests_to_user_id_fkey(*)')
+        .select('id, to_user_id, created_at')
         .eq('from_user_id', _uid)
-        .eq('status', 'pending');
+        .eq('status', 'pending')
+        .timeout(const Duration(seconds: 10), onTimeout: () => []);
 
-    return (rows as List).map((r) {
-      final toProfile = r['to_profile'] as Map<String, dynamic>;
+    if ((rows as List).isEmpty) return [];
+
+    final toIds = rows.map((r) => r['to_user_id'] as String).toList();
+    final profiles = await _db
+        .from('profiles')
+        .select()
+        .inFilter('id', toIds)
+        .timeout(const Duration(seconds: 10), onTimeout: () => []);
+
+    final profileMap = {
+      for (final p in profiles as List) (p['id'] as String): _rowToUser(p),
+    };
+
+    return rows.map((r) {
+      final toId = r['to_user_id'] as String;
       return FriendRequestModel(
         id: r['id'] as String,
         from: UserModel(id: _uid, name: '', username: ''),
-        to: _rowToUser(toProfile),
+        to: profileMap[toId] ?? UserModel(id: toId, name: '', username: ''),
         status: FriendRequestStatus.pending,
         createdAt: DateTime.parse(r['created_at'] as String),
       );
@@ -151,6 +193,36 @@ class SupabaseSocialService {
         .from('friend_requests')
         .update({'status': 'rejected'})
         .eq('id', requestId);
+  }
+
+  // ── Friends' recent trips (for home stories) ──────────────
+  static Future<List<FriendTripStory>> getFriendsRecentTrips() async {
+    final friends = await getFriends();
+    if (friends.isEmpty) return [];
+
+    final friendIds = friends.map((f) => f.id).toList();
+    final friendMap = {for (final f in friends) f.id: f};
+
+    // Trips created by friends that are upcoming
+    final rows = await _db
+        .from('trips')
+        .select('id, title, destination_address, creator_id')
+        .inFilter('creator_id', friendIds)
+        .inFilter('status', ['planned', 'active'])
+        .order('created_at', ascending: false)
+        .limit(20)
+        .timeout(const Duration(seconds: 10), onTimeout: () => []);
+
+    return (rows as List).map((r) {
+      final friend = friendMap[r['creator_id'] as String];
+      if (friend == null) return null;
+      return FriendTripStory(
+        friend: friend,
+        tripId: r['id'] as String,
+        tripTitle: r['title'] as String,
+        destination: r['destination_address'] as String? ?? '',
+      );
+    }).whereType<FriendTripStory>().toList();
   }
 
   // ── Search users ───────────────────────────────────────────

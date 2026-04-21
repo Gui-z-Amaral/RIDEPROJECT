@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/trip_model.dart';
 import '../models/location_model.dart';
 import '../models/user_model.dart';
+import 'supabase_notification_service.dart';
 
 class SupabaseTripService {
   static SupabaseClient get _db => Supabase.instance.client;
@@ -9,32 +10,82 @@ class SupabaseTripService {
 
   // ── Buscar todas as viagens ────────────────────────────────
   static Future<List<TripModel>> getTrips() async {
+    // Sem PostgREST join — evita hang causado por RLS em joins
     final rows = await _db
         .from('trips')
-        .select('''
-          *,
-          creator:profiles!trips_creator_id_fkey(*),
-          participants:trip_participants(user:profiles(*))
-        ''')
-        .order('created_at', ascending: false);
+        .select()
+        .order('created_at', ascending: false)
+        .timeout(const Duration(seconds: 15));
 
-    return rows.map(_rowToTrip).toList();
+    if (rows.isEmpty) return [];
+
+    final tripIds = rows.map((r) => r['id'] as String).toList();
+
+    final participantRows = await _db
+        .from('trip_participants')
+        .select('trip_id, user_id')
+        .inFilter('trip_id', tripIds)
+        .timeout(const Duration(seconds: 15));
+
+    final participantsByTrip = <String, List<String>>{};
+    for (final p in participantRows as List) {
+      final tid = p['trip_id'] as String;
+      final uid = p['user_id'] as String;
+      participantsByTrip.putIfAbsent(tid, () => []).add(uid);
+    }
+
+    // Busca criadores + participantes numa única query de perfis
+    final creatorIds = rows.map((r) => r['creator_id'] as String).toSet();
+    final participantIds =
+        participantsByTrip.values.expand((ids) => ids).toSet();
+    final profilesMap = await _fetchProfilesMap({...creatorIds, ...participantIds});
+
+    return rows.map((row) {
+      final ids = participantsByTrip[row['id'] as String] ?? [];
+      return _rowToTrip(row, profilesMap, participantIds: ids);
+    }).toList();
   }
 
   // ── Buscar viagem por ID ───────────────────────────────────
   static Future<TripModel?> getTripById(String id) async {
+    // Sem PostgREST join — evita hang causado por RLS em joins
     final row = await _db
         .from('trips')
-        .select('''
-          *,
-          creator:profiles!trips_creator_id_fkey(*),
-          participants:trip_participants(user:profiles(*))
-        ''')
+        .select()
         .eq('id', id)
-        .maybeSingle();
+        .maybeSingle()
+        .timeout(const Duration(seconds: 15));
 
     if (row == null) return null;
-    return _rowToTrip(row);
+
+    final participantRows = await _db
+        .from('trip_participants')
+        .select('user_id')
+        .eq('trip_id', id)
+        .timeout(const Duration(seconds: 15));
+
+    final participantIds = (participantRows as List)
+        .map((p) => p['user_id'] as String)
+        .toSet();
+
+    final creatorId = row['creator_id'] as String? ?? '';
+    final allIds = {...participantIds, if (creatorId.isNotEmpty) creatorId};
+    final profilesMap = await _fetchProfilesMap(allIds);
+
+    return _rowToTrip(row, profilesMap, participantIds: participantIds.toList());
+  }
+
+  // ── Busca perfis por IDs em uma só query ───────────────────
+  static Future<Map<String, UserModel>> _fetchProfilesMap(Set<String> ids) async {
+    if (ids.isEmpty) return {};
+    final profiles = await _db
+        .from('profiles')
+        .select()
+        .inFilter('id', ids.toList())
+        .timeout(const Duration(seconds: 15));
+    return {
+      for (final p in profiles as List) (p['id'] as String): _rowToUser(p),
+    };
   }
 
   // ── Criar viagem ───────────────────────────────────────────
@@ -44,7 +95,6 @@ class SupabaseTripService {
     required LocationModel origin,
     required LocationModel destination,
     List<String> participantIds = const [],
-    RouteType routeType = RouteType.none,
     DateTime? scheduledAt,
   }) async {
     // Insert trip
@@ -60,7 +110,6 @@ class SupabaseTripService {
       'destination_lng': destination.lng,
       'destination_address': destination.address,
       'destination_label': destination.label,
-      'route_type': routeType.name,
       'scheduled_at': scheduledAt?.toIso8601String(),
     }).select().single();
 
@@ -86,6 +135,31 @@ class SupabaseTripService {
       await _db.rpc('update_trips_count', params: {'p_user_id': _uid});
     } catch (_) {}
 
+    // Send trip_invite notifications to non-creator participants
+    final invitedIds = participantIds.where((id) => id != _uid).toList();
+    if (invitedIds.isNotEmpty) {
+      try {
+        final creatorRow = await _db
+            .from('profiles')
+            .select('name')
+            .eq('id', _uid)
+            .single();
+        final creatorName = creatorRow['name'] as String? ?? 'Alguém';
+        await SupabaseNotificationService.sendInviteNotifications(
+          userIds: invitedIds,
+          type: 'trip_invite',
+          title: '$creatorName te convidou para uma viagem',
+          body: '$title · ${destination.address ?? destination.label ?? 'Destino'}',
+          data: {
+            'tripId': tripId,
+            'tripTitle': title,
+            'originAddress': origin.address ?? '',
+            'destinationAddress': destination.address ?? '',
+          },
+        );
+      } catch (_) {}
+    }
+
     return (await getTripById(tripId))!;
   }
 
@@ -100,6 +174,8 @@ class SupabaseTripService {
 
   // ── Deletar viagem ─────────────────────────────────────────
   static Future<void> deleteTrip(String tripId) async {
+    // Remove participants first (no CASCADE on FK)
+    await _db.from('trip_participants').delete().eq('trip_id', tripId);
     await _db
         .from('trips')
         .delete()
@@ -119,7 +195,7 @@ class SupabaseTripService {
   static Future<void> declineParticipation(String tripId) async {
     await _db
         .from('trip_participants')
-        .update({'status': 'declined'})
+        .delete()
         .eq('trip_id', tripId)
         .eq('user_id', _uid);
   }
@@ -141,10 +217,12 @@ class SupabaseTripService {
   }
 
   // ── Helpers ────────────────────────────────────────────────
-  static TripModel _rowToTrip(Map<String, dynamic> r) {
-    final creatorRow = r['creator'] as Map<String, dynamic>? ?? {};
-    final participantRows =
-        (r['participants'] as List? ?? []).cast<Map<String, dynamic>>();
+  static TripModel _rowToTrip(
+      Map<String, dynamic> r, Map<String, UserModel> profilesMap,
+      {List<String> participantIds = const []}) {
+    final creatorId = r['creator_id'] as String? ?? '';
+    final creator = profilesMap[creatorId] ??
+        UserModel(id: creatorId, name: '', username: '');
 
     return TripModel(
       id: r['id'] as String,
@@ -162,9 +240,10 @@ class SupabaseTripService {
         address: r['destination_address'] as String?,
         label: r['destination_label'] as String?,
       ),
-      creator: _rowToUser(creatorRow),
-      participants: participantRows
-          .map((p) => _rowToUser(p['user'] as Map<String, dynamic>? ?? {}))
+      creator: creator,
+      participants: participantIds
+          .map((uid) => profilesMap[uid])
+          .whereType<UserModel>()
           .toList(),
       status: _parseStatus(r['status'] as String?),
       routeType: _parseRouteType(r['route_type'] as String?),

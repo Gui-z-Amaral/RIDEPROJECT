@@ -14,6 +14,7 @@ import '../viewmodels/home_viewmodel.dart';
 import '../../../core/models/trip_model.dart';
 import '../../../core/models/ride_model.dart';
 import '../../../core/services/places_service.dart';
+import '../../../core/services/supabase_social_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -32,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
       context.read<NotificationsViewModel>().load();
       context.read<SocialViewModel>().loadRequests();
       _fetchLocationAndRecommend();
+      if (mounted) context.read<HomeViewModel>().loadFriendsStories();
     });
   }
 
@@ -84,6 +86,8 @@ class _HomeScreenState extends State<HomeScreen> {
           // ── AppBar ────────────────────────────────────────────────
           SliverAppBar(
             backgroundColor: AppColors.background,
+            surfaceTintColor: Colors.transparent,
+            scrolledUnderElevation: 0,
             pinned: true,
             automaticallyImplyLeading: false,
             title: Row(
@@ -224,6 +228,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
+
+                  // ── NOVIDADES DOS AMIGOS (stories) ────────────────
+                  if (vm.isLoadingStories || vm.friendStories.isNotEmpty) ...[
+                    _SectionLabel(label: 'NOVIDADES DOS AMIGOS'),
+                    const SizedBox(height: AppSpacing.sm),
+                    _FriendStoriesStrip(
+                      stories: vm.friendStories,
+                      isLoading: vm.isLoadingStories,
+                      onTapStory: (tripId) =>
+                          context.push('/trips/$tripId'),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                  ],
 
                   // ── PRÓXIMA VIAGEM ────────────────────────────────
                   _SectionLabel(label: 'PRÓXIMA VIAGEM'),
@@ -1066,5 +1083,202 @@ class _SuggestionCard extends StatelessWidget {
   String _fmt(int n) {
     if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}k';
     return '$n';
+  }
+}
+
+// ─── Friend Stories Strip ─────────────────────────────────────────────────────
+
+class _FriendStoriesStrip extends StatelessWidget {
+  final List<FriendTripStory> stories;
+  final bool isLoading;
+  final void Function(String tripId) onTapStory;
+
+  const _FriendStoriesStrip({
+    required this.stories,
+    required this.isLoading,
+    required this.onTapStory,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading && stories.isEmpty) {
+      return SizedBox(
+        height: 100,
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          itemCount: 5,
+          itemBuilder: (_, __) => const _StoryItemSkeleton(),
+        ),
+      );
+    }
+
+    // Every 5th slot (index % 5 == 4) is an ad; others are stories
+    final total = stories.length + stories.length ~/ 4;
+    return SizedBox(
+      height: 100,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: total,
+        itemBuilder: (_, i) {
+          final isAd = (i + 1) % 5 == 0;
+          if (isAd) return const _AdStoryItem();
+          final storyIdx = i - i ~/ 5;
+          if (storyIdx >= stories.length) return const SizedBox.shrink();
+          final story = stories[storyIdx];
+          return _StoryItem(
+            story: story,
+            onTap: () => onTapStory(story.tripId),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _StoryItem extends StatelessWidget {
+  final FriendTripStory story;
+  final VoidCallback onTap;
+  const _StoryItem({required this.story, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 72,
+        margin: const EdgeInsets.only(right: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 62,
+              height: 62,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.teal, width: 2.5),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(2.5),
+                child: CircleAvatar(
+                  backgroundColor: AppColors.navy.withOpacity(0.1),
+                  backgroundImage: story.friend.avatarUrl != null
+                      ? NetworkImage(story.friend.avatarUrl!)
+                      : null,
+                  child: story.friend.avatarUrl == null
+                      ? Text(
+                          story.friend.name.isNotEmpty
+                              ? story.friend.name[0].toUpperCase()
+                              : '?',
+                          style: const TextStyle(
+                              color: AppColors.navy,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 20),
+                        )
+                      : null,
+                ),
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              story.friend.name.split(' ').first,
+              style: AppTextStyles.labelSmall
+                  .copyWith(fontWeight: FontWeight.w600),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+            Text(
+              story.tripTitle,
+              style: AppTextStyles.labelSmall
+                  .copyWith(color: AppColors.textMuted, fontSize: 9),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdStoryItem extends StatelessWidget {
+  const _AdStoryItem();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 72,
+      margin: const EdgeInsets.only(right: 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 62,
+            height: 62,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                colors: [AppColors.navy, AppColors.teal],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              border: Border.all(color: AppColors.teal, width: 2),
+            ),
+            child: const Icon(Icons.two_wheeler,
+                color: Colors.white, size: 28),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            'RideApp',
+            style: AppTextStyles.labelSmall.copyWith(
+                fontWeight: FontWeight.w700, color: AppColors.navy),
+            maxLines: 1,
+            textAlign: TextAlign.center,
+          ),
+          Text(
+            'Publicidade',
+            style: AppTextStyles.labelSmall
+                .copyWith(color: AppColors.textMuted, fontSize: 9),
+            maxLines: 1,
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StoryItemSkeleton extends StatelessWidget {
+  const _StoryItemSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 72,
+      margin: const EdgeInsets.only(right: 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 62,
+            height: 62,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.shimmerBase,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Container(
+            width: 44,
+            height: 9,
+            decoration: BoxDecoration(
+              color: AppColors.shimmerBase,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

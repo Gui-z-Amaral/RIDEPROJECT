@@ -35,6 +35,7 @@ class StartRideScreen extends StatefulWidget {
 
 class _StartRideScreenState extends State<StartRideScreen> {
   final Set<String> _selectedFriendIds = {};
+  final _searchCtrl = TextEditingController();
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
   bool _saving = false;
@@ -43,6 +44,12 @@ class _StartRideScreenState extends State<StartRideScreen> {
   void initState() {
     super.initState();
     Future.microtask(() => context.read<SocialViewModel>().loadFriends());
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   String get _mapsUrl =>
@@ -107,7 +114,11 @@ class _StartRideScreenState extends State<StartRideScreen> {
     }
 
     final rideVm = context.read<RideViewModel>();
-    final friends = context.read<SocialViewModel>().friends;
+    final socialVm = context.read<SocialViewModel>();
+    // Combina amigos + resultados de busca para achar os selecionados
+    final allKnownUsers = <String, UserModel>{
+      for (final u in [...socialVm.friends, ...socialVm.searchResults]) u.id: u,
+    };
 
     rideVm.resetForm();
     rideVm.setTitle(widget.placeName);
@@ -120,7 +131,7 @@ class _StartRideScreenState extends State<StartRideScreen> {
     rideVm.setScheduledAt(scheduledAt);
 
     for (final id in _selectedFriendIds) {
-      final friend = friends.where((f) => f.id == id).firstOrNull;
+      final friend = allKnownUsers[id];
       if (friend != null) rideVm.toggleParticipant(friend);
     }
 
@@ -160,11 +171,18 @@ class _StartRideScreenState extends State<StartRideScreen> {
         ),
       );
     } else {
+      final err = rideVm.saveError;
+      debugPrint('[StartRideScreen] saveRide failed: title="${widget.placeName}" '
+          'lat=${widget.lat} lng=${widget.lng} '
+          'participants=${_selectedFriendIds.length} error=$err');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Erro ao criar o rolê. Tente novamente.'),
+        SnackBar(
+          content: Text(err != null
+              ? 'Erro ao criar o rolê: $err'
+              : 'Erro ao criar o rolê. Verifique título e ponto de encontro.'),
           backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 6),
         ),
       );
     }
@@ -172,7 +190,10 @@ class _StartRideScreenState extends State<StartRideScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final friends = context.watch<SocialViewModel>().friends;
+    final socialVm = context.watch<SocialViewModel>();
+    final isSearching = _searchCtrl.text.isNotEmpty;
+    final users = isSearching ? socialVm.searchResults : socialVm.friends;
+    final loadingUsers = isSearching ? socialVm.isSearching : socialVm.isLoading;
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
@@ -273,34 +294,78 @@ class _StartRideScreenState extends State<StartRideScreen> {
                   ),
                   const SizedBox(height: AppSpacing.sm),
 
-                  if (friends.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(AppSpacing.lg),
-                      decoration: BoxDecoration(
-                        color: AppColors.card,
-                        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+                  // Barra de busca
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                      border: Border.all(color: AppColors.divider),
+                    ),
+                    child: TextField(
+                      controller: _searchCtrl,
+                      onChanged: (q) {
+                        setState(() {});
+                        context.read<SocialViewModel>().search(q);
+                      },
+                      style: AppTextStyles.bodyMedium,
+                      decoration: InputDecoration(
+                        hintText: 'Buscar por nome ou @username',
+                        hintStyle: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.textMuted),
+                        prefixIcon: const Icon(Icons.search,
+                            color: AppColors.textMuted, size: 20),
+                        suffixIcon: _searchCtrl.text.isNotEmpty
+                            ? GestureDetector(
+                                onTap: () {
+                                  _searchCtrl.clear();
+                                  context.read<SocialViewModel>().search('');
+                                  setState(() {});
+                                },
+                                child: const Icon(Icons.close,
+                                    color: AppColors.textMuted, size: 18),
+                              )
+                            : null,
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 12),
                       ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.people_outline, color: AppColors.textMuted),
-                          const SizedBox(width: AppSpacing.sm),
-                          Text('Nenhum amigo ainda',
-                              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted)),
-                        ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+
+                  if (loadingUsers)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Center(
+                          child: CircularProgressIndicator(
+                              color: _rideAccent, strokeWidth: 2)),
+                    )
+                  else if (users.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Center(
+                        child: Text(
+                          isSearching
+                              ? 'Nenhum usuário encontrado'
+                              : 'Você ainda não tem amigos. Busque pelo nome acima.',
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.textMuted),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                     )
                   else
-                    ...friends.map((friend) => _FriendTile(
-                      friend: friend,
-                      selected: _selectedFriendIds.contains(friend.id),
-                      onToggle: () => setState(() {
-                        if (_selectedFriendIds.contains(friend.id)) {
-                          _selectedFriendIds.remove(friend.id);
-                        } else {
-                          _selectedFriendIds.add(friend.id);
-                        }
-                      }),
-                    )),
+                    ...users.map((friend) => _FriendTile(
+                          friend: friend,
+                          selected: _selectedFriendIds.contains(friend.id),
+                          onToggle: () => setState(() {
+                            if (_selectedFriendIds.contains(friend.id)) {
+                              _selectedFriendIds.remove(friend.id);
+                            } else {
+                              _selectedFriendIds.add(friend.id);
+                            }
+                          }),
+                        )),
 
                   const SizedBox(height: AppSpacing.xl),
 

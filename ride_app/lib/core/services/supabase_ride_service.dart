@@ -132,6 +132,18 @@ class SupabaseRideService {
     });
   }
 
+  // ── Convidar novos participantes ───────────────────────────
+  static Future<void> inviteParticipants(
+      String rideId, List<String> userIds) async {
+    if (userIds.isEmpty) return;
+    await _db.from('ride_participants').upsert(
+      userIds
+          .map((uid) => {'ride_id': rideId, 'user_id': uid})
+          .toList(),
+      onConflict: 'ride_id,user_id',
+    );
+  }
+
   static Future<void> leaveRide(String rideId) async {
     // Soft-delete: guarda o timestamp de saída para o histórico
     await _db

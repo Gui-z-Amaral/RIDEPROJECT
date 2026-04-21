@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
 import '../viewmodels/notifications_viewmodel.dart';
 import '../../../core/models/notification_model.dart';
+import '../../../core/services/supabase_trip_service.dart';
 import '../../social/viewmodels/social_viewmodel.dart';
+import '../../trips/viewmodels/trip_viewmodel.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -83,11 +84,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       return;
     }
 
-    // Convites de viagem/rolê com coordenadas
-    final lat = notif.data['lat'];
-    final lng = notif.data['lng'];
-    if (lat != null && lng != null) {
-      _showTripInviteSheet(context, notif);
+    if (notif.type == 'trip_invite') {
+      _showTripInviteSheet(context, vm, notif);
+      return;
     }
   }
 
@@ -137,12 +136,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  // ── Bottom sheet: convite de viagem/rolê ──────────────────────────────────
+  // ── Bottom sheet: convite de viagem ──────────────────────────────────────
 
-  void _showTripInviteSheet(BuildContext context, NotificationModel notif) {
-    final lat = notif.data['lat'];
-    final lng = notif.data['lng'];
-    final place = notif.data['place'] as String? ?? '';
+  void _showTripInviteSheet(BuildContext context, NotificationsViewModel vm,
+      NotificationModel notif) {
+    final tripId = notif.data['tripId'] as String?;
+    final tripTitle = notif.data['tripTitle'] as String? ?? notif.title;
+    final origin = notif.data['originAddress'] as String? ?? '';
+    final dest = notif.data['destinationAddress'] as String? ?? '';
 
     showModalBottomSheet(
       context: context,
@@ -151,67 +152,172 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         borderRadius:
             BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusXl)),
       ),
-      builder: (_) => Padding(
-        padding: EdgeInsets.only(
-          left: AppSpacing.lg,
-          right: AppSpacing.lg,
-          top: AppSpacing.lg,
-          bottom: MediaQuery.of(context).padding.bottom + AppSpacing.lg,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Text(notif.title, style: AppTextStyles.headlineSmall),
-            const SizedBox(height: AppSpacing.sm),
-            Text(notif.body,
-                style: AppTextStyles.bodyMedium
-                    .copyWith(color: AppColors.textSecondary)),
-            const SizedBox(height: AppSpacing.xl),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () async {
-                  Navigator.pop(context);
-                  final url = Uri.parse(
-                      'https://www.google.com/maps/search/?api=1&query=$lat,$lng');
-                  if (await canLaunchUrl(url)) {
-                    await launchUrl(url,
-                        mode: LaunchMode.externalApplication);
+      builder: (sheetCtx) => _TripInviteSheet(
+        tripTitle: tripTitle,
+        origin: origin,
+        destination: dest,
+        body: notif.body,
+        onAccept: tripId == null
+            ? null
+            : () async {
+                Navigator.pop(sheetCtx);
+                try {
+                  await SupabaseTripService.confirmParticipation(tripId);
+                  if (context.mounted) {
+                    await context.read<TripViewModel>().loadTrips();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Você aceitou o convite!'),
+                        backgroundColor: AppColors.teal,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
                   }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.teal,
-                  foregroundColor: AppColors.deepNavy,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.circular(AppSpacing.radiusFull),
-                  ),
-                  elevation: 0,
-                ),
-                icon: const Icon(Icons.map_outlined, size: 20),
-                label: Text(
-                  'Abrir "$place" no Google Maps',
-                  style: AppTextStyles.titleMedium.copyWith(
-                      color: AppColors.deepNavy,
-                      fontWeight: FontWeight.bold),
-                ),
+                } catch (_) {}
+              },
+        onDecline: tripId == null
+            ? null
+            : () async {
+                Navigator.pop(sheetCtx);
+                try {
+                  await SupabaseTripService.declineParticipation(tripId);
+                  if (context.mounted) {
+                    await context.read<TripViewModel>().loadTrips();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Convite recusado.'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                } catch (_) {}
+              },
+      ),
+    );
+  }
+}
+
+// ── Sheet de convite de viagem ─────────────────────────────────────────────────
+
+class _TripInviteSheet extends StatelessWidget {
+  final String tripTitle;
+  final String origin;
+  final String destination;
+  final String body;
+  final VoidCallback? onAccept;
+  final VoidCallback? onDecline;
+
+  const _TripInviteSheet({
+    required this.tripTitle,
+    required this.origin,
+    required this.destination,
+    required this.body,
+    this.onAccept,
+    this.onDecline,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: AppSpacing.lg,
+        right: AppSpacing.lg,
+        top: AppSpacing.lg,
+        bottom: MediaQuery.of(context).padding.bottom + AppSpacing.lg,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: AppColors.teal.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.map_outlined, color: AppColors.teal, size: 32),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text('Convite de Viagem', style: AppTextStyles.headlineSmall),
+          const SizedBox(height: AppSpacing.sm),
+          Text(body,
+              style: AppTextStyles.bodyMedium
+                  .copyWith(color: AppColors.textSecondary),
+              textAlign: TextAlign.center),
+          const SizedBox(height: AppSpacing.md),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: Column(
+              children: [
+                Row(children: [
+                  const Icon(Icons.radio_button_on, size: 14, color: AppColors.teal),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(origin.isNotEmpty ? origin : 'Origem',
+                      style: AppTextStyles.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                ]),
+                const SizedBox(height: 6),
+                Row(children: [
+                  const Icon(Icons.location_on, size: 14, color: AppColors.error),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(destination.isNotEmpty ? destination : 'Destino',
+                      style: AppTextStyles.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                ]),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onDecline,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    side: const BorderSide(color: AppColors.error),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppSpacing.radiusFull)),
+                  ),
+                  child: Text('Recusar',
+                      style: AppTextStyles.titleMedium.copyWith(color: AppColors.error)),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: onAccept,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.teal,
+                    foregroundColor: AppColors.deepNavy,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppSpacing.radiusFull)),
+                    elevation: 0,
+                  ),
+                  child: Text('Aceitar',
+                      style: AppTextStyles.titleMedium
+                          .copyWith(color: AppColors.deepNavy, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
