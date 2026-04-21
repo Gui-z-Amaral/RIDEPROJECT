@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/models/message_model.dart';
 import '../../../core/models/friend_request_model.dart';
@@ -14,6 +15,7 @@ class SocialViewModel extends ChangeNotifier {
   bool _isLoading = false;
   bool _isSearching = false;
   String _searchQuery = '';
+  RealtimeChannel? _messageChannel;
 
   List<UserModel> get friends => _friends;
   List<UserModel> get searchResults => _searchResults;
@@ -72,27 +74,50 @@ class SocialViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loadMessages(String chatId) async {
+  Future<void> loadMessages(String otherUserId) async {
+    // Cancela subscription anterior (outro chat aberto)
+    _messageChannel?.unsubscribe();
+    _messageChannel = null;
+    _messages = [];
+    notifyListeners();
+
     try {
-      _messages = await SupabaseSocialService.getMessages(chatId);
+      _messages = await SupabaseSocialService.getMessages(otherUserId);
       notifyListeners();
     } catch (_) {}
+
+    // Inicia real-time para mensagens novas
+    _messageChannel = SupabaseSocialService.subscribeToMessages(
+      otherUserId,
+      (msg) {
+        // Evita duplicata da própria mensagem enviada via sendMessage
+        if (!_messages.any((m) => m.id == msg.id)) {
+          _messages = [..._messages, msg];
+          notifyListeners();
+        }
+      },
+    );
   }
 
-  Future<void> sendMessage(String chatId, String content) async {
+  void unsubscribeMessages() {
+    _messageChannel?.unsubscribe();
+    _messageChannel = null;
+  }
+
+  Future<void> sendMessage(String otherUserId, String content) async {
     try {
-      final msg = await SupabaseSocialService.sendMessage(chatId, content);
+      final msg = await SupabaseSocialService.sendMessage(otherUserId, content);
       _messages = [..._messages, msg];
       notifyListeners();
     } catch (_) {}
   }
 
   Future<void> sendImage(
-      String chatId, Uint8List bytes, String extension) async {
+      String otherUserId, Uint8List bytes, String extension) async {
     try {
       final imageUrl = await SupabaseSocialService.uploadChatImage(
-          chatId, bytes, extension);
-      final msg = await SupabaseSocialService.sendMessage(chatId, '',
+          otherUserId, bytes, extension);
+      final msg = await SupabaseSocialService.sendMessage(otherUserId, '',
           imageUrl: imageUrl);
       _messages = [..._messages, msg];
       notifyListeners();

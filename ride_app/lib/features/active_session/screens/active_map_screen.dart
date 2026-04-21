@@ -287,9 +287,12 @@ class _ActiveMapScreenState extends State<ActiveMapScreen> {
         ),
       );
     } catch (e) {
+      final msg = e.toString().contains('42501')
+          ? 'Sem permissão para convidar. Verifique as políticas de segurança no Supabase.'
+          : 'Não foi possível convidar. Tente novamente.';
       messenger.showSnackBar(
         SnackBar(
-          content: Text('Erro ao convidar: $e'),
+          content: Text(msg),
           backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
         ),

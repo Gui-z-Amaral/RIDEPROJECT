@@ -238,7 +238,16 @@ class SupabaseSocialService {
   }
 
   // ── Messages ───────────────────────────────────────────────
-  static Future<List<MessageModel>> getMessages(String chatId) async {
+
+  /// ID canônico da conversa: IDs dos dois usuários em ordem alfabética.
+  /// Garante que A→B e B→A usem o mesmo chat_id na tabela messages.
+  static String canonicalChatId(String otherUserId) {
+    final ids = [_uid, otherUserId]..sort();
+    return ids.join('_');
+  }
+
+  static Future<List<MessageModel>> getMessages(String otherUserId) async {
+    final chatId = canonicalChatId(otherUserId);
     final rows = await _db
         .from('messages')
         .select('*, sender:profiles!messages_sender_id_fkey(name, avatar_url)')
@@ -248,8 +257,9 @@ class SupabaseSocialService {
     return (rows as List).map((r) => _rowToMessage(r, chatId)).toList();
   }
 
-  static Future<MessageModel> sendMessage(String chatId, String content,
+  static Future<MessageModel> sendMessage(String otherUserId, String content,
       {String? imageUrl}) async {
+    final chatId = canonicalChatId(otherUserId);
     final row = await _db.from('messages').insert({
       'chat_id': chatId,
       'sender_id': _uid,
@@ -257,11 +267,29 @@ class SupabaseSocialService {
       if (imageUrl != null) 'image_url': imageUrl,
     }).select('*, sender:profiles!messages_sender_id_fkey(name, avatar_url)').single();
 
+    // Notifica o destinatário (best-effort)
+    try {
+      final sender = await _db
+          .from('profiles')
+          .select('name')
+          .eq('id', _uid)
+          .maybeSingle();
+      final senderName = sender?['name'] as String? ?? 'Alguém';
+      await _db.from('notifications').insert({
+        'user_id': otherUserId,
+        'type': 'message',
+        'title': senderName,
+        'body': content.isNotEmpty ? content : '📷 Imagem',
+        'data': {'fromUserId': _uid, 'fromName': senderName},
+      });
+    } catch (_) {}
+
     return _rowToMessage(row, chatId);
   }
 
   static Future<String> uploadChatImage(
-      String chatId, Uint8List bytes, String extension) async {
+      String otherUserId, Uint8List bytes, String extension) async {
+    final chatId = canonicalChatId(otherUserId);
     final path =
         'chat/$chatId/${DateTime.now().millisecondsSinceEpoch}.$extension';
     await _db.storage.from('chat-images').uploadBinary(
@@ -289,7 +317,8 @@ class SupabaseSocialService {
 
   // ── Real-time messages ─────────────────────────────────────
   static RealtimeChannel subscribeToMessages(
-      String chatId, void Function(MessageModel) onMessage) {
+      String otherUserId, void Function(MessageModel) onMessage) {
+    final chatId = canonicalChatId(otherUserId);
     return _db
         .channel('messages:$chatId')
         .onPostgresChanges(

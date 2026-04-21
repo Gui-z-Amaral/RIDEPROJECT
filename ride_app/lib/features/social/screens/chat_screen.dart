@@ -34,6 +34,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    context.read<SocialViewModel>().unsubscribeMessages();
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();

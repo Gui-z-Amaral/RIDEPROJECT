@@ -27,7 +27,7 @@ class SupabaseRideService {
         .select('''
           *,
           creator:profiles!rides_creator_id_fkey(*),
-          participants:ride_participants(user:profiles(*), left_at)
+          participants:ride_participants(user:profiles(*), left_at, status, user_id)
         ''')
         .inFilter('id', activeRideIds)
         .order('created_at', ascending: false);
@@ -42,7 +42,7 @@ class SupabaseRideService {
         .select('''
           *,
           creator:profiles!rides_creator_id_fkey(*),
-          participants:ride_participants(user:profiles(*), left_at)
+          participants:ride_participants(user:profiles(*), left_at, status, user_id)
         ''')
         .eq('id', id)
         .maybeSingle();
@@ -150,12 +150,10 @@ class SupabaseRideService {
   static Future<void> inviteParticipants(
       String rideId, List<String> userIds) async {
     if (userIds.isEmpty) return;
-    await _db.from('ride_participants').upsert(
-      userIds
-          .map((uid) => {'ride_id': rideId, 'user_id': uid})
-          .toList(),
-      onConflict: 'ride_id,user_id',
-    );
+    await _db.rpc('invite_ride_participants', params: {
+      'p_ride_id': rideId,
+      'p_user_ids': userIds,
+    });
   }
 
   static Future<void> leaveRide(String rideId) async {
@@ -231,9 +229,12 @@ class SupabaseRideService {
         label: r['meeting_label'] as String?,
       ),
       creator: _rowToUser(creatorRow),
-      // Filtra participantes que já saíram (left_at != null)
+      // Mostra apenas: criador (sempre) + participantes que aceitaram o convite
       participants: participantRows
-          .where((p) => p['left_at'] == null)
+          .where((p) =>
+              p['left_at'] == null &&
+              (p['user_id'] == r['creator_id'] ||
+                  p['status'] == 'confirmed'))
           .map((p) => _rowToUser(p['user'] as Map<String, dynamic>? ?? {}))
           .toList(),
       status: _parseStatus(r['status'] as String?),
