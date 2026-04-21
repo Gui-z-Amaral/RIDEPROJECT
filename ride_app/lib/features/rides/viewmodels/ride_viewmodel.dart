@@ -134,8 +134,26 @@ class RideViewModel extends ChangeNotifier {
   Future<void> deleteRide(String id) async {
     try {
       await SupabaseRideService.deleteRide(id);
-      _rides = _rides.where((r) => r.id != id).toList();
-      notifyListeners();
-    } catch (_) {}
+      _removeRideLocally(id);
+    } catch (e) {
+      debugPrint('🔴 [RideViewModel.deleteRide] erro: $e');
+    }
+  }
+
+  Future<void> leaveRide(String id) async {
+    try {
+      await SupabaseRideService.leaveRide(id);
+      _removeRideLocally(id);
+    } catch (e) {
+      debugPrint('🔴 [RideViewModel.leaveRide] erro: $e');
+    }
+  }
+
+  void _removeRideLocally(String id) {
+    _rides = _rides.where((r) => r.id != id).toList();
+    _activeUserRides = _activeUserRides.where((e) => e.rideId != id).toList();
+    _history = _history.where((e) => e.rideId != id).toList();
+    if (_selectedRide?.id == id) _selectedRide = null;
+    notifyListeners();
   }
 }

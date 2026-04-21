@@ -41,15 +41,15 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     if (trip == null) return;
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         title: const Text('Excluir viagem'),
         content: Text('Deseja excluir "${trip.title}"? Esta ação não pode ser desfeita.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
+              onPressed: () => Navigator.pop(dialogCtx, false),
               child: const Text('Cancelar')),
           TextButton(
-              onPressed: () => Navigator.pop(context, true),
+              onPressed: () => Navigator.pop(dialogCtx, true),
               child: const Text('Excluir',
                   style: TextStyle(color: Colors.red))),
         ],
@@ -135,7 +135,13 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             backgroundColor: AppColors.navy,
             foregroundColor: Colors.white,
             surfaceTintColor: Colors.transparent,
-            leading: IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.white), onPressed: () => context.pop()),
+            leading: IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.white), onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/home');
+              }
+            }),
             actions: [
               IconButton(
                 icon: const Icon(Icons.delete_outline, color: Colors.white),

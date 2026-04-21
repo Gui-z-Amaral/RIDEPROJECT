@@ -208,7 +208,6 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
               step: _step,
               isSaving: vm.isSaving,
               canAdvance: _canAdvance,
-              onSave: _back,
               onAdvance: _step == 3 ? _confirm : _advance,
             ),
           ],
@@ -399,17 +398,19 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            SizedBox(
-              height: 52,
-              child: ElevatedButton(
-                onPressed: () => _lookupCep(_cepCtrl.text),
-                style: ElevatedButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
+            Expanded(
+              child: SizedBox(
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: () => _lookupCep(_cepCtrl.text),
+                  style: ElevatedButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: Text('SALVAR DESTINO',
+                      style: AppTextStyles.labelLarge
+                          .copyWith(fontSize: 11)),
                 ),
-                child: Text('SALVAR DESTINO',
-                    style: AppTextStyles.labelLarge
-                        .copyWith(fontSize: 11)),
               ),
             ),
           ],
@@ -1003,14 +1004,12 @@ class _BottomButtons extends StatelessWidget {
   final int step;
   final bool isSaving;
   final bool canAdvance;
-  final VoidCallback onSave;
   final VoidCallback onAdvance;
 
   const _BottomButtons({
     required this.step,
     required this.isSaving,
     required this.canAdvance,
-    required this.onSave,
     required this.onAdvance,
   });
 
@@ -1018,55 +1017,32 @@ class _BottomButtons extends StatelessWidget {
   Widget build(BuildContext context) {
     final bottomPad = MediaQuery.of(context).padding.bottom;
     return Container(
-      padding: EdgeInsets.fromLTRB(
-          24, 12, 24, bottomPad + 12),
+      padding: EdgeInsets.fromLTRB(24, 12, 24, bottomPad + 12),
       decoration: const BoxDecoration(
         color: AppColors.background,
         border: Border(top: BorderSide(color: AppColors.divider)),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: SizedBox(
-              height: 50,
-              child: ElevatedButton(
-                onPressed: onSave,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.navy,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-                child: Text('SALVAR',
-                    style: AppTextStyles.labelLarge),
-              ),
-            ),
+      child: SizedBox(
+        height: 50,
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: (canAdvance && !isSaving) ? onAdvance : null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.navy,
+            disabledBackgroundColor: AppColors.navy.withOpacity(0.4),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8)),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: SizedBox(
-              height: 50,
-              child: ElevatedButton(
-                onPressed: (canAdvance && !isSaving) ? onAdvance : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.navy,
-                  disabledBackgroundColor:
-                      AppColors.navy.withOpacity(0.4),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-                child: isSaving
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2.5, color: Colors.white),
-                      )
-                    : Text(step == 3 ? 'CONFIRMAR' : 'AVANÇAR',
-                        style: AppTextStyles.labelLarge),
-              ),
-            ),
-          ),
-        ],
+          child: isSaving
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2.5, color: Colors.white),
+                )
+              : Text(step == 3 ? 'CONFIRMAR' : 'AVANÇAR',
+                  style: AppTextStyles.labelLarge),
+        ),
       ),
     );
   }

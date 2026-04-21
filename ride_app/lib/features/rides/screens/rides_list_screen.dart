@@ -109,7 +109,7 @@ class _RidesListScreenState extends State<RidesListScreen> {
                 padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
                 child: GestureDetector(
-                  onTap: () => context.pop(),
+                  onTap: () => context.go('/home'),
                   child: const Icon(Icons.arrow_back,
                       color: AppColors.navy, size: 26),
                 ),

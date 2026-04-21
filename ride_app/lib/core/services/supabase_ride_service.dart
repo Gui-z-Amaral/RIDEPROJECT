@@ -9,6 +9,19 @@ class SupabaseRideService {
 
   // ── Buscar todos os rolês ──────────────────────────────────
   static Future<List<RideModel>> getRides() async {
+    // Só retorna rolês onde o usuário atual é participante ativo (left_at IS NULL)
+    final participantRows = await _db
+        .from('ride_participants')
+        .select('ride_id')
+        .eq('user_id', _uid)
+        .isFilter('left_at', null);
+
+    final activeRideIds = (participantRows as List)
+        .map((r) => r['ride_id'] as String)
+        .toList();
+
+    if (activeRideIds.isEmpty) return [];
+
     final rows = await _db
         .from('rides')
         .select('''
@@ -16,6 +29,7 @@ class SupabaseRideService {
           creator:profiles!rides_creator_id_fkey(*),
           participants:ride_participants(user:profiles(*), left_at)
         ''')
+        .inFilter('id', activeRideIds)
         .order('created_at', ascending: false);
 
     return rows.map(_rowToRide).toList();
@@ -192,6 +206,8 @@ class SupabaseRideService {
 
   // ── Deletar rolê ───────────────────────────────────────────
   static Future<void> deleteRide(String rideId) async {
+    // Remove participantes primeiro (sem CASCADE na FK)
+    await _db.from('ride_participants').delete().eq('ride_id', rideId);
     await _db
         .from('rides')
         .delete()

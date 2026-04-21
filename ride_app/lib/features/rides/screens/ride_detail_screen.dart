@@ -15,6 +15,7 @@ import '../../../core/models/location_model.dart';
 import '../../../core/utils/extensions.dart';
 import '../viewmodels/ride_viewmodel.dart';
 import '../../active_session/viewmodels/active_session_viewmodel.dart';
+import '../../auth/viewmodels/auth_viewmodel.dart';
 
 class RideDetailScreen extends StatefulWidget {
   final String rideId;
@@ -32,15 +33,10 @@ class _RideDetailScreenState extends State<RideDetailScreen> {
       final vm = context.read<RideViewModel>();
       await vm.loadRideById(widget.rideId);
       if (!mounted) return;
-      final ride = vm.selectedRide;
-      if (ride != null &&
-          (ride.status == RideStatus.active ||
-              ride.status == RideStatus.waiting)) {
-        context.read<ActiveSessionViewModel>().startActiveTracking(
-              widget.rideId,
-              isRide: true,
-            );
-      }
+      context.read<ActiveSessionViewModel>().startActiveTracking(
+            widget.rideId,
+            isRide: true,
+          );
     });
   }
 
@@ -61,11 +57,21 @@ class _RideDetailScreenState extends State<RideDetailScreen> {
       return Scaffold(appBar: AppBar(), body: const LoadingWidget());
     }
 
-    final isCreator = ride.creator.id == 'u1';
+    final currentUserId = context.read<AuthViewModel>().user?.id;
+    final isCreator = currentUserId != null && ride.creator.id == currentUserId;
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios), onPressed: () => context.pop()),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/rides');
+            }
+          },
+        ),
         title: Text(ride.title),
         actions: [
           if (isCreator) IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () {}),
@@ -156,13 +162,22 @@ class _RideDetailScreenState extends State<RideDetailScreen> {
 
             const SizedBox(height: AppSpacing.lg),
 
-            // Live participant map
-            if (ride.status == RideStatus.active ||
-                ride.status == RideStatus.waiting)
-              _LiveParticipantMap(
-                rideId: widget.rideId,
-                meetingPoint: ride.meetingPoint,
-              ),
+            // Live participant map + botão iniciar
+            _LiveParticipantMap(
+              rideId: widget.rideId,
+              meetingPoint: ride.meetingPoint,
+              isCreator: isCreator,
+              rideStatus: ride.status,
+              onStart: () {
+                context.read<ActiveSessionViewModel>().startSession(
+                  id: ride.id,
+                  title: ride.title,
+                  isRide: true,
+                  participants: ride.participants,
+                );
+                context.push('/session/waiting/${ride.id}');
+              },
+            ),
 
             const SizedBox(height: AppSpacing.xxl),
 
@@ -174,30 +189,76 @@ class _RideDetailScreenState extends State<RideDetailScreen> {
               onPressed: () => _openMaps(ride),
             ),
             const SizedBox(height: AppSpacing.md),
-            if (isCreator && ride.status == RideStatus.scheduled || ride.status == RideStatus.waiting)
+            if (isCreator)
               AppButton(
-                label: 'Iniciar Rolê',
-                icon: Icons.play_arrow,
-                onPressed: () {
-                  context.read<ActiveSessionViewModel>().startSession(id: ride.id, title: ride.title, isRide: true);
-                  context.push('/session/waiting/${ride.id}');
-                },
-              ),
-            if (!isCreator)
+                label: 'Excluir rolê',
+                variant: AppButtonVariant.danger,
+                icon: Icons.delete_outline,
+                onPressed: () => _confirmDelete(context, ride.id),
+              )
+            else
               AppButton(
                 label: 'Sair do rolê',
                 variant: AppButtonVariant.danger,
                 icon: Icons.exit_to_app,
-                onPressed: () {
-                  MockRideService.leaveRide(ride.id);
-                  context.pop();
-                },
+                onPressed: () => _confirmLeave(context, ride.id),
               ),
             const SizedBox(height: AppSpacing.xxxl),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDelete(BuildContext context, String rideId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text('Excluir rolê?'),
+        content: const Text(
+            'O rolê será removido permanentemente para todos os participantes.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: Text('Excluir',
+                style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await context.read<RideViewModel>().deleteRide(rideId);
+    if (mounted) context.go('/rides');
+  }
+
+  Future<void> _confirmLeave(BuildContext context, String rideId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text('Sair do rolê?'),
+        content: const Text(
+            'Você será removido do rolê. Para participar novamente precisará de um novo convite.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: Text('Sair', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await context.read<RideViewModel>().leaveRide(rideId);
+    if (mounted) context.go('/rides');
   }
 
   Color _statusColor(RideStatus s) {
@@ -225,16 +286,22 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-class MockRideService {
-  static Future<void> leaveRide(String id) async {}
-}
-
 // ─── Mapa de localização em tempo real dos participantes ──────────────────────
 
 class _LiveParticipantMap extends StatefulWidget {
   final String rideId;
   final LocationModel meetingPoint;
-  const _LiveParticipantMap({required this.rideId, required this.meetingPoint});
+  final bool isCreator;
+  final RideStatus rideStatus;
+  final VoidCallback onStart;
+
+  const _LiveParticipantMap({
+    required this.rideId,
+    required this.meetingPoint,
+    required this.isCreator,
+    required this.rideStatus,
+    required this.onStart,
+  });
 
   @override
   State<_LiveParticipantMap> createState() => _LiveParticipantMapState();
@@ -287,11 +354,15 @@ class _LiveParticipantMapState extends State<_LiveParticipantMap> {
     return markers;
   }
 
+  bool get _canStart =>
+      widget.isCreator &&
+      (widget.rideStatus == RideStatus.scheduled ||
+          widget.rideStatus == RideStatus.waiting);
+
   @override
   Widget build(BuildContext context) {
     final sessionVm = context.watch<ActiveSessionViewModel>();
-    final participants = sessionVm.participants;
-    final markers = _buildMarkers(participants);
+    final markers = _buildMarkers(sessionVm.participants);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -314,40 +385,107 @@ class _LiveParticipantMapState extends State<_LiveParticipantMap> {
         ClipRRect(
           borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
           child: SizedBox(
-            height: 220,
-            child: GestureDetector(
-              onTap: () => context.push(
-                '/session/active/${widget.rideId}',
-                extra: {'isRide': true},
-              ),
-              child: AbsorbPointer(
-                child: GoogleMap(
-                  initialCameraPosition: CameraPosition(
-                    target: LatLng(
-                        widget.meetingPoint.lat, widget.meetingPoint.lng),
-                    zoom: 13,
+            height: 240,
+            child: Stack(
+              children: [
+                // Mapa
+                GestureDetector(
+                  onTap: () => context.push(
+                    '/session/active/${widget.rideId}',
+                    extra: {'isRide': true},
                   ),
-                  markers: markers,
-                  myLocationEnabled: true,
-                  myLocationButtonEnabled: false,
-                  mapToolbarEnabled: false,
-                  zoomControlsEnabled: false,
-                  compassEnabled: false,
-                  onMapCreated: (c) {
-                    _controller = c;
-                    c.setMapStyle(_mapStyle);
-                  },
+                  child: AbsorbPointer(
+                    child: GoogleMap(
+                      initialCameraPosition: CameraPosition(
+                        target: LatLng(
+                            widget.meetingPoint.lat, widget.meetingPoint.lng),
+                        zoom: 13,
+                      ),
+                      markers: markers,
+                      myLocationEnabled: true,
+                      myLocationButtonEnabled: false,
+                      mapToolbarEnabled: false,
+                      zoomControlsEnabled: false,
+                      compassEnabled: false,
+                      onMapCreated: (c) {
+                        _controller = c;
+                        c.setMapStyle(_mapStyle);
+                      },
+                    ),
+                  ),
                 ),
-              ),
+
+                // Gradiente escuro na parte inferior
+                if (_canStart)
+                  Positioned(
+                    bottom: 0, left: 0, right: 0,
+                    child: Container(
+                      height: 90,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.7),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // Botão Iniciar Rolê sobreposto
+                if (_canStart)
+                  Positioned(
+                    bottom: 12, left: 12, right: 12,
+                    child: SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: widget.onStart,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF9C6FE4),
+                          foregroundColor: Colors.white,
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(AppSpacing.radiusFull),
+                          ),
+                        ),
+                        icon: const Icon(Icons.play_arrow_rounded, size: 22),
+                        label: Text(
+                          'INICIAR ROLÊ AGORA',
+                          style: AppTextStyles.labelLarge.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // Hint toque (apenas quando não tem botão de iniciar)
+                if (!_canStart)
+                  Positioned(
+                    bottom: 8, left: 0, right: 0,
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          'Toque para abrir o mapa completo',
+                          style: AppTextStyles.labelSmall
+                              .copyWith(color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Center(
-          child: Text(
-            'Toque para abrir o mapa completo',
-            style:
-                AppTextStyles.labelSmall.copyWith(color: AppColors.textMuted),
           ),
         ),
       ],
