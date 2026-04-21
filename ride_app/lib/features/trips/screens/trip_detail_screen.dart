@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
@@ -59,6 +60,12 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       await vm.deleteTrip(trip.id);
       if (context.mounted) context.go('/home');
     }
+  }
+
+  /// Criador pode editar apenas viagens ainda planejadas (não iniciadas/concluídas).
+  bool _canEdit(TripModel trip) {
+    final myId = Supabase.instance.client.auth.currentUser?.id;
+    return trip.creator.id == myId && trip.status == TripStatus.planned;
   }
 
   Future<void> _openMaps(TripModel trip) async {
@@ -143,10 +150,22 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
               }
             }),
             actions: [
-              IconButton(
-                icon: const Icon(Icons.delete_outline, color: Colors.white),
-                onPressed: () => _confirmDelete(context),
-              ),
+              if (_canEdit(trip)) ...[
+                IconButton(
+                  tooltip: 'Editar viagem',
+                  icon: const Icon(Icons.edit_outlined, color: Colors.white),
+                  onPressed: () => context.push('/trips/${trip.id}/edit'),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.white),
+                  onPressed: () => _confirmDelete(context),
+                ),
+              ] else if (trip.creator.id ==
+                  Supabase.instance.client.auth.currentUser?.id)
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.white),
+                  onPressed: () => _confirmDelete(context),
+                ),
             ],
             flexibleSpace: FlexibleSpaceBar(
               title: Text(trip.title, style: AppTextStyles.headlineSmall),

@@ -112,6 +112,19 @@ class TripViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Popula o form a partir de uma viagem existente (modo edição).
+  void prefillFromTrip(TripModel trip) {
+    _title = trip.title;
+    _origin = trip.origin;
+    _destination = trip.destination;
+    _waypoints = [...trip.waypoints];
+    // Participantes excluindo o criador (o criador não é "convidado")
+    _participants =
+        trip.participants.where((u) => u.id != trip.creator.id).toList();
+    _scheduledAt = trip.scheduledAt;
+    notifyListeners();
+  }
+
   /// Resets detail state and immediately enters loading mode.
   /// Called from TripDetailScreen.initState() before the first build.
   /// Sets _isLoadingDetail = true so the first build always shows the
@@ -139,6 +152,34 @@ class TripViewModel extends ChangeNotifier {
         scheduledAt: _scheduledAt,
       );
       _trips = [trip, ..._trips];
+      resetForm();
+      _isSaving = false;
+      notifyListeners();
+      return trip;
+    } catch (e) {
+      _saveError = e.toString();
+      _isSaving = false;
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<TripModel?> updateTrip(String tripId) async {
+    if (_title.isEmpty || _origin == null || _destination == null) return null;
+    _isSaving = true;
+    _saveError = null;
+    notifyListeners();
+    try {
+      final trip = await SupabaseTripService.updateTrip(
+        tripId: tripId,
+        title: _title,
+        origin: _origin!,
+        destination: _destination!,
+        participantIds: _participants.map((u) => u.id).toList(),
+        scheduledAt: _scheduledAt,
+      );
+      _trips = _trips.map((t) => t.id == tripId ? trip : t).toList();
+      _selectedTrip = trip;
       resetForm();
       _isSaving = false;
       notifyListeners();

@@ -24,9 +24,68 @@ class SessionParticipant {
   });
 }
 
-class ActiveSessionViewModel extends ChangeNotifier {
+class ActiveSessionViewModel extends ChangeNotifier with WidgetsBindingObserver {
   static SupabaseClient get _db => Supabase.instance.client;
   static String get _uid => _db.auth.currentUser?.id ?? '';
+
+  ActiveSessionViewModel() {
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _onAppResumed();
+    }
+  }
+
+  Future<void> _onAppResumed() async {
+    if (_hasActiveSession) {
+      // Reinicia GPS e canais realtime que podem ter caído em background
+      await _loadParticipantsFromDb(_sessionId, _isRide);
+      await _loadInitialLocations(_sessionId);
+      _subscribeToLocations(_sessionId);
+      await _startGPS(_sessionId);
+    } else {
+      await restoreSession();
+    }
+  }
+
+  /// Busca no banco se há sessão ativa para este usuário e restaura o estado.
+  Future<void> restoreSession() async {
+    if (_hasActiveSession) return;
+    try {
+      final participantRows = await _db
+          .from('ride_participants')
+          .select('ride_id')
+          .eq('user_id', _uid)
+          .isFilter('left_at', null);
+
+      if ((participantRows as List).isEmpty) return;
+
+      final rideIds = participantRows
+          .map((r) => r['ride_id'] as String)
+          .toList();
+
+      final activeRides = await _db
+          .from('rides')
+          .select('id, title, creator_id, status')
+          .inFilter('id', rideIds)
+          .inFilter('status', ['active', 'waiting']);
+
+      if ((activeRides as List).isEmpty) return;
+
+      final ride = activeRides.first;
+      _hasActiveSession = true;
+      _sessionId = ride['id'] as String;
+      _sessionTitle = ride['title'] as String;
+      _isRide = true;
+      _isLeader = (ride['creator_id'] as String) == _uid;
+      notifyListeners();
+
+      await startActiveTracking(_sessionId, isRide: true);
+    } catch (_) {}
+  }
 
   bool _hasActiveSession = false;
   String _sessionId = '';
@@ -101,16 +160,22 @@ class ActiveSessionViewModel extends ChangeNotifier {
   // ── Chamado ao entrar na tela do mapa ativo ───────────────
   // Funciona tanto para criador quanto para convidados.
   Future<void> startActiveTracking(String sessionId, {bool isRide = true}) async {
-    // Já rastreando esta sessão — não reinicia
-    if (_locationChannel != null && _sessionId == sessionId) return;
+    // Se trocou de sessão, cancela tudo antes de recomeçar
+    if (_sessionId.isNotEmpty && _sessionId != sessionId) {
+      _cancelAllSubscriptions();
+      _participants = [];
+    }
 
+    // Primeira entrada do convidado (sem passar por startSession/restoreSession)
     if (_sessionId != sessionId) {
-      // Participante entrou direto (ex: convidado confirmou)
       _sessionId = sessionId;
       _isRide = isRide;
       _hasActiveSession = true;
       _isLeader = false;
     }
+
+    // Carrega lista real de participantes do banco (corrige convidados sem lista)
+    await _loadParticipantsFromDb(sessionId, isRide);
 
     // Carrega localizações existentes para mostrar imediatamente
     await _loadInitialLocations(sessionId);
@@ -120,6 +185,51 @@ class ActiveSessionViewModel extends ChangeNotifier {
 
     // Começa a publicar a própria localização
     await _startGPS(sessionId);
+  }
+
+  /// Carrega participantes do banco e faz merge preservando lat/lng já conhecidos.
+  Future<void> _loadParticipantsFromDb(String sessionId, bool isRide) async {
+    try {
+      List<UserModel> users;
+      if (isRide) {
+        final ride = await SupabaseRideService.getRideById(sessionId);
+        if (ride == null) return;
+        users = ride.participants;
+        // Garante que o criador também está na lista
+        if (users.every((u) => u.id != ride.creator.id)) {
+          users = [ride.creator, ...users];
+        }
+      } else {
+        final trip = await SupabaseTripService.getTripById(sessionId);
+        if (trip == null) return;
+        users = trip.participants;
+        if (users.every((u) => u.id != trip.creator.id)) {
+          users = [trip.creator, ...users];
+        }
+      }
+      _mergeParticipants(users);
+    } catch (_) {}
+  }
+
+  /// Mantém lat/lng dos participantes já em memória, adiciona novos e
+  /// remove quem saiu da sessão.
+  void _mergeParticipants(List<UserModel> users) {
+    final existing = {for (final p in _participants) p.user.id: p};
+    _participants = users.map((u) {
+      final prev = existing[u.id];
+      if (prev != null) {
+        return SessionParticipant(
+          user: u,
+          status: prev.status == ParticipantStatus.waiting
+              ? ParticipantStatus.confirmed
+              : prev.status,
+          lat: prev.lat,
+          lng: prev.lng,
+        );
+      }
+      return SessionParticipant(user: u, status: ParticipantStatus.confirmed);
+    }).toList();
+    notifyListeners();
   }
 
   Future<void> _loadInitialLocations(String sessionId) async {
@@ -185,8 +295,18 @@ class ActiveSessionViewModel extends ChangeNotifier {
             // Atualiza localização de outros participantes (própria já é local)
             if (userId != null && lat != null && lng != null &&
                 userId != _uid) {
-              _setParticipantLocation(userId, lat, lng);
-              notifyListeners();
+              final known =
+                  _participants.any((p) => p.user.id == userId);
+              if (!known) {
+                // Novo convidado apareceu em tempo real — recarrega lista do banco
+                _loadParticipantsFromDb(sessionId, _isRide).then((_) {
+                  _setParticipantLocation(userId, lat, lng);
+                  notifyListeners();
+                });
+              } else {
+                _setParticipantLocation(userId, lat, lng);
+                notifyListeners();
+              }
             }
           },
         )
@@ -310,6 +430,7 @@ class ActiveSessionViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _cancelAllSubscriptions();
     super.dispose();
   }

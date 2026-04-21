@@ -85,6 +85,11 @@ final router = GoRouter(
       path: '/trips/:id',
       builder: (_, state) => TripDetailScreen(tripId: state.pathParameters['id']!),
     ),
+    GoRoute(
+      path: '/trips/:id/edit',
+      builder: (_, state) =>
+          CreateTripScreen(tripId: state.pathParameters['id']!),
+    ),
 
     GoRoute(path: '/rides/create', builder: (_, __) => const CreateRideScreen()),
     GoRoute(path: '/rides/schedule', builder: (_, __) => const ScheduleRideScreen()),

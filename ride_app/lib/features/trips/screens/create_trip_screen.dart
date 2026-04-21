@@ -18,7 +18,9 @@ import '../../../core/utils/extensions.dart';
 import '../../../shared/widgets/app_avatar.dart';
 
 class CreateTripScreen extends StatefulWidget {
-  const CreateTripScreen({super.key});
+  /// Quando informado, a tela opera em modo edição da viagem com este ID.
+  final String? tripId;
+  const CreateTripScreen({super.key, this.tripId});
 
   @override
   State<CreateTripScreen> createState() => _CreateTripScreenState();
@@ -26,6 +28,8 @@ class CreateTripScreen extends StatefulWidget {
 
 class _CreateTripScreenState extends State<CreateTripScreen> {
   int _step = 0; // 0=destino, 1=tempo+pessoas, 2=paradas+rota, 3=resumo
+  bool get _isEditing => widget.tripId != null;
+  bool _prefilled = false;
 
   // Step 0 – Destino
   final _ruaCtrl = TextEditingController();
@@ -59,6 +63,53 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     Future.microtask(
         () => context.read<SocialViewModel>().loadFriends());
     _fetchOriginLocation();
+
+    if (_isEditing) {
+      // Carrega a viagem e preenche o form numa sequência determinística.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadAndPrefill());
+    } else {
+      _prefilled = true;
+    }
+  }
+
+  Future<void> _loadAndPrefill() async {
+    final vm = context.read<TripViewModel>();
+    await vm.loadTripById(widget.tripId!);
+    if (!mounted) return;
+    final trip = vm.selectedTrip;
+    if (trip != null && trip.id == widget.tripId) {
+      setState(() {
+        _prefillFromTrip(trip);
+        _prefilled = true;
+      });
+    } else {
+      // Falhou — libera a UI mesmo assim para não travar em loading
+      setState(() => _prefilled = true);
+    }
+  }
+
+  void _prefillFromTrip(TripModel trip) {
+    final vm = context.read<TripViewModel>();
+    vm.prefillFromTrip(trip);
+
+    // Preenche controllers locais com os dados do destino
+    _destinoLabel = trip.destination.label ?? '';
+    _destLat = trip.destination.lat;
+    _destLng = trip.destination.lng;
+    _departurePoint = (trip.origin.label == 'Localização atual')
+        ? null
+        : trip.origin;
+    _departureDate = trip.scheduledAt;
+
+    // Destrincha o endereço do destino em rua/num/bairro/cep (best-effort)
+    final addr = trip.destination.address ?? '';
+    final parts = addr.split(',').map((p) => p.trim()).toList();
+    if (parts.isNotEmpty) _ruaCtrl.text = parts[0];
+    if (parts.length > 1) _numCtrl.text = parts[1];
+    if (parts.length > 2) _bairroCtrl.text = parts[2];
+    // CEP pode estar em qualquer parte — extrai padrão numérico
+    final cepMatch = RegExp(r'\b\d{5}-?\d{3}\b').firstMatch(addr);
+    if (cepMatch != null) _cepCtrl.text = cepMatch.group(0)!;
   }
 
   Future<void> _fetchOriginLocation() async {
@@ -168,16 +219,20 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     ));
     vm.setScheduledAt(_departureDate);
 
-    final trip = await vm.saveTrip();
+    final trip = _isEditing
+        ? await vm.updateTrip(widget.tripId!)
+        : await vm.saveTrip();
     if (!mounted) return;
     if (trip != null) {
-      context.showSnack('Viagem criada com sucesso!');
+      context.showSnack(
+          _isEditing ? 'Viagem atualizada!' : 'Viagem criada com sucesso!');
       context.pushReplacement('/trips/${trip.id}');
     } else {
+      final verb = _isEditing ? 'atualizar' : 'criar';
       context.showSnack(
         vm.saveError != null
-            ? 'Erro ao criar viagem: ${vm.saveError}'
-            : 'Erro ao criar viagem. Tente novamente.',
+            ? 'Erro ao $verb viagem: ${vm.saveError}'
+            : 'Erro ao $verb viagem. Tente novamente.',
         isError: true,
       );
     }
@@ -186,6 +241,18 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<TripViewModel>();
+
+    // Loading enquanto carrega + prefill no modo edição
+    if (_isEditing && !_prefilled) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: const SafeArea(
+          child: Center(
+              child: CircularProgressIndicator(color: AppColors.navy)),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -209,6 +276,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
               isSaving: vm.isSaving,
               canAdvance: _canAdvance,
               onAdvance: _step == 3 ? _confirm : _advance,
+              isEditing: _isEditing,
             ),
           ],
         ),
@@ -230,9 +298,10 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SectionHeading(
-          title: 'EDITAR VIAGEM',
-          subtitle:
-              'Altere os dados da viagem. Destino, Paradas, rotas, pessoas o tempo de viagem',
+          title: _isEditing ? 'EDITAR VIAGEM' : 'NOVA VIAGEM',
+          subtitle: _isEditing
+              ? 'Altere os dados da viagem. Destino, paradas, rotas, pessoas e tempo de viagem'
+              : 'Preencha os dados da viagem. Destino, paradas, rotas, pessoas e tempo de viagem',
         ),
         const SizedBox(height: 24),
         _SectionTitle(title: 'PARA ONDE VOCÊ VAI?'),
@@ -611,9 +680,10 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SectionHeading(
-          title: 'EDITAR VIAGEM',
-          subtitle:
-              'Altere os dados da viagem. Destino, Paradas, rotas, pessoas o tempo de viagem',
+          title: _isEditing ? 'EDITAR VIAGEM' : 'NOVA VIAGEM',
+          subtitle: _isEditing
+              ? 'Altere os dados da viagem. Destino, paradas, rotas, pessoas e tempo de viagem'
+              : 'Preencha os dados da viagem. Destino, paradas, rotas, pessoas e tempo de viagem',
         ),
         const SizedBox(height: 24),
         _SectionTitle(title: 'QUANTO TEMPO DE VIAGEM?'),
@@ -710,9 +780,10 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SectionHeading(
-          title: 'EDITAR VIAGEM',
-          subtitle:
-              'Altere os dados da viagem. Destino, Paradas, rotas, pessoas o tempo de viagem',
+          title: _isEditing ? 'EDITAR VIAGEM' : 'NOVA VIAGEM',
+          subtitle: _isEditing
+              ? 'Altere os dados da viagem. Destino, paradas, rotas, pessoas e tempo de viagem'
+              : 'Preencha os dados da viagem. Destino, paradas, rotas, pessoas e tempo de viagem',
         ),
         const SizedBox(height: 24),
 
@@ -1005,12 +1076,14 @@ class _BottomButtons extends StatelessWidget {
   final bool isSaving;
   final bool canAdvance;
   final VoidCallback onAdvance;
+  final bool isEditing;
 
   const _BottomButtons({
     required this.step,
     required this.isSaving,
     required this.canAdvance,
     required this.onAdvance,
+    this.isEditing = false,
   });
 
   @override
@@ -1040,7 +1113,10 @@ class _BottomButtons extends StatelessWidget {
                   child: CircularProgressIndicator(
                       strokeWidth: 2.5, color: Colors.white),
                 )
-              : Text(step == 3 ? 'CONFIRMAR' : 'AVANÇAR',
+              : Text(
+                  step == 3
+                      ? (isEditing ? 'SALVAR ALTERAÇÕES' : 'CONFIRMAR')
+                      : 'AVANÇAR',
                   style: AppTextStyles.labelLarge),
         ),
       ),

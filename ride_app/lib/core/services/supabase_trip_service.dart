@@ -172,6 +172,89 @@ class SupabaseTripService {
         .eq('creator_id', _uid);
   }
 
+  // ── Editar viagem (apenas criador, apenas planejadas) ──────
+  static Future<TripModel> updateTrip({
+    required String tripId,
+    required String title,
+    required LocationModel origin,
+    required LocationModel destination,
+    DateTime? scheduledAt,
+    List<String> participantIds = const [],
+  }) async {
+    await _db.from('trips').update({
+      'title': title,
+      'origin_lat': origin.lat,
+      'origin_lng': origin.lng,
+      'origin_address': origin.address,
+      'origin_label': origin.label,
+      'destination_lat': destination.lat,
+      'destination_lng': destination.lng,
+      'destination_address': destination.address,
+      'destination_label': destination.label,
+      'scheduled_at': scheduledAt?.toIso8601String(),
+    }).eq('id', tripId).eq('creator_id', _uid);
+
+    // Sincroniza participantes (mantém criador, adiciona novos, remove retirados)
+    final existingRows = await _db
+        .from('trip_participants')
+        .select('user_id')
+        .eq('trip_id', tripId);
+    final existingIds = (existingRows as List)
+        .map((r) => r['user_id'] as String)
+        .toSet();
+    final desiredIds = {_uid, ...participantIds};
+
+    final toRemove = existingIds
+        .difference(desiredIds)
+        .where((id) => id != _uid)
+        .toList();
+    final toAdd = desiredIds.difference(existingIds).toList();
+
+    for (final uid in toRemove) {
+      try {
+        await _db
+            .from('trip_participants')
+            .delete()
+            .eq('trip_id', tripId)
+            .eq('user_id', uid);
+      } catch (_) {}
+    }
+    if (toAdd.isNotEmpty) {
+      try {
+        await _db.from('trip_participants').insert(
+          toAdd.map((id) => {'trip_id': tripId, 'user_id': id}).toList(),
+        );
+      } catch (_) {}
+    }
+
+    // Notifica convidados novos (apenas os adicionados nesta edição)
+    final newlyInvited = toAdd.where((id) => id != _uid).toList();
+    if (newlyInvited.isNotEmpty) {
+      try {
+        final creatorRow = await _db
+            .from('profiles')
+            .select('name')
+            .eq('id', _uid)
+            .single();
+        final creatorName = creatorRow['name'] as String? ?? 'Alguém';
+        await SupabaseNotificationService.sendInviteNotifications(
+          userIds: newlyInvited,
+          type: 'trip_invite',
+          title: '$creatorName te convidou para uma viagem',
+          body: '$title · ${destination.address ?? destination.label ?? 'Destino'}',
+          data: {
+            'tripId': tripId,
+            'tripTitle': title,
+            'originAddress': origin.address ?? '',
+            'destinationAddress': destination.address ?? '',
+          },
+        );
+      } catch (_) {}
+    }
+
+    return (await getTripById(tripId))!;
+  }
+
   // ── Deletar viagem ─────────────────────────────────────────
   static Future<void> deleteTrip(String tripId) async {
     // Remove participants first (no CASCADE on FK)

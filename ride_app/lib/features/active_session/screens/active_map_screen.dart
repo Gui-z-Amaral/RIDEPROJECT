@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -414,14 +416,142 @@ class _MapViewState extends State<_MapView> {
 ]
 ''';
 
-  Set<Marker> get _markers => widget.participants.asMap().entries.map((e) {
-    return Marker(
-      markerId: MarkerId('participant_${e.key}'),
-      position: LatLng(e.value.lat, e.value.lng),
-      infoWindow: InfoWindow(title: e.value.user.name, snippet: e.value.user.motoModel),
-      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+  // Cache de ícones por userId (evita re-gerar o avatar a cada build)
+  final Map<String, BitmapDescriptor> _markerIcons = {};
+  final Set<String> _generatingIcons = {};
+  static const double _iconSize = 110; // tamanho do bitmap em px
+
+  BitmapDescriptor _iconFor(UserModel user) {
+    final cached = _markerIcons[user.id];
+    if (cached != null) return cached;
+    if (!_generatingIcons.contains(user.id)) {
+      _generatingIcons.add(user.id);
+      _buildMarkerIcon(user).then((icon) {
+        _generatingIcons.remove(user.id);
+        if (mounted) setState(() => _markerIcons[user.id] = icon);
+      }).catchError((_) {
+        _generatingIcons.remove(user.id);
+      });
+    }
+    // Enquanto o avatar carrega, usa pin padrão
+    return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
+  }
+
+  Future<BitmapDescriptor> _buildMarkerIcon(UserModel user) async {
+    const size = _iconSize;
+    const borderWidth = 7.0;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final center = const Offset(size / 2, size / 2);
+
+    // Fundo branco (aparece como gap entre foto e borda)
+    canvas.drawCircle(
+        center, size / 2, Paint()..color = Colors.white);
+    // Borda teal
+    canvas.drawCircle(
+      center,
+      size / 2 - borderWidth / 2,
+      Paint()
+        ..color = AppColors.teal
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = borderWidth,
     );
-  }).toSet();
+
+    final innerRadius = size / 2 - borderWidth - 2;
+    ui.Image? avatar;
+    final url = user.avatarUrl;
+    if (url != null && url.isNotEmpty) {
+      try {
+        avatar = await _loadNetworkImage(url);
+      } catch (_) {}
+    }
+
+    if (avatar != null) {
+      canvas.save();
+      canvas.clipPath(
+        Path()
+          ..addOval(Rect.fromCircle(center: center, radius: innerRadius)),
+      );
+      // Cover: escala a imagem para preencher o círculo mantendo aspect ratio
+      final imgW = avatar.width.toDouble();
+      final imgH = avatar.height.toDouble();
+      final aspect = imgW / imgH;
+      final target = innerRadius * 2;
+      double drawW, drawH;
+      if (aspect >= 1) {
+        drawH = target;
+        drawW = drawH * aspect;
+      } else {
+        drawW = target;
+        drawH = drawW / aspect;
+      }
+      canvas.drawImageRect(
+        avatar,
+        Rect.fromLTWH(0, 0, imgW, imgH),
+        Rect.fromCenter(center: center, width: drawW, height: drawH),
+        Paint()..filterQuality = FilterQuality.high,
+      );
+      canvas.restore();
+    } else {
+      // Fallback: círculo navy com inicial do nome
+      canvas.drawCircle(
+          center, innerRadius, Paint()..color = AppColors.navy);
+      final initial =
+          user.name.trim().isNotEmpty ? user.name.trim()[0].toUpperCase() : '?';
+      final tp = TextPainter(
+        text: TextSpan(
+          text: initial,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: size * 0.42,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      tp.layout();
+      tp.paint(
+          canvas,
+          Offset(
+              (size - tp.width) / 2, (size - tp.height) / 2));
+    }
+
+    final picture = recorder.endRecording();
+    final img = await picture.toImage(size.toInt(), size.toInt());
+    final data = await img.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.fromBytes(data!.buffer.asUint8List());
+  }
+
+  Future<ui.Image> _loadNetworkImage(String url) async {
+    final completer = Completer<ui.Image>();
+    final provider = NetworkImage(url);
+    final stream = provider.resolve(const ImageConfiguration());
+    late ImageStreamListener listener;
+    listener = ImageStreamListener(
+      (info, _) {
+        if (!completer.isCompleted) completer.complete(info.image);
+        stream.removeListener(listener);
+      },
+      onError: (e, _) {
+        if (!completer.isCompleted) completer.completeError(e);
+        stream.removeListener(listener);
+      },
+    );
+    stream.addListener(listener);
+    return completer.future;
+  }
+
+  Set<Marker> get _markers => widget.participants
+      .where((p) => p.lat != 0 || p.lng != 0)
+      .map((p) => Marker(
+            markerId: MarkerId('participant_${p.user.id}'),
+            position: LatLng(p.lat, p.lng),
+            anchor: const Offset(0.5, 0.5),
+            infoWindow: InfoWindow(
+                title: p.user.name, snippet: p.user.motoModel),
+            icon: _iconFor(p.user),
+          ))
+      .toSet();
 
   @override
   Widget build(BuildContext context) {
