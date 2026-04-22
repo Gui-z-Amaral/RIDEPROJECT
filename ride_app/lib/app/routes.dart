@@ -24,6 +24,7 @@ import '../features/rides/screens/start_ride_screen.dart';
 import '../features/active_session/screens/waiting_screen.dart';
 import '../features/active_session/screens/active_map_screen.dart';
 import '../features/active_session/screens/guest_confirm_screen.dart';
+import '../features/active_session/screens/finish_trip_screen.dart';
 import '../features/map/screens/map_select_screen.dart';
 import '../features/notifications/screens/notifications_screen.dart';
 import '../features/calls/screens/voice_call_screen.dart';
@@ -131,6 +132,16 @@ final router = GoRouter(
         return GuestConfirmScreen(
           sessionId: state.pathParameters['id']!,
           isRide: extra?['isRide'] as bool? ?? true,
+        );
+      },
+    ),
+    GoRoute(
+      path: '/session/finish/:id',
+      builder: (_, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return FinishTripScreen(
+          sessionId: state.pathParameters['id']!,
+          isRide: extra?['isRide'] as bool? ?? false,
         );
       },
     ),

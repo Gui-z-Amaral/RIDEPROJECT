@@ -747,24 +747,15 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         // ── Search bar ──────────────────────────────────────────
         _ParticipantSearchBar(
           controller: _peoplSearchCtrl,
-          onChanged: (q) {
-            if (q.isEmpty) {
-              context.read<SocialViewModel>().search('');
-            } else {
-              context.read<SocialViewModel>().search(q);
-            }
-            setState(() {});
-          },
+          onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 8),
 
-        // ── List: friends or search results ─────────────────────
+        // ── List: filtered friends (local) ──────────────────────
         _ParticipantList(
-          isSearching: socialVm.isSearching,
+          isSearching: false,
           query: _peoplSearchCtrl.text,
-          users: _peoplSearchCtrl.text.isEmpty
-              ? socialVm.friends
-              : socialVm.searchResults,
+          users: _filterFriends(socialVm.friends, _peoplSearchCtrl.text),
           isLoadingFriends: socialVm.isLoading,
           isSelected: vm.isParticipant,
           onToggle: vm.toggleParticipant,
@@ -1010,6 +1001,16 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         const SizedBox(height: 32),
       ],
     );
+  }
+
+  List<UserModel> _filterFriends(List<UserModel> friends, String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return friends;
+    return friends
+        .where((u) =>
+            u.name.toLowerCase().contains(q) ||
+            u.username.toLowerCase().contains(q))
+        .toList();
   }
 
   String _formatDate(DateTime d) {

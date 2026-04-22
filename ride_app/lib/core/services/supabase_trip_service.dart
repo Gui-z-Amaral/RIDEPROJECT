@@ -1,8 +1,11 @@
+import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/trip_model.dart';
 import '../models/location_model.dart';
 import '../models/user_model.dart';
+import '../models/trip_photo_model.dart';
 import 'supabase_notification_service.dart';
+import 'supabase_social_service.dart';
 
 class SupabaseTripService {
   static SupabaseClient get _db => Supabase.instance.client;
@@ -297,6 +300,120 @@ class SupabaseTripService {
         .delete()
         .eq('trip_id', tripId)
         .eq('user_id', _uid);
+  }
+
+  // ── Fotos da viagem ────────────────────────────────────────
+  static Future<TripPhotoModel> uploadTripPhoto(
+      String tripId, Uint8List bytes, String extension) async {
+    final path =
+        'trip/$tripId/${_uid}_${DateTime.now().millisecondsSinceEpoch}.$extension';
+    await _db.storage.from('trip-photos').uploadBinary(
+          path,
+          bytes,
+          fileOptions:
+              FileOptions(contentType: 'image/$extension', upsert: false),
+        );
+    final url = _db.storage.from('trip-photos').getPublicUrl(path);
+
+    final row = await _db.from('trip_photos').insert({
+      'trip_id': tripId,
+      'uploaded_by': _uid,
+      'photo_url': url,
+    }).select().single();
+
+    return TripPhotoModel.fromRow(row);
+  }
+
+  static Future<List<TripPhotoModel>> getTripPhotos(String tripId) async {
+    final rows = await _db
+        .from('trip_photos')
+        .select()
+        .eq('trip_id', tripId)
+        .order('created_at', ascending: false);
+    return (rows as List).map((r) => TripPhotoModel.fromRow(r)).toList();
+  }
+
+  static Future<void> deleteTripPhoto(String photoId) async {
+    await _db
+        .from('trip_photos')
+        .delete()
+        .eq('id', photoId)
+        .eq('uploaded_by', _uid);
+  }
+
+  // ── Destaques (featured photo) ─────────────────────────────
+  /// Define a foto destacada do usuário atual. Substitui qualquer destaque
+  /// anterior (PRIMARY KEY user_id). Expira em 7 dias.
+  static Future<void> setFeaturedPhoto({
+    required String tripId,
+    required String photoUrl,
+  }) async {
+    final now = DateTime.now().toUtc();
+    final expires = now.add(const Duration(days: 7));
+    await _db.from('featured_photos').upsert({
+      'user_id': _uid,
+      'trip_id': tripId,
+      'photo_url': photoUrl,
+      'featured_at': now.toIso8601String(),
+      'expires_at': expires.toIso8601String(),
+    });
+  }
+
+  static Future<void> clearFeaturedPhoto() async {
+    await _db.from('featured_photos').delete().eq('user_id', _uid);
+  }
+
+  /// Foto destacada atual do usuário (se existe e não expirou).
+  static Future<FeaturedPhotoModel?> getMyFeaturedPhoto() async {
+    final row = await _db
+        .from('featured_photos')
+        .select()
+        .eq('user_id', _uid)
+        .maybeSingle();
+    if (row == null) return null;
+    final expires = DateTime.parse(row['expires_at'] as String);
+    if (expires.isBefore(DateTime.now().toUtc())) return null;
+    return FeaturedPhotoModel(
+      user: UserModel(id: _uid, name: '', username: ''),
+      photoUrl: row['photo_url'] as String,
+      tripId: row['trip_id'] as String?,
+      featuredAt: DateTime.parse(row['featured_at'] as String),
+      expiresAt: expires,
+    );
+  }
+
+  /// Destaques ativos dos amigos (não expirados).
+  static Future<List<FeaturedPhotoModel>> getFriendsFeaturedPhotos() async {
+    final friends = await SupabaseSocialService.getFriends();
+    if (friends.isEmpty) return [];
+
+    final friendsMap = {for (final f in friends) f.id: f};
+    final ids = friends.map((f) => f.id).toList();
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+
+    final rows = await _db
+        .from('featured_photos')
+        .select()
+        .inFilter('user_id', ids)
+        .gt('expires_at', nowIso)
+        .order('featured_at', ascending: false);
+
+    return (rows as List).map((r) {
+      final user = friendsMap[r['user_id'] as String];
+      if (user == null) return null;
+      return FeaturedPhotoModel(
+        user: user,
+        photoUrl: r['photo_url'] as String,
+        tripId: r['trip_id'] as String?,
+        featuredAt: DateTime.parse(r['featured_at'] as String),
+        expiresAt: DateTime.parse(r['expires_at'] as String),
+      );
+    }).whereType<FeaturedPhotoModel>().toList();
+  }
+
+  /// Marca a viagem como concluída (apenas criador).
+  static Future<void> finalizeTrip(String tripId) async {
+    await updateStatus(tripId, TripStatus.completed);
   }
 
   // ── Helpers ────────────────────────────────────────────────

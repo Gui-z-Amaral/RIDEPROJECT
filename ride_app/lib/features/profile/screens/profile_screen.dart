@@ -241,6 +241,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = vm.user;
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
+    // Separa viagens ativas/planejadas vs concluídas
+    final ongoingTrips = tripVm.trips
+        .where((t) =>
+            t.status != TripStatus.completed &&
+            t.status != TripStatus.cancelled)
+        .toList();
+    final completedTrips = tripVm.trips
+        .where((t) => t.status == TripStatus.completed)
+        .toList();
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: CustomScrollView(
@@ -359,7 +369,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           value: '${socialVm.friends.isNotEmpty ? socialVm.friends.length : (user?.friendsCount ?? 0)}',
                           label: 'Amigos\nadicionados'),
                       const SizedBox(width: 12),
-                      _StatBox(value: '0', label: 'Viagens\nconcluídas'),
+                      _StatBox(
+                          value: '${completedTrips.length}',
+                          label: 'Viagens\nconcluídas'),
                     ],
                   ),
                 ),
@@ -571,7 +583,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                 ),
-                if (tripVm.trips.isEmpty)
+                if (ongoingTrips.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Container(
@@ -586,7 +598,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   )
                 else
-                  ...tripVm.trips.take(3).map((t) {
+                  ...ongoingTrips.take(3).map((t) {
                     final parts =
                         t.destination.address?.split(',') ?? [];
                     final city = parts.isNotEmpty
@@ -643,6 +655,123 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     );
                   }),
+
+                // ── Viagens Concluídas ─────────────────────────
+                if (completedTrips.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Viagens Concluídas',
+                            style: AppTextStyles.headlineMedium
+                                .copyWith(fontWeight: FontWeight.w800)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.teal.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '${completedTrips.length}',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.teal,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  ...completedTrips.map((t) {
+                    final parts =
+                        t.destination.address?.split(',') ?? [];
+                    final city = parts.isNotEmpty
+                        ? parts.first.trim()
+                        : t.title;
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                      child: GestureDetector(
+                        onTap: () => context.push('/trips/${t.id}'),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppColors.card,
+                            border: Border.all(color: AppColors.divider),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: AppColors.teal.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(Icons.flag,
+                                    color: AppColors.teal, size: 20),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(city.toUpperCase(),
+                                        style: AppTextStyles.titleSmall
+                                            .copyWith(
+                                                fontWeight: FontWeight.w700)),
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 6, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.teal
+                                                .withOpacity(0.15),
+                                            borderRadius:
+                                                BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            'ENCERRADA',
+                                            style: AppTextStyles.labelSmall
+                                                .copyWith(
+                                              color: AppColors.teal,
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 9,
+                                            ),
+                                          ),
+                                        ),
+                                        if (t.scheduledAt != null) ...[
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            '${t.scheduledAt!.day.toString().padLeft(2, '0')}/${t.scheduledAt!.month.toString().padLeft(2, '0')}/${t.scheduledAt!.year}',
+                                            style: AppTextStyles.bodySmall
+                                                .copyWith(
+                                                    color:
+                                                        AppColors.textMuted,
+                                                    fontSize: 11),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.chevron_right,
+                                  color: AppColors.textMuted, size: 20),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ],
 
                 SizedBox(height: bottomPad + 100),
               ],

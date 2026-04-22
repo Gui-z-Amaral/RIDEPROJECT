@@ -52,6 +52,16 @@ class _StartRideScreenState extends State<StartRideScreen> {
     super.dispose();
   }
 
+  List<UserModel> _filterFriends(List<UserModel> friends, String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return friends;
+    return friends
+        .where((u) =>
+            u.name.toLowerCase().contains(q) ||
+            u.username.toLowerCase().contains(q))
+        .toList();
+  }
+
   String get _mapsUrl =>
       'https://www.google.com/maps/search/?api=1&query=${widget.lat},${widget.lng}';
 
@@ -115,9 +125,9 @@ class _StartRideScreenState extends State<StartRideScreen> {
 
     final rideVm = context.read<RideViewModel>();
     final socialVm = context.read<SocialViewModel>();
-    // Combina amigos + resultados de busca para achar os selecionados
+    // Apenas amigos podem ser convidados
     final allKnownUsers = <String, UserModel>{
-      for (final u in [...socialVm.friends, ...socialVm.searchResults]) u.id: u,
+      for (final u in socialVm.friends) u.id: u,
     };
 
     rideVm.resetForm();
@@ -192,8 +202,8 @@ class _StartRideScreenState extends State<StartRideScreen> {
   Widget build(BuildContext context) {
     final socialVm = context.watch<SocialViewModel>();
     final isSearching = _searchCtrl.text.isNotEmpty;
-    final users = isSearching ? socialVm.searchResults : socialVm.friends;
-    final loadingUsers = isSearching ? socialVm.isSearching : socialVm.isLoading;
+    final users = _filterFriends(socialVm.friends, _searchCtrl.text);
+    final loadingUsers = socialVm.isLoading;
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
@@ -303,10 +313,7 @@ class _StartRideScreenState extends State<StartRideScreen> {
                     ),
                     child: TextField(
                       controller: _searchCtrl,
-                      onChanged: (q) {
-                        setState(() {});
-                        context.read<SocialViewModel>().search(q);
-                      },
+                      onChanged: (_) => setState(() {}),
                       style: AppTextStyles.bodyMedium,
                       decoration: InputDecoration(
                         hintText: 'Buscar por nome ou @username',
@@ -318,7 +325,6 @@ class _StartRideScreenState extends State<StartRideScreen> {
                             ? GestureDetector(
                                 onTap: () {
                                   _searchCtrl.clear();
-                                  context.read<SocialViewModel>().search('');
                                   setState(() {});
                                 },
                                 child: const Icon(Icons.close,

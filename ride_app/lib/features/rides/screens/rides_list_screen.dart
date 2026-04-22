@@ -91,7 +91,7 @@ class _RidesListScreenState extends State<RidesListScreen> {
                     ),
                   ),
                   const Spacer(),
-                  Text('HOME',
+                  Text('ROLÊS',
                       style: AppTextStyles.headlineMedium
                           .copyWith(fontWeight: FontWeight.w800)),
                   const Spacer(),

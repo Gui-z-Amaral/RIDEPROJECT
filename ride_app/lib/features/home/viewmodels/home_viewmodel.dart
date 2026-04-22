@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/trip_model.dart';
 import '../../../core/models/ride_model.dart';
+import '../../../core/models/trip_photo_model.dart';
 import '../../../core/services/supabase_trip_service.dart';
 import '../../../core/services/supabase_ride_service.dart';
 import '../../../core/services/supabase_social_service.dart';
@@ -11,17 +12,21 @@ class HomeViewModel extends ChangeNotifier {
   List<RideModel> _upcomingRides = [];
   List<PlaceRecommendation> _recommendations = [];
   List<FriendTripStory> _friendStories = [];
+  List<FeaturedPhotoModel> _featuredHighlights = [];
   bool _isLoading = false;
   bool _isLoadingRecs = false;
   bool _isLoadingStories = false;
+  bool _isLoadingHighlights = false;
 
   List<TripModel> get upcomingTrips => _upcomingTrips;
   List<RideModel> get upcomingRides => _upcomingRides;
   List<PlaceRecommendation> get recommendations => _recommendations;
   List<FriendTripStory> get friendStories => _friendStories;
+  List<FeaturedPhotoModel> get featuredHighlights => _featuredHighlights;
   bool get isLoading => _isLoading;
   bool get isLoadingRecs => _isLoadingRecs;
   bool get isLoadingStories => _isLoadingStories;
+  bool get isLoadingHighlights => _isLoadingHighlights;
 
   Future<void> load() async {
     _isLoading = true;
@@ -60,6 +65,19 @@ class HomeViewModel extends ChangeNotifier {
       _friendStories = [];
     }
     _isLoadingStories = false;
+    notifyListeners();
+  }
+
+  Future<void> loadFeaturedHighlights() async {
+    _isLoadingHighlights = true;
+    notifyListeners();
+    try {
+      _featuredHighlights =
+          await SupabaseTripService.getFriendsFeaturedPhotos();
+    } catch (_) {
+      _featuredHighlights = [];
+    }
+    _isLoadingHighlights = false;
     notifyListeners();
   }
 

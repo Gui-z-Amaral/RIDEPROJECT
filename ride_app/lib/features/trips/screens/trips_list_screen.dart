@@ -69,7 +69,7 @@ class _TripsListScreenState extends State<TripsListScreen> {
                   ),
                 ),
                 const Spacer(),
-                Text('HOME',
+                Text('VIAGENS',
                     style: AppTextStyles.headlineMedium
                         .copyWith(fontWeight: FontWeight.w800)),
                 const Spacer(),
@@ -87,7 +87,7 @@ class _TripsListScreenState extends State<TripsListScreen> {
               padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
               child: GestureDetector(
-                onTap: () => context.pop(),
+                onTap: () => context.go('/home'),
                 child: const Icon(Icons.arrow_back,
                     color: AppColors.navy, size: 26),
               ),

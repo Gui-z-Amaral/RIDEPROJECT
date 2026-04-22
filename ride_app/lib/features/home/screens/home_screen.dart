@@ -13,8 +13,10 @@ import '../../social/viewmodels/social_viewmodel.dart';
 import '../viewmodels/home_viewmodel.dart';
 import '../../../core/models/trip_model.dart';
 import '../../../core/models/ride_model.dart';
+import '../../../core/models/trip_photo_model.dart';
 import '../../../core/services/places_service.dart';
 import '../../../core/services/supabase_social_service.dart';
+import '../../../shared/widgets/app_avatar.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -33,7 +35,10 @@ class _HomeScreenState extends State<HomeScreen> {
       context.read<NotificationsViewModel>().load();
       context.read<SocialViewModel>().loadRequests();
       _fetchLocationAndRecommend();
-      if (mounted) context.read<HomeViewModel>().loadFriendsStories();
+      if (mounted) {
+        context.read<HomeViewModel>().loadFriendsStories();
+        context.read<HomeViewModel>().loadFeaturedHighlights();
+      }
     });
   }
 
@@ -238,6 +243,21 @@ class _HomeScreenState extends State<HomeScreen> {
                       isLoading: vm.isLoadingStories,
                       onTapStory: (tripId) =>
                           context.push('/trips/$tripId'),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                  ],
+
+                  // ── DESTAQUES DOS AMIGOS (fotos destacadas) ───────
+                  if (vm.featuredHighlights.isNotEmpty) ...[
+                    _SectionLabel(label: 'DESTAQUES'),
+                    const SizedBox(height: AppSpacing.sm),
+                    _HighlightsStrip(
+                      highlights: vm.featuredHighlights,
+                      onTap: (h) {
+                        if (h.tripId != null) {
+                          context.push('/trips/${h.tripId}');
+                        }
+                      },
                     ),
                     const SizedBox(height: AppSpacing.lg),
                   ],
@@ -1244,6 +1264,125 @@ class _AdStoryItem extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Featured Highlights Strip ────────────────────────────────────────────────
+
+class _HighlightsStrip extends StatelessWidget {
+  final List<FeaturedPhotoModel> highlights;
+  final void Function(FeaturedPhotoModel) onTap;
+  const _HighlightsStrip({required this.highlights, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 200,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: highlights.length,
+        separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
+        itemBuilder: (_, i) {
+          final h = highlights[i];
+          return GestureDetector(
+            onTap: () => onTap(h),
+            child: Container(
+              width: 140,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2))
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    CachedNetworkImage(
+                      imageUrl: h.photoUrl,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => Container(
+                        color: AppColors.inputFill,
+                        child: const Center(
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: AppColors.navy),
+                        ),
+                      ),
+                      errorWidget: (_, __, ___) => Container(
+                        color: AppColors.inputFill,
+                        child: const Icon(Icons.broken_image,
+                            color: AppColors.textMuted),
+                      ),
+                    ),
+                    // Overlay gradient
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        height: 100,
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.transparent, Colors.black87],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Star badge
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: const BoxDecoration(
+                          color: AppColors.teal,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.star,
+                            color: AppColors.deepNavy, size: 14),
+                      ),
+                    ),
+                    // Footer (avatar + name)
+                    Positioned(
+                      bottom: 10,
+                      left: 10,
+                      right: 10,
+                      child: Row(
+                        children: [
+                          AppAvatar(
+                            name: h.user.name,
+                            imageUrl: h.user.avatarUrl,
+                            size: 28,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              h.user.name.split(' ').first,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

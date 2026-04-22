@@ -47,6 +47,16 @@ class _CreateRideScreenState extends State<CreateRideScreen> {
     }
   }
 
+  List<UserModel> _filterFriends(List<UserModel> friends, String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return friends;
+    return friends
+        .where((u) =>
+            u.name.toLowerCase().contains(q) ||
+            u.username.toLowerCase().contains(q))
+        .toList();
+  }
+
   Future<void> _pickMeetingPoint() async {
     final result = await context.push<dynamic>('/map/select', extra: {
       'title': 'Ponto de encontro',
@@ -154,10 +164,9 @@ class _CreateRideScreenState extends State<CreateRideScreen> {
 
   Widget _buildStep0(RideViewModel vm) {
     final socialVm = context.watch<SocialViewModel>();
+    final users = _filterFriends(socialVm.friends, _searchCtrl.text);
+    final loading = socialVm.isLoading;
     final isSearching = _searchCtrl.text.isNotEmpty;
-    final users = isSearching ? socialVm.searchResults : socialVm.friends;
-    final loading =
-        isSearching ? socialVm.isSearching : socialVm.isLoading;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -194,14 +203,7 @@ class _CreateRideScreenState extends State<CreateRideScreen> {
           ),
           child: TextField(
             controller: _searchCtrl,
-            onChanged: (q) {
-              setState(() {});
-              if (q.isEmpty) {
-                context.read<SocialViewModel>().search('');
-              } else {
-                context.read<SocialViewModel>().search(q);
-              }
-            },
+            onChanged: (_) => setState(() {}),
             style: AppTextStyles.bodyMedium,
             decoration: InputDecoration(
               hintText: 'Buscar por nome ou @username',
@@ -213,7 +215,6 @@ class _CreateRideScreenState extends State<CreateRideScreen> {
                   ? GestureDetector(
                       onTap: () {
                         _searchCtrl.clear();
-                        context.read<SocialViewModel>().search('');
                         setState(() {});
                       },
                       child: const Icon(Icons.close,

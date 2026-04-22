@@ -219,6 +219,32 @@ class _ActiveMapScreenState extends State<ActiveMapScreen> {
                         ),
                       ],
                     ),
+                    if (vm.isLeader) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () => context.push(
+                            '/session/finish/${vm.sessionId}',
+                            extra: {'isRide': vm.isRide},
+                          ),
+                          icon: const Icon(Icons.flag, size: 18),
+                          label: Text(
+                            vm.isRide ? 'FINALIZAR ROLÊ' : 'FINALIZAR VIAGEM',
+                            style: AppTextStyles.labelLarge,
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.teal,
+                            foregroundColor: AppColors.deepNavy,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(AppSpacing.radiusFull),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

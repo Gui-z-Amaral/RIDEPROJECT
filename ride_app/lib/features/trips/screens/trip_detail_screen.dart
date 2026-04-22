@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -13,6 +14,8 @@ import '../../../shared/widgets/stop_card.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/loading_widget.dart';
 import '../../../core/models/trip_model.dart';
+import '../../../core/models/trip_photo_model.dart';
+import '../../../core/services/supabase_trip_service.dart';
 import '../../../core/utils/extensions.dart';
 import '../viewmodels/trip_viewmodel.dart';
 import '../../active_session/viewmodels/active_session_viewmodel.dart';
@@ -26,6 +29,9 @@ class TripDetailScreen extends StatefulWidget {
 }
 
 class _TripDetailScreenState extends State<TripDetailScreen> {
+  List<TripPhotoModel> _photos = [];
+  String? _photosLoadedFor;
+
   @override
   void initState() {
     super.initState();
@@ -34,6 +40,13 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       if (!mounted) return;
       context.read<TripViewModel>().loadTripById(widget.tripId);
     });
+  }
+
+  Future<void> _loadPhotos(String tripId) async {
+    try {
+      final photos = await SupabaseTripService.getTripPhotos(tripId);
+      if (mounted) setState(() => _photos = photos);
+    } catch (_) {}
   }
 
   Future<void> _confirmDelete(BuildContext context) async {
@@ -81,6 +94,16 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     final vm = context.watch<TripViewModel>();
     // Só considera a viagem válida se o ID bate com o que foi solicitado
     final trip = vm.selectedTrip?.id == widget.tripId ? vm.selectedTrip : null;
+
+    // Carrega fotos quando a viagem está concluída (apenas uma vez por tripId)
+    if (trip != null &&
+        trip.status == TripStatus.completed &&
+        _photosLoadedFor != trip.id) {
+      _photosLoadedFor = trip.id;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadPhotos(trip.id);
+      });
+    }
 
     // Mostra loading enquanto: carregando detalhes, ou viagem ainda não chegou (e sem erro)
     if (vm.isLoadingDetail || (trip == null && !vm.hasError)) {
@@ -266,6 +289,46 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     Text('Paradas', style: AppTextStyles.headlineSmall),
                     const SizedBox(height: AppSpacing.md),
                     ...trip.stops.map((s) => Padding(padding: const EdgeInsets.only(bottom: AppSpacing.sm), child: StopCard(stop: s, horizontal: false))),
+                  ],
+
+                  // ── Fotos da viagem (apenas concluídas) ─────────
+                  if (trip.status == TripStatus.completed &&
+                      _photos.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    Text('Fotos da Viagem',
+                        style: AppTextStyles.headlineSmall),
+                    const SizedBox(height: AppSpacing.md),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _photos.length,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        crossAxisSpacing: 6,
+                        mainAxisSpacing: 6,
+                      ),
+                      itemBuilder: (_, i) => ClipRRect(
+                        borderRadius:
+                            BorderRadius.circular(AppSpacing.radiusMd),
+                        child: CachedNetworkImage(
+                          imageUrl: _photos[i].photoUrl,
+                          fit: BoxFit.cover,
+                          placeholder: (_, __) => Container(
+                            color: AppColors.inputFill,
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: AppColors.navy),
+                            ),
+                          ),
+                          errorWidget: (_, __, ___) => Container(
+                            color: AppColors.inputFill,
+                            child: const Icon(Icons.broken_image,
+                                color: AppColors.textMuted),
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
 
                   const SizedBox(height: AppSpacing.xxl),
