@@ -83,6 +83,7 @@ class SocialViewModel extends ChangeNotifier {
 
     try {
       _messages = await SupabaseSocialService.getMessages(otherUserId);
+      _sortMessages();
       notifyListeners();
     } catch (_) {}
 
@@ -93,10 +94,15 @@ class SocialViewModel extends ChangeNotifier {
         // Evita duplicata da própria mensagem enviada via sendMessage
         if (!_messages.any((m) => m.id == msg.id)) {
           _messages = [..._messages, msg];
+          _sortMessages();
           notifyListeners();
         }
       },
     );
+  }
+
+  void _sortMessages() {
+    _messages.sort((a, b) => a.sentAt.compareTo(b.sentAt));
   }
 
   void unsubscribeMessages() {
@@ -107,21 +113,25 @@ class SocialViewModel extends ChangeNotifier {
   Future<void> sendMessage(String otherUserId, String content) async {
     try {
       final msg = await SupabaseSocialService.sendMessage(otherUserId, content);
-      _messages = [..._messages, msg];
-      notifyListeners();
+      if (!_messages.any((m) => m.id == msg.id)) {
+        _messages = [..._messages, msg];
+        _sortMessages();
+        notifyListeners();
+      }
     } catch (_) {}
   }
 
   Future<void> sendImage(
       String otherUserId, Uint8List bytes, String extension) async {
-    try {
-      final imageUrl = await SupabaseSocialService.uploadChatImage(
-          otherUserId, bytes, extension);
-      final msg = await SupabaseSocialService.sendMessage(otherUserId, '',
-          imageUrl: imageUrl);
+    final imageUrl = await SupabaseSocialService.uploadChatImage(
+        otherUserId, bytes, extension);
+    final msg = await SupabaseSocialService.sendMessage(otherUserId, '',
+        imageUrl: imageUrl);
+    if (!_messages.any((m) => m.id == msg.id)) {
       _messages = [..._messages, msg];
+      _sortMessages();
       notifyListeners();
-    } catch (_) {}
+    }
   }
 
   Future<void> acceptRequest(String requestId) async {
@@ -147,5 +157,26 @@ class SocialViewModel extends ChangeNotifier {
     try {
       await SupabaseSocialService.sendFriendRequest(userId);
     } catch (_) {}
+  }
+
+  /// Limpa estado e cancela canais — chamado no logout.
+  void reset() {
+    _messageChannel?.unsubscribe();
+    _messageChannel = null;
+    _friends = [];
+    _searchResults = [];
+    _receivedRequests = [];
+    _sentRequests = [];
+    _messages = [];
+    _searchQuery = '';
+    _isLoading = false;
+    _isSearching = false;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _messageChannel?.unsubscribe();
+    super.dispose();
   }
 }

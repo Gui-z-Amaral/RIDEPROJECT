@@ -156,4 +156,17 @@ class RideViewModel extends ChangeNotifier {
     if (_selectedRide?.id == id) _selectedRide = null;
     notifyListeners();
   }
+
+  /// Limpa estado — chamado no logout.
+  void reset() {
+    _rides = [];
+    _selectedRide = null;
+    _history = [];
+    _activeUserRides = [];
+    _isLoading = false;
+    _isSaving = false;
+    _saveError = null;
+    _isHistoryLoading = false;
+    resetForm();
+  }
 }

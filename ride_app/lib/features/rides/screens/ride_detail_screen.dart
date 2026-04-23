@@ -177,6 +177,22 @@ class _RideDetailScreenState extends State<RideDetailScreen> {
                 );
                 context.push('/session/waiting/${ride.id}');
               },
+              onJoin: () {
+                context.read<ActiveSessionViewModel>().startSession(
+                  id: ride.id,
+                  title: ride.title,
+                  isRide: true,
+                  participants: ride.participants,
+                );
+                if (ride.status == RideStatus.active) {
+                  context.push(
+                    '/session/active/${ride.id}',
+                    extra: {'isRide': true},
+                  );
+                } else {
+                  context.push('/session/waiting/${ride.id}');
+                }
+              },
             ),
 
             const SizedBox(height: AppSpacing.xxl),
@@ -232,7 +248,11 @@ class _RideDetailScreenState extends State<RideDetailScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
+    final sessionVm = context.read<ActiveSessionViewModel>();
     await context.read<RideViewModel>().deleteRide(rideId);
+    if (sessionVm.sessionId == rideId) {
+      sessionVm.endSession();
+    }
     if (mounted) context.go('/rides');
   }
 
@@ -257,7 +277,11 @@ class _RideDetailScreenState extends State<RideDetailScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
+    final sessionVm = context.read<ActiveSessionViewModel>();
     await context.read<RideViewModel>().leaveRide(rideId);
+    if (sessionVm.sessionId == rideId) {
+      sessionVm.endSession();
+    }
     if (mounted) context.go('/rides');
   }
 
@@ -294,6 +318,7 @@ class _LiveParticipantMap extends StatefulWidget {
   final bool isCreator;
   final RideStatus rideStatus;
   final VoidCallback onStart;
+  final VoidCallback onJoin;
 
   const _LiveParticipantMap({
     required this.rideId,
@@ -301,6 +326,7 @@ class _LiveParticipantMap extends StatefulWidget {
     required this.isCreator,
     required this.rideStatus,
     required this.onStart,
+    required this.onJoin,
   });
 
   @override
@@ -357,6 +383,11 @@ class _LiveParticipantMapState extends State<_LiveParticipantMap> {
   bool get _canStart =>
       widget.isCreator &&
       (widget.rideStatus == RideStatus.scheduled ||
+          widget.rideStatus == RideStatus.waiting);
+
+  bool get _canJoin =>
+      !widget.isCreator &&
+      (widget.rideStatus == RideStatus.active ||
           widget.rideStatus == RideStatus.waiting);
 
   @override
@@ -416,7 +447,7 @@ class _LiveParticipantMapState extends State<_LiveParticipantMap> {
                 ),
 
                 // Gradiente escuro na parte inferior
-                if (_canStart)
+                if (_canStart || _canJoin)
                   Positioned(
                     bottom: 0, left: 0, right: 0,
                     child: Container(
@@ -434,7 +465,7 @@ class _LiveParticipantMapState extends State<_LiveParticipantMap> {
                     ),
                   ),
 
-                // Botão Iniciar Rolê sobreposto
+                // Botão Iniciar Rolê sobreposto (criador)
                 if (_canStart)
                   Positioned(
                     bottom: 12, left: 12, right: 12,
@@ -464,8 +495,38 @@ class _LiveParticipantMapState extends State<_LiveParticipantMap> {
                     ),
                   ),
 
-                // Hint toque (apenas quando não tem botão de iniciar)
-                if (!_canStart)
+                // Botão Entrar no Rolê sobreposto (participante)
+                if (_canJoin)
+                  Positioned(
+                    bottom: 12, left: 12, right: 12,
+                    child: SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: widget.onJoin,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.teal,
+                          foregroundColor: AppColors.deepNavy,
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(AppSpacing.radiusFull),
+                          ),
+                        ),
+                        icon: const Icon(Icons.login_rounded, size: 22),
+                        label: Text(
+                          'ENTRAR NO ROLÊ',
+                          style: AppTextStyles.labelLarge.copyWith(
+                            color: AppColors.deepNavy,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // Hint toque (apenas quando não tem botão de ação)
+                if (!_canStart && !_canJoin)
                   Positioned(
                     bottom: 8, left: 0, right: 0,
                     child: Center(

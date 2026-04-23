@@ -106,6 +106,7 @@ class SupabaseAuthService {
     String? motoModel,
     String? motoYear,
     String? avatarUrl,
+    Object? tripStyle = _unset, // null = limpa, _unset = não tocar
   }) async {
     final u = currentAuthUser;
     if (u == null) return null;
@@ -117,11 +118,45 @@ class SupabaseAuthService {
     if (motoModel != null) updates['moto_model'] = motoModel;
     if (motoYear != null) updates['moto_year'] = motoYear;
     if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
+    if (tripStyle != _unset) updates['trip_style'] = tripStyle;
     if (updates.isEmpty) return getCurrentUser();
 
-    await _db.from('profiles').update(updates).eq('id', u.id);
+    await _updateWithRetry(u.id, updates);
     return _fetchProfile(u.id);
   }
+
+  /// Tenta fazer o update; se o Supabase retornar "coluna não encontrada"
+  /// (PGRST204), remove a coluna do payload e tenta de novo.
+  /// Evita perder o save inteiro só porque uma coluna nova ainda não foi
+  /// criada no banco.
+  static Future<void> _updateWithRetry(
+      String id, Map<String, dynamic> updates) async {
+    var payload = Map<String, dynamic>.from(updates);
+    while (payload.isNotEmpty) {
+      try {
+        await _db.from('profiles').update(payload).eq('id', id);
+        return;
+      } on PostgrestException catch (e) {
+        final missing = _extractMissingColumn(e);
+        if (missing != null && payload.containsKey(missing)) {
+          payload.remove(missing);
+          continue;
+        }
+        rethrow;
+      }
+    }
+  }
+
+  /// Extrai o nome da coluna de mensagens como
+  /// "Could not find the 'city' column of 'profiles' in the schema cache".
+  static String? _extractMissingColumn(PostgrestException e) {
+    if (e.code != 'PGRST204') return null;
+    final match = RegExp(r"'([^']+)' column").firstMatch(e.message);
+    return match?.group(1);
+  }
+
+  // Sentinel para distinguir "não alterar" vs "setar para null".
+  static const _unset = Object();
 
   // ── Helpers ────────────────────────────────────────────────
   static Future<UserModel?> _fetchProfile(String id) async {
@@ -143,6 +178,7 @@ class SupabaseAuthService {
         city: r['city'] as String?,
         motoModel: r['moto_model'] as String?,
         motoYear: r['moto_year'] as String?,
+        tripStyle: r['trip_style'] as String?,
         photos: List<String>.from(r['photos'] as List? ?? []),
         friendsCount: (r['friends_count'] as num?)?.toInt() ?? 0,
         tripsCount: (r['trips_count'] as num?)?.toInt() ?? 0,

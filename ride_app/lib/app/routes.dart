@@ -27,6 +27,8 @@ import '../features/active_session/screens/guest_confirm_screen.dart';
 import '../features/active_session/screens/finish_trip_screen.dart';
 import '../features/map/screens/map_select_screen.dart';
 import '../features/notifications/screens/notifications_screen.dart';
+import '../features/search/screens/search_screen.dart';
+import '../features/businesses/screens/businesses_screen.dart';
 import '../features/calls/screens/voice_call_screen.dart';
 import '../features/calls/screens/group_voice_screen.dart';
 import 'shell_screen.dart';
@@ -51,6 +53,8 @@ final router = GoRouter(
     ),
 
     GoRoute(path: '/notifications', builder: (_, __) => const NotificationsScreen()),
+    GoRoute(path: '/search', builder: (_, __) => const SearchScreen()),
+    GoRoute(path: '/businesses', builder: (_, __) => const BusinessesScreen()),
     GoRoute(path: '/profile/edit', builder: (_, __) => const EditProfileScreen()),
     GoRoute(path: '/friends/search', builder: (_, __) => const SearchUsersScreen()),
     GoRoute(

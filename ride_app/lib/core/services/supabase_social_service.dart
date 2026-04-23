@@ -56,6 +56,49 @@ class SupabaseSocialService {
     return (profiles as List).map((p) => _rowToUser(p)).toList();
   }
 
+  /// Retorna os amigos que eu tenho em comum com [otherUserId].
+  /// Faz 2 queries (amigos meus, amigos dele) e calcula a interseção no cliente.
+  static Future<List<UserModel>> getMutualFriends(String otherUserId) async {
+    if (otherUserId == _uid) return [];
+
+    Future<Set<String>> friendsOf(String uid) async {
+      final a = await _db
+          .from('friendships')
+          .select('friend_id')
+          .eq('user_id', uid)
+          .timeout(const Duration(seconds: 10), onTimeout: () => []);
+      final b = await _db
+          .from('friendships')
+          .select('user_id')
+          .eq('friend_id', uid)
+          .timeout(const Duration(seconds: 10), onTimeout: () => []);
+      final ids = <String>{};
+      for (final row in a as List) {
+        ids.add(row['friend_id'] as String);
+      }
+      for (final row in b as List) {
+        ids.add(row['user_id'] as String);
+      }
+      return ids;
+    }
+
+    final results = await Future.wait([
+      friendsOf(_uid),
+      friendsOf(otherUserId),
+    ]);
+    final mine = results[0];
+    final theirs = results[1];
+    final mutualIds = mine.intersection(theirs).toList();
+    if (mutualIds.isEmpty) return [];
+
+    final profiles = await _db
+        .from('profiles')
+        .select()
+        .inFilter('id', mutualIds)
+        .timeout(const Duration(seconds: 10), onTimeout: () => []);
+    return (profiles as List).map((p) => _rowToUser(p)).toList();
+  }
+
   static Future<void> sendFriendRequest(String toUserId) async {
     // Upsert: ignora caso já exista pedido pendente para evitar duplicate-key error
     await _db.from('friend_requests').upsert({
@@ -309,7 +352,7 @@ class SupabaseSocialService {
       senderAvatar: sender['avatar_url'] as String?,
       content: r['content'] as String? ?? '',
       imageUrl: r['image_url'] as String?,
-      sentAt: DateTime.parse(r['sent_at'] as String),
+      sentAt: DateTime.parse(r['sent_at'] as String).toLocal(),
       isRead: r['is_read'] as bool? ?? false,
       chatId: chatId,
     );
@@ -343,7 +386,7 @@ class SupabaseSocialService {
               senderAvatar: profile?['avatar_url'] as String?,
               content: newRow['content'] as String? ?? '',
               imageUrl: newRow['image_url'] as String?,
-              sentAt: DateTime.parse(newRow['sent_at'] as String),
+              sentAt: DateTime.parse(newRow['sent_at'] as String).toLocal(),
               chatId: chatId,
             ));
           },
@@ -361,6 +404,7 @@ class SupabaseSocialService {
         city: r['city'] as String?,
         motoModel: r['moto_model'] as String?,
         motoYear: r['moto_year'] as String?,
+        tripStyle: r['trip_style'] as String?,
         friendsCount: (r['friends_count'] as num?)?.toInt() ?? 0,
         tripsCount: (r['trips_count'] as num?)?.toInt() ?? 0,
         isOnline: r['is_online'] as bool? ?? false,

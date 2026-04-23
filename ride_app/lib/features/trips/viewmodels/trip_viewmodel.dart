@@ -214,4 +214,17 @@ class TripViewModel extends ChangeNotifier {
       notifyListeners();
     } catch (_) {}
   }
+
+  /// Limpa estado — chamado no logout.
+  void reset() {
+    _trips = [];
+    _selectedTrip = null;
+    _isLoading = false;
+    _isLoadingDetail = false;
+    _detailError = false;
+    _detailErrorMessage = null;
+    _isSaving = false;
+    _saveError = null;
+    resetForm();
+  }
 }

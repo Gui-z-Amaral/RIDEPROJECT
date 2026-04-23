@@ -4,13 +4,56 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../core/models/user_model.dart';
+import '../../../core/services/supabase_social_service.dart';
+import '../../../shared/widgets/app_avatar.dart';
 
-class FriendProfileScreen extends StatelessWidget {
+class FriendProfileScreen extends StatefulWidget {
   final UserModel user;
   const FriendProfileScreen({super.key, required this.user});
 
   @override
+  State<FriendProfileScreen> createState() => _FriendProfileScreenState();
+}
+
+class _FriendProfileScreenState extends State<FriendProfileScreen> {
+  List<UserModel> _mutualFriends = [];
+  bool _loadingMutual = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMutual();
+  }
+
+  Future<void> _loadMutual() async {
+    try {
+      final list = await SupabaseSocialService.getMutualFriends(widget.user.id);
+      if (!mounted) return;
+      setState(() {
+        _mutualFriends = list;
+        _loadingMutual = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingMutual = false);
+    }
+  }
+
+  IconData _iconForStyle(String style) {
+    switch (style) {
+      case 'Curtas':
+        return Icons.route_outlined;
+      case 'Longas':
+        return Icons.map_outlined;
+      case 'Rolês':
+        return Icons.groups_outlined;
+      default:
+        return Icons.two_wheeler;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final user = widget.user;
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
@@ -164,6 +207,50 @@ class FriendProfileScreen extends StatelessWidget {
                   const SizedBox(height: 16),
                 ],
 
+                // ── Estilo de viagem preferido ───────────────────────
+                if (user.tripStyle != null && user.tripStyle!.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Estilo de viagem preferido',
+                              style: AppTextStyles.headlineMedium
+                                  .copyWith(fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: AppColors.inputFill,
+                              borderRadius: BorderRadius.circular(
+                                  AppSpacing.radiusFull),
+                              border: Border.all(color: AppColors.divider),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(_iconForStyle(user.tripStyle!),
+                                    size: 16, color: AppColors.navy),
+                                const SizedBox(width: 8),
+                                Text(
+                                  user.tripStyle!,
+                                  style: AppTextStyles.labelMedium.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.textPrimary),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+
                 // ── Bio ───────────────────────────────────────────────
                 if (user.bio != null && user.bio!.isNotEmpty) ...[
                   Padding(
@@ -185,6 +272,12 @@ class FriendProfileScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
                 ],
+
+                // ── Amigos em comum ──────────────────────────────────
+                _MutualFriendsSection(
+                  loading: _loadingMutual,
+                  friends: _mutualFriends,
+                ),
 
                 const Divider(height: 1),
                 const SizedBox(height: AppSpacing.xl),
@@ -254,6 +347,124 @@ class _StatBox extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _MutualFriendsSection extends StatelessWidget {
+  final bool loading;
+  final List<UserModel> friends;
+  const _MutualFriendsSection({
+    required this.loading,
+    required this.friends,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(
+            horizontal: 24, vertical: AppSpacing.md),
+        child: Row(
+          children: [
+            Text(
+              'Amigos em comum',
+              style: AppTextStyles.headlineMedium
+                  .copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(width: 12),
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: AppColors.navy),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (friends.isEmpty) return const SizedBox(height: AppSpacing.md);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Amigos em comum',
+                style: AppTextStyles.headlineMedium
+                    .copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.teal.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                  border: Border.all(color: AppColors.teal),
+                ),
+                child: Text(
+                  '${friends.length}',
+                  style: AppTextStyles.labelSmall.copyWith(
+                      color: AppColors.teal, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Column(
+            children: friends
+                .map((f) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: InkWell(
+                        onTap: () =>
+                            context.push('/profile/${f.id}', extra: f),
+                        borderRadius:
+                            BorderRadius.circular(AppSpacing.radiusMd),
+                        child: Row(
+                          children: [
+                            AppAvatar(
+                              name: f.name,
+                              imageUrl: f.avatarUrl,
+                              size: 40,
+                              showOnline: true,
+                              isOnline: f.isOnline,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Text(f.name,
+                                      style: AppTextStyles.titleMedium,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis),
+                                  if (f.username.isNotEmpty)
+                                    Text('@${f.username}',
+                                        style: AppTextStyles.bodySmall
+                                            .copyWith(
+                                                color: AppColors.textMuted),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right,
+                                color: AppColors.textMuted),
+                          ],
+                        ),
+                      ),
+                    ))
+                .toList(),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
       ),
     );
   }

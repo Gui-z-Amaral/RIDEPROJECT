@@ -112,4 +112,18 @@ class HomeViewModel extends ChangeNotifier {
     _isLoadingRecs = false;
     notifyListeners();
   }
+
+  /// Limpa estado — chamado no logout.
+  void reset() {
+    _upcomingTrips = [];
+    _upcomingRides = [];
+    _recommendations = [];
+    _friendStories = [];
+    _featuredHighlights = [];
+    _isLoading = false;
+    _isLoadingRecs = false;
+    _isLoadingStories = false;
+    _isLoadingHighlights = false;
+    notifyListeners();
+  }
 }

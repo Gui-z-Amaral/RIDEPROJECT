@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
@@ -6,8 +7,10 @@ import '../../../theme/app_spacing.dart';
 import '../viewmodels/notifications_viewmodel.dart';
 import '../../../core/models/notification_model.dart';
 import '../../../core/services/supabase_trip_service.dart';
+import '../../../core/services/supabase_ride_service.dart';
 import '../../social/viewmodels/social_viewmodel.dart';
 import '../../trips/viewmodels/trip_viewmodel.dart';
+import '../../rides/viewmodels/ride_viewmodel.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -88,6 +91,77 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       _showTripInviteSheet(context, vm, notif);
       return;
     }
+
+    if (notif.type == 'ride_invite') {
+      _showRideInviteSheet(context, vm, notif);
+      return;
+    }
+
+    if (notif.type == 'message') {
+      final fromUserId = notif.data['fromUserId'] as String?;
+      if (fromUserId != null && fromUserId.isNotEmpty) {
+        context.push('/friends/chat/$fromUserId');
+      }
+      return;
+    }
+  }
+
+  // ── Bottom sheet: convite de rolê ────────────────────────────────────────
+
+  void _showRideInviteSheet(BuildContext context, NotificationsViewModel vm,
+      NotificationModel notif) {
+    final rideId = notif.data['rideId'] as String?;
+    final place = notif.data['place'] as String? ?? notif.title;
+    final address = notif.data['address'] as String? ?? '';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusXl)),
+      ),
+      builder: (sheetCtx) => _RideInviteSheet(
+        place: place,
+        address: address,
+        body: notif.body,
+        onAccept: rideId == null
+            ? null
+            : () async {
+                Navigator.pop(sheetCtx);
+                try {
+                  await SupabaseRideService.confirmParticipation(rideId);
+                  if (context.mounted) {
+                    await context.read<RideViewModel>().loadRides();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Você aceitou o convite do rolê!'),
+                        backgroundColor: AppColors.teal,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                } catch (_) {}
+              },
+        onDecline: rideId == null
+            ? null
+            : () async {
+                Navigator.pop(sheetCtx);
+                try {
+                  await SupabaseRideService.declineParticipation(rideId);
+                  if (context.mounted) {
+                    await context.read<RideViewModel>().loadRides();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Convite recusado.'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                } catch (_) {}
+              },
+      ),
+    );
   }
 
   // ── Bottom sheet: pedido de amizade ───────────────────────────────────────
@@ -323,6 +397,145 @@ class _TripInviteSheet extends StatelessWidget {
   }
 }
 
+// ── Sheet de convite de rolê ───────────────────────────────────────────────────
+
+class _RideInviteSheet extends StatelessWidget {
+  final String place;
+  final String address;
+  final String body;
+  final VoidCallback? onAccept;
+  final VoidCallback? onDecline;
+
+  const _RideInviteSheet({
+    required this.place,
+    required this.address,
+    required this.body,
+    this.onAccept,
+    this.onDecline,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = Color(0xFF9C6FE4);
+    return Padding(
+      padding: EdgeInsets.only(
+        left: AppSpacing.lg,
+        right: AppSpacing.lg,
+        top: AppSpacing.lg,
+        bottom: MediaQuery.of(context).padding.bottom + AppSpacing.lg,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: accent.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.groups_outlined, color: accent, size: 32),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text('Convite de Rolê', style: AppTextStyles.headlineSmall),
+          const SizedBox(height: AppSpacing.sm),
+          Text(body,
+              style: AppTextStyles.bodyMedium
+                  .copyWith(color: AppColors.textSecondary),
+              textAlign: TextAlign.center),
+          const SizedBox(height: AppSpacing.md),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: Column(
+              children: [
+                Row(children: [
+                  const Icon(Icons.place, size: 14, color: accent),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(place,
+                        style: AppTextStyles.bodyMedium
+                            .copyWith(fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                ]),
+                if (address.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Row(children: [
+                    const SizedBox(width: 22),
+                    Expanded(
+                      child: Text(address,
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.textMuted),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                  ]),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onDecline,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    side: const BorderSide(color: AppColors.error),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(AppSpacing.radiusFull)),
+                  ),
+                  child: Text('Recusar',
+                      style: AppTextStyles.titleMedium
+                          .copyWith(color: AppColors.error)),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: onAccept,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: accent,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(AppSpacing.radiusFull)),
+                    elevation: 0,
+                  ),
+                  child: Text('Aceitar',
+                      style: AppTextStyles.titleMedium.copyWith(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Bottom sheet com Aceitar / Recusar ─────────────────────────────────────────
 
 class _FriendRequestSheet extends StatelessWidget {
@@ -441,6 +654,8 @@ class _NotifTile extends StatelessWidget {
         return Icons.groups_outlined;
       case 'trip_invite':
         return Icons.map_outlined;
+      case 'message':
+        return Icons.chat_bubble_outline;
       default:
         return Icons.notifications_outlined;
     }
@@ -454,6 +669,8 @@ class _NotifTile extends StatelessWidget {
         return const Color(0xFF9C6FE4);
       case 'trip_invite':
         return AppColors.teal;
+      case 'message':
+        return AppColors.lightCyan;
       default:
         return AppColors.lightCyan;
     }

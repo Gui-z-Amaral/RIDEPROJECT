@@ -24,17 +24,26 @@ class _ChatScreenState extends State<ChatScreen> {
   final _msgCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   bool _sendingImage = false;
+  SocialViewModel? _socialVm;
 
   @override
   void initState() {
     super.initState();
-    Future.microtask(
-        () => context.read<SocialViewModel>().loadMessages(widget.userId));
+    Future.microtask(() {
+      if (!mounted) return;
+      context.read<SocialViewModel>().loadMessages(widget.userId);
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _socialVm = context.read<SocialViewModel>();
   }
 
   @override
   void dispose() {
-    context.read<SocialViewModel>().unsubscribeMessages();
+    _socialVm?.unsubscribeMessages();
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();

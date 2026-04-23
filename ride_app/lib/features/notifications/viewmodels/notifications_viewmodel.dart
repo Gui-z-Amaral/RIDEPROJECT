@@ -57,6 +57,15 @@ class NotificationsViewModel extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Limpa estado e cancela canal — chamado no logout.
+  void reset() {
+    _channel?.unsubscribe();
+    _channel = null;
+    _notifications = [];
+    _isLoading = false;
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _channel?.unsubscribe();

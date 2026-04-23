@@ -9,6 +9,10 @@ import '../viewmodels/profile_viewmodel.dart';
 import '../../auth/viewmodels/auth_viewmodel.dart';
 import '../../social/viewmodels/social_viewmodel.dart';
 import '../../trips/viewmodels/trip_viewmodel.dart';
+import '../../home/viewmodels/home_viewmodel.dart';
+import '../../rides/viewmodels/ride_viewmodel.dart';
+import '../../active_session/viewmodels/active_session_viewmodel.dart';
+import '../../notifications/viewmodels/notifications_viewmodel.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/models/trip_model.dart';
 
@@ -20,6 +24,22 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  // ── Logout: zera todos os viewmodels antes do signOut ─────
+  Future<void> _handleLogout(BuildContext context) async {
+    final auth = context.read<AuthViewModel>();
+    // Captura refs antes do logout (context pode ficar indisponível depois)
+    context.read<ProfileViewModel>().reset();
+    context.read<HomeViewModel>().reset();
+    context.read<SocialViewModel>().reset();
+    context.read<TripViewModel>().reset();
+    context.read<RideViewModel>().reset();
+    context.read<NotificationsViewModel>().reset();
+    context.read<ActiveSessionViewModel>().endSession();
+
+    await auth.logout();
+    if (context.mounted) context.go('/login');
+  }
+
   // ── Photo upload ──────────────────────────────────────────
   Future<void> _pickAndUploadPhoto(BuildContext context) async {
     final picker = ImagePicker();
@@ -303,10 +323,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 // Logout
                 IconButton(
                   icon: const Icon(Icons.logout, color: AppColors.navy),
-                  onPressed: () async {
-                    await context.read<AuthViewModel>().logout();
-                    if (context.mounted) context.go('/login');
-                  },
+                  onPressed: () => _handleLogout(context),
                 ),
               ],
             ),

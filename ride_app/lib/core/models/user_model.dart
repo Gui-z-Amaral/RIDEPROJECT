@@ -7,6 +7,7 @@ class UserModel {
   final String? city;
   final String? motoModel;
   final String? motoYear;
+  final String? tripStyle;
   final List<String> photos;
   final int friendsCount;
   final int tripsCount;
@@ -22,6 +23,7 @@ class UserModel {
     this.city,
     this.motoModel,
     this.motoYear,
+    this.tripStyle,
     this.photos = const [],
     this.friendsCount = 0,
     this.tripsCount = 0,
@@ -37,6 +39,7 @@ class UserModel {
     String? city,
     String? motoModel,
     String? motoYear,
+    String? tripStyle,
     List<String>? photos,
     int? friendsCount,
     int? tripsCount,
@@ -51,6 +54,7 @@ class UserModel {
       city: city ?? this.city,
       motoModel: motoModel ?? this.motoModel,
       motoYear: motoYear ?? this.motoYear,
+      tripStyle: tripStyle ?? this.tripStyle,
       photos: photos ?? this.photos,
       friendsCount: friendsCount ?? this.friendsCount,
       tripsCount: tripsCount ?? this.tripsCount,
@@ -68,6 +72,7 @@ class UserModel {
         'city': city,
         'moto_model': motoModel,
         'moto_year': motoYear,
+        'trip_style': tripStyle,
         'photos': photos,
         'friends_count': friendsCount,
         'trips_count': tripsCount,
@@ -83,6 +88,7 @@ class UserModel {
         city: map['city'],
         motoModel: map['moto_model'],
         motoYear: map['moto_year'],
+        tripStyle: map['trip_style'],
         photos: List<String>.from(map['photos'] ?? []),
         friendsCount: map['friends_count'] ?? 0,
         tripsCount: map['trips_count'] ?? 0,

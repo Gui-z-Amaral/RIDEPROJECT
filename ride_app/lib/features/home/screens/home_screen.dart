@@ -210,7 +210,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   // ── Barra de pesquisa ─────────────────────────────
                   GestureDetector(
-                    onTap: () {},
+                    onTap: () => context.push('/search'),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 12),
@@ -317,7 +317,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: AppSpacing.lg),
 
                   // ── ENCONTRE EMPRESAS ─────────────────────────────
-                  _BusinessSection(onTap: () {}),
+                  _BusinessSection(onTap: () => context.push('/businesses')),
                   const SizedBox(height: AppSpacing.lg),
 
                   // ── SUGESTÕES PARA VOCÊ ───────────────────────────
@@ -898,6 +898,8 @@ class _SuggestionCard extends StatelessWidget {
         return '🏨 Mais próximo';
       case RecommendationReason.tripBased:
         return '🗺️ ${place.tripContext ?? 'Sua viagem'}';
+      case RecommendationReason.trustedBusiness:
+        return '⭐ ${place.distanceLabel}';
     }
   }
 

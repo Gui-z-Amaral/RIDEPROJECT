@@ -9,6 +9,54 @@ enum RecommendationReason {
   nearestFuel, // Posto mais próximo (fallback)
   nearestLodging, // Hospedagem mais próxima (fallback)
   tripBased, // Baseado na próxima viagem
+  trustedBusiness, // Empresa confiável (nota alta no Google)
+}
+
+/// Categorias de empresas confiáveis exibidas na seção "Encontre Empresas".
+enum BusinessCategory {
+  gasStation, // Postos de combustível
+  mechanic, // Oficinas mecânicas
+  tireShop, // Borracharias
+  carWash, // Lava-rápido
+}
+
+extension BusinessCategoryX on BusinessCategory {
+  String get label {
+    switch (this) {
+      case BusinessCategory.gasStation:
+        return 'Postos';
+      case BusinessCategory.mechanic:
+        return 'Oficinas';
+      case BusinessCategory.tireShop:
+        return 'Borracharias';
+      case BusinessCategory.carWash:
+        return 'Lava-rápido';
+    }
+  }
+
+  /// Tipo do Google Places (null usa somente keyword)
+  String? get googleType {
+    switch (this) {
+      case BusinessCategory.gasStation:
+        return 'gas_station';
+      case BusinessCategory.mechanic:
+        return 'car_repair';
+      case BusinessCategory.tireShop:
+        return null; // não existe tipo específico, usa keyword
+      case BusinessCategory.carWash:
+        return 'car_wash';
+    }
+  }
+
+  /// Keyword adicional para filtrar resultados (útil para categorias brasileiras)
+  String? get keyword {
+    switch (this) {
+      case BusinessCategory.tireShop:
+        return 'borracharia';
+      default:
+        return null;
+    }
+  }
 }
 
 class PlaceRecommendation {
@@ -85,17 +133,19 @@ class PlacesService {
   static Future<List<Map<String, dynamic>>> _search({
     required double lat,
     required double lng,
-    required String type,
+    String? type,
+    String? keyword,
     int? radius,
     bool rankByDistance = false,
   }) async {
     try {
       final params = <String, String>{
         'location': '$lat,$lng',
-        'type': type,
         'key': _key,
         'language': 'pt-BR',
       };
+      if (type != null) params['type'] = type;
+      if (keyword != null) params['keyword'] = keyword;
       if (rankByDistance) {
         params['rankby'] = 'distance';
       } else {
@@ -258,5 +308,51 @@ class PlacesService {
     }
 
     return recommendations;
+  }
+
+  /// Busca empresas da categoria num raio definido, filtrando por nota mínima
+  /// do Google. Resultados ordenados por rating (desc), depois por nº de reviews.
+  ///
+  /// - [minRating]: nota mínima (padrão 3.5). Use 0 para não filtrar.
+  /// - [radiusMeters]: raio de busca em metros (padrão 8000m = 8km).
+  static Future<List<PlaceRecommendation>> getTrustedBusinesses({
+    required double lat,
+    required double lng,
+    required BusinessCategory category,
+    double minRating = 3.5,
+    int radiusMeters = 8000,
+  }) async {
+    final raw = await _search(
+      lat: lat,
+      lng: lng,
+      type: category.googleType,
+      keyword: category.keyword,
+      radius: radiusMeters,
+    );
+
+    final filtered = raw.where((p) {
+      final r = (p['rating'] as num?)?.toDouble() ?? 0;
+      return r >= minRating;
+    }).toList();
+
+    filtered.sort((a, b) {
+      final rA = (a['rating'] as num?)?.toDouble() ?? 0;
+      final rB = (b['rating'] as num?)?.toDouble() ?? 0;
+      if (rA != rB) return rB.compareTo(rA);
+      final cA = (a['user_ratings_total'] as num?)?.toInt() ?? 0;
+      final cB = (b['user_ratings_total'] as num?)?.toInt() ?? 0;
+      return cB.compareTo(cA);
+    });
+
+    return filtered
+        .map((p) => _parse(
+              p,
+              lat,
+              lng,
+              category.googleType ?? 'business',
+              category.label,
+              RecommendationReason.trustedBusiness,
+            ))
+        .toList();
   }
 }

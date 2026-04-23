@@ -8,30 +8,40 @@ import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../viewmodels/active_session_viewmodel.dart';
 
-class WaitingScreen extends StatelessWidget {
+class WaitingScreen extends StatefulWidget {
   final String sessionId;
   const WaitingScreen({super.key, required this.sessionId});
 
+  @override
+  State<WaitingScreen> createState() => _WaitingScreenState();
+}
+
+class _WaitingScreenState extends State<WaitingScreen> {
+  bool _navigated = false;
+
+  String get sessionId => widget.sessionId;
+
   Future<void> _startNow(BuildContext context) async {
+    if (_navigated) return;
     final vm = context.read<ActiveSessionViewModel>();
     await vm.startNow();
-    if (context.mounted) {
-      context.go('/session/active/$sessionId',
-          extra: {'isRide': vm.isRide});
-    }
+    if (!mounted || _navigated) return;
+    _navigated = true;
+    context.go('/session/active/$sessionId',
+        extra: {'isRide': vm.isRide});
   }
 
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<ActiveSessionViewModel>();
 
-    // Auto-navega quando todos responderam
-    if (vm.allConfirmed && vm.confirmedCount > 0) {
+    // Auto-navega quando todos responderam (apenas uma vez)
+    if (!_navigated && vm.allConfirmed && vm.confirmedCount > 0) {
+      _navigated = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (context.mounted) {
-          context.go('/session/active/$sessionId',
-              extra: {'isRide': vm.isRide});
-        }
+        if (!mounted) return;
+        context.go('/session/active/$sessionId',
+            extra: {'isRide': vm.isRide});
       });
     }
 
