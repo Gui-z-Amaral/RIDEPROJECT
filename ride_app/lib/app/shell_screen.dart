@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_colors.dart';
@@ -6,9 +7,17 @@ import '../theme/app_text_styles.dart';
 import '../features/active_session/viewmodels/active_session_viewmodel.dart';
 import '../shared/widgets/active_session_banner.dart';
 
-class ShellScreen extends StatelessWidget {
+class ShellScreen extends StatefulWidget {
   final Widget child;
   const ShellScreen({super.key, required this.child});
+
+  @override
+  State<ShellScreen> createState() => _ShellScreenState();
+}
+
+class _ShellScreenState extends State<ShellScreen> {
+  static const _doubleBackWindow = Duration(seconds: 2);
+  DateTime? _lastBackAt;
 
   int _currentIndex(BuildContext context) {
     final location = GoRouterState.of(context).uri.path;
@@ -19,13 +28,41 @@ class ShellScreen extends StatelessWidget {
     return 1;
   }
 
+  /// Intercepta o botão de voltar em rotas-raiz (shell):
+  /// 1º toque em < 2s → mostra snackbar "pressione novamente para sair"
+  /// 2º toque em < 2s → minimiza o app
+  /// Rotas empurradas (push) em cima do shell usam o pop padrão do GoRouter.
+  void _handleBackPress() {
+    final now = DateTime.now();
+    if (_lastBackAt != null &&
+        now.difference(_lastBackAt!) <= _doubleBackWindow) {
+      SystemNavigator.pop();
+      return;
+    }
+    _lastBackAt = now;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Pressione novamente para sair'),
+          duration: _doubleBackWindow,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
 
   @override
   Widget build(BuildContext context) {
     final idx = _currentIndex(context);
     final sessionVM = context.watch<ActiveSessionViewModel>();
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _handleBackPress();
+      },
+      child: Scaffold(
       extendBody: true,
       body: Column(
         children: [
@@ -36,7 +73,7 @@ class ShellScreen extends StatelessWidget {
               onTap: () =>
                   context.go('/session/active/${sessionVM.sessionId}'),
             ),
-          Expanded(child: child),
+          Expanded(child: widget.child),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -95,6 +132,7 @@ class ShellScreen extends StatelessWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }
