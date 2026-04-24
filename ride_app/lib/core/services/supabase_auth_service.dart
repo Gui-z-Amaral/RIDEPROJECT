@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
@@ -137,7 +138,7 @@ class SupabaseAuthService {
         await _db.from('profiles').update(payload).eq('id', id);
         return;
       } on PostgrestException catch (e) {
-        final missing = _extractMissingColumn(e);
+        final missing = extractMissingColumn(e);
         if (missing != null && payload.containsKey(missing)) {
           payload.remove(missing);
           continue;
@@ -149,7 +150,10 @@ class SupabaseAuthService {
 
   /// Extrai o nome da coluna de mensagens como
   /// "Could not find the 'city' column of 'profiles' in the schema cache".
-  static String? _extractMissingColumn(PostgrestException e) {
+  /// Retorna `null` se o erro não for de coluna ausente (código ≠ PGRST204)
+  /// ou se a mensagem não vier no formato esperado.
+  @visibleForTesting
+  static String? extractMissingColumn(PostgrestException e) {
     if (e.code != 'PGRST204') return null;
     final match = RegExp(r"'([^']+)' column").firstMatch(e.message);
     return match?.group(1);
@@ -166,27 +170,8 @@ class SupabaseAuthService {
         .eq('id', id)
         .maybeSingle();
     if (row == null) return null;
-    return _rowToUser(row);
+    return UserModel.fromMap(row);
   }
-
-  static UserModel _rowToUser(Map<String, dynamic> r) => UserModel(
-        id: r['id'] as String,
-        name: r['name'] as String? ?? '',
-        username: r['username'] as String? ?? '',
-        avatarUrl: r['avatar_url'] as String?,
-        bio: r['bio'] as String?,
-        city: r['city'] as String?,
-        motoModel: r['moto_model'] as String?,
-        motoYear: r['moto_year'] as String?,
-        tripStyle: r['trip_style'] as String?,
-        photos: List<String>.from(r['photos'] as List? ?? []),
-        friendsCount: (r['friends_count'] as num?)?.toInt() ?? 0,
-        tripsCount: (r['trips_count'] as num?)?.toInt() ?? 0,
-        isOnline: r['is_online'] as bool? ?? false,
-        createdAt: r['created_at'] != null
-            ? DateTime.parse(r['created_at'] as String)
-            : null,
-      );
 
   static String _usernameFrom(String name) =>
       name.toLowerCase().replaceAll(RegExp(r'\s+'), '_');

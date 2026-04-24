@@ -33,6 +33,14 @@ class _ShellScreenState extends State<ShellScreen> {
   /// 2º toque em < 2s → minimiza o app
   /// Rotas empurradas (push) em cima do shell usam o pop padrão do GoRouter.
   void _handleBackPress() {
+    // Defesa: se algum Navigator aninhado ainda pode popar (modal bottom sheet,
+    // diálogo, etc.), deixa o pop padrão acontecer em vez de mostrar o prompt.
+    final nav = Navigator.of(context);
+    if (nav.canPop()) {
+      nav.pop();
+      return;
+    }
+
     final now = DateTime.now();
     if (_lastBackAt != null &&
         now.difference(_lastBackAt!) <= _doubleBackWindow) {
@@ -70,8 +78,12 @@ class _ShellScreenState extends State<ShellScreen> {
             ActiveSessionBanner(
               title: sessionVM.sessionTitle,
               isRide: sessionVM.isRide,
-              onTap: () =>
-                  context.go('/session/active/${sessionVM.sessionId}'),
+              // Push em vez de go para que o back volte para a tab atual
+              // em vez de minimizar o app.
+              onTap: () => context.push(
+                '/session/active/${sessionVM.sessionId}',
+                extra: {'isRide': sessionVM.isRide},
+              ),
             ),
           Expanded(child: widget.child),
         ],

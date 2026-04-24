@@ -228,14 +228,14 @@ class SupabaseRideService {
         address: r['meeting_address'] as String?,
         label: r['meeting_label'] as String?,
       ),
-      creator: _rowToUser(creatorRow),
+      creator: UserModel.fromMap(creatorRow),
       // Mostra apenas: criador (sempre) + participantes que aceitaram o convite
       participants: participantRows
           .where((p) =>
               p['left_at'] == null &&
               (p['user_id'] == r['creator_id'] ||
                   p['status'] == 'confirmed'))
-          .map((p) => _rowToUser(p['user'] as Map<String, dynamic>? ?? {}))
+          .map((p) => UserModel.fromMap(p['user'] as Map<String, dynamic>? ?? {}))
           .toList(),
       status: _parseStatus(r['status'] as String?),
       scheduledAt: r['scheduled_at'] != null
@@ -248,15 +248,6 @@ class SupabaseRideService {
           : null,
     );
   }
-
-  static UserModel _rowToUser(Map<String, dynamic> r) => UserModel(
-        id: r['id'] as String? ?? '',
-        name: r['name'] as String? ?? '',
-        username: r['username'] as String? ?? '',
-        avatarUrl: r['avatar_url'] as String?,
-        motoModel: r['moto_model'] as String?,
-        isOnline: r['is_online'] as bool? ?? false,
-      );
 
   static RideStatus _parseStatus(String? s) {
     switch (s) {

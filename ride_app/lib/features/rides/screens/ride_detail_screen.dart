@@ -219,7 +219,9 @@ class _RideDetailScreenState extends State<RideDetailScreen> {
                 icon: Icons.exit_to_app,
                 onPressed: () => _confirmLeave(context, ride.id),
               ),
-            const SizedBox(height: AppSpacing.xxxl),
+            SizedBox(
+                height: AppSpacing.xxxl +
+                    MediaQuery.of(context).padding.bottom),
           ],
         ),
       ),

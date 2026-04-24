@@ -65,6 +65,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
                   onAction: () => context.push('/friends/search'),
                 )
               : ListView.separated(
+                  padding: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).padding.bottom + 16),
                   itemCount: vm.friends.length,
                   separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
                   itemBuilder: (_, i) {

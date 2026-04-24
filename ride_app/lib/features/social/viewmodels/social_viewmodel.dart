@@ -111,14 +111,14 @@ class SocialViewModel extends ChangeNotifier {
   }
 
   Future<void> sendMessage(String otherUserId, String content) async {
-    try {
-      final msg = await SupabaseSocialService.sendMessage(otherUserId, content);
-      if (!_messages.any((m) => m.id == msg.id)) {
-        _messages = [..._messages, msg];
-        _sortMessages();
-        notifyListeners();
-      }
-    } catch (_) {}
+    // Propaga erros ao chamador para que a UI possa mostrar feedback
+    // (mesma abordagem usada em sendImage).
+    final msg = await SupabaseSocialService.sendMessage(otherUserId, content);
+    if (!_messages.any((m) => m.id == msg.id)) {
+      _messages = [..._messages, msg];
+      _sortMessages();
+      notifyListeners();
+    }
   }
 
   Future<void> sendImage(
@@ -171,6 +171,7 @@ class SocialViewModel extends ChangeNotifier {
     _searchQuery = '';
     _isLoading = false;
     _isSearching = false;
+    SupabaseSocialService.clearCaches();
     notifyListeners();
   }
 

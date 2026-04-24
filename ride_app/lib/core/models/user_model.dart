@@ -79,19 +79,25 @@ class UserModel {
         'is_online': isOnline,
       };
 
-  factory UserModel.fromMap(Map<String, dynamic> map) => UserModel(
-        id: map['id'] ?? '',
-        name: map['name'] ?? '',
-        username: map['username'] ?? '',
-        avatarUrl: map['avatar_url'],
-        bio: map['bio'],
-        city: map['city'],
-        motoModel: map['moto_model'],
-        motoYear: map['moto_year'],
-        tripStyle: map['trip_style'],
-        photos: List<String>.from(map['photos'] ?? []),
-        friendsCount: map['friends_count'] ?? 0,
-        tripsCount: map['trips_count'] ?? 0,
-        isOnline: map['is_online'] ?? false,
-      );
+  factory UserModel.fromMap(Map<String, dynamic> map) {
+    final rawCreatedAt = map['created_at'];
+    return UserModel(
+      id: map['id'] as String? ?? '',
+      name: map['name'] as String? ?? '',
+      username: map['username'] as String? ?? '',
+      avatarUrl: map['avatar_url'] as String?,
+      bio: map['bio'] as String?,
+      city: map['city'] as String?,
+      motoModel: map['moto_model'] as String?,
+      motoYear: map['moto_year'] as String?,
+      tripStyle: map['trip_style'] as String?,
+      photos: List<String>.from(map['photos'] as List? ?? []),
+      friendsCount: (map['friends_count'] as num?)?.toInt() ?? 0,
+      tripsCount: (map['trips_count'] as num?)?.toInt() ?? 0,
+      isOnline: map['is_online'] as bool? ?? false,
+      createdAt: rawCreatedAt is String
+          ? DateTime.tryParse(rawCreatedAt)
+          : rawCreatedAt as DateTime?,
+    );
+  }
 }

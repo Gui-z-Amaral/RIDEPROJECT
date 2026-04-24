@@ -62,8 +62,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ),
                 )
               : ListView.separated(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                  padding: EdgeInsets.only(
+                      top: AppSpacing.sm,
+                      bottom: AppSpacing.sm +
+                          MediaQuery.of(context).padding.bottom),
                   itemCount: vm.notifications.length,
                   separatorBuilder: (_, __) =>
                       const Divider(height: 1, color: AppColors.divider),

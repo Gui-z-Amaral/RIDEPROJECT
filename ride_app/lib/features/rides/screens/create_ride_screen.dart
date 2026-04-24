@@ -95,7 +95,9 @@ class _CreateRideScreenState extends State<CreateRideScreen> {
         participants: ride.participants,
       );
       context.showSnack('Rolê criado!');
-      context.go('/session/waiting/${ride.id}');
+      // pushReplacement: não volta para o form ao pressionar back,
+      // mas preserva a tela anterior (shell) para o back funcionar.
+      context.pushReplacement('/session/waiting/${ride.id}');
     } else {
       context.showSnack(
         vm.saveError != null
@@ -122,7 +124,9 @@ class _CreateRideScreenState extends State<CreateRideScreen> {
             onPressed: _prevStep),
         elevation: 0,
       ),
-      body: Column(
+      body: SafeArea(
+        top: false,
+        child: Column(
         children: [
           // Progress bar
           Padding(
@@ -156,6 +160,7 @@ class _CreateRideScreenState extends State<CreateRideScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

@@ -156,8 +156,11 @@ class _SearchScreenState extends State<SearchScreen> {
                   hint: 'Tente outro termo',
                 )
               : ListView(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+                  padding: EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      AppSpacing.md,
+                      AppSpacing.lg,
+                      AppSpacing.md + MediaQuery.of(context).padding.bottom),
                   children: [
                     if (_isSearchingUsers && _users.isEmpty) ...[
                       const _SectionHeader('PESSOAS'),

@@ -54,7 +54,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     ],
     'Turismo e lazer': [
       'MIRANTES',
-      'CHACHOEIRA',
+      'CACHOEIRA',
       'CÂNION',
       'TRILHAS',
       'MUSEU',
@@ -364,7 +364,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               style: AppTextStyles.labelLarge),
                     ),
                   ),
-                  const SizedBox(height: 40),
+                  SizedBox(
+                      height: 40 + MediaQuery.of(context).padding.bottom),
                 ],
               ),
             ),

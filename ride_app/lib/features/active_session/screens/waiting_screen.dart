@@ -66,7 +66,9 @@ class _WaitingScreenState extends State<WaitingScreen> {
           ),
         ],
       ),
-      body: Padding(
+      body: SafeArea(
+        top: false,
+        child: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: Column(
           children: [
@@ -196,6 +198,7 @@ class _WaitingScreenState extends State<WaitingScreen> {
             const SizedBox(height: AppSpacing.xl),
           ],
         ),
+      ),
       ),
     );
   }

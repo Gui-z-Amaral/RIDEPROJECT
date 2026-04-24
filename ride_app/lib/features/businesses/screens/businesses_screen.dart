@@ -23,6 +23,9 @@ class _BusinessesScreenState extends State<BusinessesScreen> {
   bool _loadingResults = false;
   String? _locationError;
   List<PlaceRecommendation> _results = [];
+  // Token que invalida respostas pendentes quando o usuário troca de categoria
+  // antes da request anterior terminar (evita race: último que começa ganha).
+  int _loadToken = 0;
 
   @override
   void initState() {
@@ -75,25 +78,27 @@ class _BusinessesScreenState extends State<BusinessesScreen> {
 
   Future<void> _loadResults() async {
     if (_lat == null || _lng == null) return;
+    final myToken = ++_loadToken;
+    final requestedCategory = _selected;
     setState(() => _loadingResults = true);
     try {
       final res = await PlacesService.getTrustedBusinesses(
         lat: _lat!,
         lng: _lng!,
-        category: _selected,
+        category: requestedCategory,
       );
-      if (!mounted) return;
+      // Se o usuário trocou de categoria no meio, descarta o resultado
+      if (!mounted || myToken != _loadToken) return;
       setState(() {
         _results = res;
         _loadingResults = false;
       });
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _results = [];
-          _loadingResults = false;
-        });
-      }
+      if (!mounted || myToken != _loadToken) return;
+      setState(() {
+        _results = [];
+        _loadingResults = false;
+      });
     }
   }
 
@@ -198,8 +203,11 @@ class _BusinessesScreenState extends State<BusinessesScreen> {
       color: AppColors.navy,
       onRefresh: _loadResults,
       child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xxl),
+        padding: EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            0,
+            AppSpacing.lg,
+            AppSpacing.xxl + MediaQuery.of(context).padding.bottom),
         itemCount: _results.length,
         separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
         itemBuilder: (_, i) => _BusinessCard(

@@ -87,7 +87,7 @@ class SupabaseTripService {
         .inFilter('id', ids.toList())
         .timeout(const Duration(seconds: 15));
     return {
-      for (final p in profiles as List) (p['id'] as String): _rowToUser(p),
+      for (final p in profiles as List) (p['id'] as String): UserModel.fromMap(p),
     };
   }
 
@@ -456,15 +456,6 @@ class SupabaseTripService {
       createdAt: DateTime.parse(r['created_at'] as String),
     );
   }
-
-  static UserModel _rowToUser(Map<String, dynamic> r) => UserModel(
-        id: r['id'] as String? ?? '',
-        name: r['name'] as String? ?? '',
-        username: r['username'] as String? ?? '',
-        avatarUrl: r['avatar_url'] as String?,
-        motoModel: r['moto_model'] as String?,
-        isOnline: r['is_online'] as bool? ?? false,
-      );
 
   static TripStatus _parseStatus(String? s) {
     switch (s) {

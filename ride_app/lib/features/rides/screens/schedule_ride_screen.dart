@@ -49,7 +49,8 @@ class _ScheduleRideScreenState extends State<ScheduleRideScreen> {
     final ride = await vm.saveRide();
     if (ride != null && mounted) {
       context.showSnack('Rolê agendado para ${ride.scheduledAt!.formattedDateTime}!');
-      context.go('/rides/${ride.id}');
+      // pushReplacement preserva a tela anterior para o back funcionar.
+      context.pushReplacement('/rides/${ride.id}');
     }
   }
 
@@ -62,7 +63,9 @@ class _ScheduleRideScreenState extends State<ScheduleRideScreen> {
         title: const Text('Agendar Rolê'),
         leading: IconButton(icon: const Icon(Icons.arrow_back_ios), onPressed: _prevStep),
       ),
-      body: Column(
+      body: SafeArea(
+        top: false,
+        child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
@@ -86,6 +89,7 @@ class _ScheduleRideScreenState extends State<ScheduleRideScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

@@ -115,7 +115,13 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           scrolledUnderElevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios, color: AppColors.navy),
-            onPressed: () => context.go('/home'),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/home');
+              }
+            },
           ),
         ),
         body: const LoadingWidget(),
@@ -131,7 +137,13 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           scrolledUnderElevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios, color: AppColors.navy),
-            onPressed: () => context.go('/home'),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/home');
+              }
+            },
           ),
         ),
         body: Center(
@@ -355,7 +367,9 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                       },
                     ),
                   ],
-                  const SizedBox(height: AppSpacing.xxxl),
+                  SizedBox(
+                      height: AppSpacing.xxxl +
+                          MediaQuery.of(context).padding.bottom),
                 ],
               ),
             ),

@@ -179,8 +179,11 @@ class _FinishTripScreenState extends State<FinishTripScreen> {
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xxl),
+        padding: EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            0,
+            AppSpacing.lg,
+            AppSpacing.xxl + MediaQuery.of(context).padding.bottom),
         children: [
           // ── Cabeçalho ───────────────────────────────────────
           Text(

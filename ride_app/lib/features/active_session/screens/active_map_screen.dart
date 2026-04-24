@@ -407,6 +407,19 @@ class _MapViewState extends State<_MapView> {
     _fetchLocation();
   }
 
+  @override
+  void didUpdateWidget(covariant _MapView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Remove do cache ícones de participantes que saíram — evita
+    // crescimento ilimitado em sessões longas com rotação de pessoas.
+    final currentIds = widget.participants.map((p) => p.user.id).toSet();
+    final stale =
+        _markerIcons.keys.where((id) => !currentIds.contains(id)).toList();
+    for (final id in stale) {
+      _markerIcons.remove(id);
+    }
+  }
+
   Future<void> _fetchLocation() async {
     try {
       LocationPermission permission = await Geolocator.checkPermission();

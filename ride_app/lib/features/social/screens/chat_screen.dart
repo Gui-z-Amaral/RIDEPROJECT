@@ -61,12 +61,24 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  void _sendMessage() {
+  Future<void> _sendMessage() async {
     final text = _msgCtrl.text.trim();
     if (text.isEmpty) return;
-    context.read<SocialViewModel>().sendMessage(widget.userId, text);
     _msgCtrl.clear();
-    _scrollToBottom();
+    try {
+      await context.read<SocialViewModel>().sendMessage(widget.userId, text);
+      _scrollToBottom();
+    } catch (_) {
+      if (!mounted) return;
+      // Restaura o texto para o usuário não perder o que digitou
+      _msgCtrl.text = text;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Erro ao enviar mensagem'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   Future<void> _pickImage() async {

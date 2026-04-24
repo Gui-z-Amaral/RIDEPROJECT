@@ -22,29 +22,63 @@ class SupabaseSocialService {
   static SupabaseClient get _db => Supabase.instance.client;
   static String get _uid => _db.auth.currentUser!.id;
 
+  // Cache em memória dos amigos do próprio usuário.
+  // Reutilizado para calcular amigos em comum sem refazer 2 queries a cada
+  // abertura de perfil. Invalidado em friend request accept/leave e no logout.
+  static Set<String>? _myFriendIdsCache;
+  static String? _cacheOwnerUid;
+
+  static void _invalidateMyFriendsCache() {
+    _myFriendIdsCache = null;
+    _cacheOwnerUid = null;
+  }
+
+  /// Chamado no logout (viewmodel.reset) para evitar vazamento entre usuários.
+  static void clearCaches() {
+    _invalidateMyFriendsCache();
+  }
+
+  /// Busca (com caching) o conjunto de IDs de amigos de um usuário.
+  /// Para o próprio usuário, guarda em memória — o cache é invalidado
+  /// por operações que mudam friendships (accept/leave) e pelo logout.
+  static Future<Set<String>> _fetchFriendIds(String uid) async {
+    if (uid == _uid &&
+        _myFriendIdsCache != null &&
+        _cacheOwnerUid == _uid) {
+      return _myFriendIdsCache!;
+    }
+
+    final results = await Future.wait([
+      _db
+          .from('friendships')
+          .select('friend_id')
+          .eq('user_id', uid)
+          .timeout(const Duration(seconds: 10), onTimeout: () => []),
+      _db
+          .from('friendships')
+          .select('user_id')
+          .eq('friend_id', uid)
+          .timeout(const Duration(seconds: 10), onTimeout: () => []),
+    ]);
+
+    final ids = <String>{};
+    for (final row in results[0] as List) {
+      ids.add(row['friend_id'] as String);
+    }
+    for (final row in results[1] as List) {
+      ids.add(row['user_id'] as String);
+    }
+
+    if (uid == _uid) {
+      _myFriendIdsCache = ids;
+      _cacheOwnerUid = _uid;
+    }
+    return ids;
+  }
+
   // ── Friends ────────────────────────────────────────────────
   static Future<List<UserModel>> getFriends() async {
-    // Separate queries — no PostgREST joins to avoid RLS hangs
-    final asUser = await _db
-        .from('friendships')
-        .select('friend_id')
-        .eq('user_id', _uid)
-        .timeout(const Duration(seconds: 10), onTimeout: () => []);
-
-    final asFriend = await _db
-        .from('friendships')
-        .select('user_id')
-        .eq('friend_id', _uid)
-        .timeout(const Duration(seconds: 10), onTimeout: () => []);
-
-    final friendIds = <String>{};
-    for (final row in asUser as List) {
-      friendIds.add(row['friend_id'] as String);
-    }
-    for (final row in asFriend as List) {
-      friendIds.add(row['user_id'] as String);
-    }
-
+    final friendIds = await _fetchFriendIds(_uid);
     if (friendIds.isEmpty) return [];
 
     final profiles = await _db
@@ -53,42 +87,19 @@ class SupabaseSocialService {
         .inFilter('id', friendIds.toList())
         .timeout(const Duration(seconds: 10), onTimeout: () => []);
 
-    return (profiles as List).map((p) => _rowToUser(p)).toList();
+    return (profiles as List).map((p) => UserModel.fromMap(p)).toList();
   }
 
   /// Retorna os amigos que eu tenho em comum com [otherUserId].
-  /// Faz 2 queries (amigos meus, amigos dele) e calcula a interseção no cliente.
+  /// Usa cache dos meus próprios amigos (reaproveitado entre aberturas de perfil).
   static Future<List<UserModel>> getMutualFriends(String otherUserId) async {
     if (otherUserId == _uid) return [];
 
-    Future<Set<String>> friendsOf(String uid) async {
-      final a = await _db
-          .from('friendships')
-          .select('friend_id')
-          .eq('user_id', uid)
-          .timeout(const Duration(seconds: 10), onTimeout: () => []);
-      final b = await _db
-          .from('friendships')
-          .select('user_id')
-          .eq('friend_id', uid)
-          .timeout(const Duration(seconds: 10), onTimeout: () => []);
-      final ids = <String>{};
-      for (final row in a as List) {
-        ids.add(row['friend_id'] as String);
-      }
-      for (final row in b as List) {
-        ids.add(row['user_id'] as String);
-      }
-      return ids;
-    }
-
     final results = await Future.wait([
-      friendsOf(_uid),
-      friendsOf(otherUserId),
+      _fetchFriendIds(_uid),
+      _fetchFriendIds(otherUserId),
     ]);
-    final mine = results[0];
-    final theirs = results[1];
-    final mutualIds = mine.intersection(theirs).toList();
+    final mutualIds = results[0].intersection(results[1]).toList();
     if (mutualIds.isEmpty) return [];
 
     final profiles = await _db
@@ -96,7 +107,7 @@ class SupabaseSocialService {
         .select()
         .inFilter('id', mutualIds)
         .timeout(const Duration(seconds: 10), onTimeout: () => []);
-    return (profiles as List).map((p) => _rowToUser(p)).toList();
+    return (profiles as List).map((p) => UserModel.fromMap(p)).toList();
   }
 
   static Future<void> sendFriendRequest(String toUserId) async {
@@ -160,7 +171,7 @@ class SupabaseSocialService {
         .timeout(const Duration(seconds: 10), onTimeout: () => []);
 
     final profileMap = {
-      for (final p in profiles as List) (p['id'] as String): _rowToUser(p),
+      for (final p in profiles as List) (p['id'] as String): UserModel.fromMap(p),
     };
 
     return rows.map((r) {
@@ -193,7 +204,7 @@ class SupabaseSocialService {
         .timeout(const Duration(seconds: 10), onTimeout: () => []);
 
     final profileMap = {
-      for (final p in profiles as List) (p['id'] as String): _rowToUser(p),
+      for (final p in profiles as List) (p['id'] as String): UserModel.fromMap(p),
     };
 
     return rows.map((r) {
@@ -229,6 +240,7 @@ class SupabaseSocialService {
       {'user_id': fromUserId, 'friend_id': _uid},
       {'user_id': _uid, 'friend_id': fromUserId},
     ]);
+    _invalidateMyFriendsCache();
   }
 
   static Future<void> rejectFriendRequest(String requestId) async {
@@ -277,7 +289,7 @@ class SupabaseSocialService {
         .or('name.ilike.%$query%,username.ilike.%$query%')
         .neq('id', _uid)
         .limit(20);
-    return (rows as List).map((r) => _rowToUser(r)).toList();
+    return (rows as List).map((r) => UserModel.fromMap(r)).toList();
   }
 
   // ── Messages ───────────────────────────────────────────────
@@ -289,15 +301,26 @@ class SupabaseSocialService {
     return ids.join('_');
   }
 
-  static Future<List<MessageModel>> getMessages(String otherUserId) async {
+  /// Carrega as últimas [limit] mensagens da conversa, em ordem cronológica
+  /// ascendente. Limite padrão evita consumir memória em conversas longas.
+  static Future<List<MessageModel>> getMessages(
+    String otherUserId, {
+    int limit = 100,
+  }) async {
     final chatId = canonicalChatId(otherUserId);
+    // Pega as últimas N (desc), depois inverte para renderizar na ordem certa.
     final rows = await _db
         .from('messages')
         .select('*, sender:profiles!messages_sender_id_fkey(name, avatar_url)')
         .eq('chat_id', chatId)
-        .order('sent_at');
+        .order('sent_at', ascending: false)
+        .limit(limit);
 
-    return (rows as List).map((r) => _rowToMessage(r, chatId)).toList();
+    return (rows as List)
+        .map((r) => _rowToMessage(r, chatId))
+        .toList()
+        .reversed
+        .toList();
   }
 
   static Future<MessageModel> sendMessage(String otherUserId, String content,
@@ -394,19 +417,4 @@ class SupabaseSocialService {
         .subscribe();
   }
 
-  // ── Helpers ────────────────────────────────────────────────
-  static UserModel _rowToUser(Map<String, dynamic> r) => UserModel(
-        id: r['id'] as String,
-        name: r['name'] as String? ?? '',
-        username: r['username'] as String? ?? '',
-        avatarUrl: r['avatar_url'] as String?,
-        bio: r['bio'] as String?,
-        city: r['city'] as String?,
-        motoModel: r['moto_model'] as String?,
-        motoYear: r['moto_year'] as String?,
-        tripStyle: r['trip_style'] as String?,
-        friendsCount: (r['friends_count'] as num?)?.toInt() ?? 0,
-        tripsCount: (r['trips_count'] as num?)?.toInt() ?? 0,
-        isOnline: r['is_online'] as bool? ?? false,
-      );
 }

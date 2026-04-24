@@ -154,6 +154,9 @@ class _SearchUsersScreenState extends State<SearchUsersScreen> {
                       )
                     // Lista de resultados (mantém visível enquanto isSearching)
                     : ListView.separated(
+                        padding: EdgeInsets.only(
+                            bottom:
+                                MediaQuery.of(context).padding.bottom + 16),
                         itemCount: vm.searchResults.length,
                         separatorBuilder: (_, __) =>
                             const Divider(height: 1, indent: 66),

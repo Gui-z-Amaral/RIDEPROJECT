@@ -352,7 +352,7 @@ class _StatBox extends StatelessWidget {
   }
 }
 
-class _MutualFriendsSection extends StatelessWidget {
+class _MutualFriendsSection extends StatefulWidget {
   final bool loading;
   final List<UserModel> friends;
   const _MutualFriendsSection({
@@ -361,8 +361,16 @@ class _MutualFriendsSection extends StatelessWidget {
   });
 
   @override
+  State<_MutualFriendsSection> createState() => _MutualFriendsSectionState();
+}
+
+class _MutualFriendsSectionState extends State<_MutualFriendsSection> {
+  static const _previewLimit = 6;
+  bool _showAll = false;
+
+  @override
   Widget build(BuildContext context) {
-    if (loading) {
+    if (widget.loading) {
       return Padding(
         padding: const EdgeInsets.symmetric(
             horizontal: 24, vertical: AppSpacing.md),
@@ -385,7 +393,13 @@ class _MutualFriendsSection extends StatelessWidget {
       );
     }
 
-    if (friends.isEmpty) return const SizedBox(height: AppSpacing.md);
+    if (widget.friends.isEmpty) return const SizedBox(height: AppSpacing.md);
+
+    final total = widget.friends.length;
+    final visible = _showAll
+        ? widget.friends
+        : widget.friends.take(_previewLimit).toList();
+    final hasMore = total > _previewLimit && !_showAll;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -409,7 +423,7 @@ class _MutualFriendsSection extends StatelessWidget {
                   border: Border.all(color: AppColors.teal),
                 ),
                 child: Text(
-                  '${friends.length}',
+                  '$total',
                   style: AppTextStyles.labelSmall.copyWith(
                       color: AppColors.teal, fontWeight: FontWeight.w800),
                 ),
@@ -418,7 +432,7 @@ class _MutualFriendsSection extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Column(
-            children: friends
+            children: visible
                 .map((f) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: InkWell(
@@ -463,6 +477,22 @@ class _MutualFriendsSection extends StatelessWidget {
                     ))
                 .toList(),
           ),
+          if (hasMore)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: TextButton(
+                onPressed: () => setState(() => _showAll = true),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.navy,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                ),
+                child: Text(
+                  'Ver todos ($total)',
+                  style: AppTextStyles.labelMedium.copyWith(
+                      color: AppColors.navy, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
           const SizedBox(height: AppSpacing.md),
         ],
       ),
