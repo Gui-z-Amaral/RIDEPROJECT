@@ -54,11 +54,13 @@ class _FinishTripScreenState extends State<FinishTripScreen> {
         _ride = await SupabaseRideService.getRideById(widget.sessionId);
       } else {
         _trip = await SupabaseTripService.getTripById(widget.sessionId);
-        _photos = await SupabaseTripService.getTripPhotos(widget.sessionId);
-        final featured = await SupabaseTripService.getMyFeaturedPhoto();
-        if (featured != null && featured.tripId == widget.sessionId) {
-          _featuredPhotoUrl = featured.photoUrl;
-        }
+      }
+      // Fotos e destaque valem tanto para viagem quanto rolê — ambos usam
+      // o id da sessão na coluna trip_id de trip_photos/featured_photos.
+      _photos = await SupabaseTripService.getTripPhotos(widget.sessionId);
+      final featured = await SupabaseTripService.getMyFeaturedPhoto();
+      if (featured != null && featured.tripId == widget.sessionId) {
+        _featuredPhotoUrl = featured.photoUrl;
       }
     } catch (_) {}
     if (mounted) setState(() => _loading = false);

@@ -11,6 +11,7 @@ import '../../../shared/widgets/app_avatar.dart';
 import '../../social/viewmodels/social_viewmodel.dart';
 import '../viewmodels/ride_viewmodel.dart';
 import '../../../core/services/supabase_notification_service.dart';
+import '../../../core/services/supabase_ride_service.dart';
 import '../../../features/auth/viewmodels/auth_viewmodel.dart';
 
 const _rideAccent = Color(0xFF9C6FE4);
@@ -151,9 +152,21 @@ class _StartRideScreenState extends State<StartRideScreen> {
     if (ride != null && _selectedFriendIds.isNotEmpty) {
       final creatorName =
           context.read<AuthViewModel>().user?.name ?? 'Alguém';
+      final ids = _selectedFriendIds.toList();
+
+      // Garante que os amigos entram em ride_participants. createRide tenta
+      // inserir o batch mas cai num try/catch silencioso quando o RLS bloqueia
+      // — por isso chamamos a RPC inviteParticipants (SECURITY DEFINER) aqui,
+      // mesmo padrão usado no active_map_screen ao convidar durante o rolê.
+      try {
+        await SupabaseRideService.inviteParticipants(ride.id, ids);
+      } catch (e) {
+        debugPrint('[StartRideScreen] inviteParticipants falhou: $e');
+      }
+
       try {
         await SupabaseNotificationService.sendInviteNotifications(
-          userIds: _selectedFriendIds.toList(),
+          userIds: ids,
           type: 'ride_invite',
           title: 'Convite para rolê',
           body: '$creatorName te convidou para um rolê em "${widget.placeName}"',
@@ -165,7 +178,9 @@ class _StartRideScreenState extends State<StartRideScreen> {
             'lng': widget.lng,
           },
         );
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[StartRideScreen] sendInviteNotifications falhou: $e');
+      }
     }
 
     if (!mounted) return;

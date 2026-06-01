@@ -58,7 +58,7 @@ class SupabaseRideService {
         .select('''
           joined_at, left_at,
           ride:rides!inner(
-            id, title, status, started_at, created_at,
+            id, title, status, started_at, created_at, creator_id,
             meeting_label, meeting_address
           )
         ''')
@@ -74,6 +74,7 @@ class SupabaseRideService {
             ? ride['meeting_label'] as String
             : (ride['meeting_address'] as String? ?? ''),
         status: _parseStatus(ride['status'] as String?),
+        creatorId: ride['creator_id'] as String?,
         startedAt: ride['started_at'] != null
             ? DateTime.parse(ride['started_at'] as String)
             : null,
@@ -161,6 +162,17 @@ class SupabaseRideService {
     await _db
         .from('ride_participants')
         .update({'left_at': DateTime.now().toIso8601String()})
+        .eq('ride_id', rideId)
+        .eq('user_id', _uid);
+  }
+
+  /// Remove o rolê do histórico do usuário de forma permanente: apaga a linha
+  /// de participação (hard delete). Diferente de [leaveRide] (soft-delete que
+  /// mantém o registro no histórico), some de vez do perfil.
+  static Future<void> removeFromHistory(String rideId) async {
+    await _db
+        .from('ride_participants')
+        .delete()
         .eq('ride_id', rideId)
         .eq('user_id', _uid);
   }

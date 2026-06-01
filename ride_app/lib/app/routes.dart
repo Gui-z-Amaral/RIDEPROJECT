@@ -7,6 +7,9 @@ import '../features/auth/screens/register_screen.dart';
 import '../features/home/screens/home_screen.dart';
 import '../features/profile/screens/profile_screen.dart';
 import '../features/profile/screens/edit_profile_screen.dart';
+import '../features/profile/screens/edit_business_profile_screen.dart';
+import '../features/profile/screens/settings_screen.dart';
+import '../features/profile/screens/history_screen.dart';
 import '../features/social/screens/friends_screen.dart';
 import '../features/social/screens/friend_profile_screen.dart';
 import '../features/social/screens/search_users_screen.dart';
@@ -29,6 +32,8 @@ import '../features/map/screens/map_select_screen.dart';
 import '../features/notifications/screens/notifications_screen.dart';
 import '../features/search/screens/search_screen.dart';
 import '../features/businesses/screens/businesses_screen.dart';
+import '../features/events/screens/create_event_screen.dart';
+import '../features/events/screens/event_detail_screen.dart';
 import '../features/calls/screens/voice_call_screen.dart';
 import '../features/calls/screens/group_voice_screen.dart';
 import 'shell_screen.dart';
@@ -55,7 +60,20 @@ final router = GoRouter(
     GoRoute(path: '/notifications', builder: (_, __) => const NotificationsScreen()),
     GoRoute(path: '/search', builder: (_, __) => const SearchScreen()),
     GoRoute(path: '/businesses', builder: (_, __) => const BusinessesScreen()),
+    GoRoute(path: '/events/create', builder: (_, __) => const CreateEventScreen()),
+    GoRoute(
+      path: '/events/:id/edit',
+      builder: (_, state) =>
+          CreateEventScreen(eventId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/events/:id',
+      builder: (_, state) => EventDetailScreen(eventId: state.pathParameters['id']!),
+    ),
     GoRoute(path: '/profile/edit', builder: (_, __) => const EditProfileScreen()),
+    GoRoute(path: '/profile/business/edit', builder: (_, __) => const EditBusinessProfileScreen()),
+    GoRoute(path: '/profile/settings', builder: (_, __) => const SettingsScreen()),
+    GoRoute(path: '/profile/history', builder: (_, __) => const HistoryScreen()),
     GoRoute(path: '/friends/search', builder: (_, __) => const SearchUsersScreen()),
     GoRoute(
       path: '/friends/chat/:userId',

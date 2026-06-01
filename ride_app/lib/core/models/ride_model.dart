@@ -8,6 +8,7 @@ class RideHistoryEntry {
   final String title;
   final String meetingName;
   final RideStatus status;
+  final String? creatorId;
   final DateTime createdAt;
   final DateTime? startedAt;
   final DateTime? joinedAt;
@@ -18,6 +19,7 @@ class RideHistoryEntry {
     required this.title,
     required this.meetingName,
     required this.status,
+    this.creatorId,
     required this.createdAt,
     this.startedAt,
     this.joinedAt,

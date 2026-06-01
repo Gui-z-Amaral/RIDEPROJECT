@@ -9,6 +9,7 @@ import '../features/trips/viewmodels/trip_viewmodel.dart';
 import '../features/rides/viewmodels/ride_viewmodel.dart';
 import '../features/active_session/viewmodels/active_session_viewmodel.dart';
 import '../features/notifications/viewmodels/notifications_viewmodel.dart';
+import '../features/events/viewmodels/event_viewmodel.dart';
 import 'routes.dart';
 
 class RideApp extends StatelessWidget {
@@ -26,6 +27,7 @@ class RideApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => RideViewModel()),
         ChangeNotifierProvider(create: (_) => ActiveSessionViewModel()),
         ChangeNotifierProvider(create: (_) => NotificationsViewModel()),
+        ChangeNotifierProvider(create: (_) => EventViewModel()),
       ],
       child: MaterialApp.router(
         title: 'Ride - Rolês e Viagens',

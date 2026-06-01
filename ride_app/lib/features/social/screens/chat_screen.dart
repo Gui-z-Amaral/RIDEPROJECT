@@ -114,7 +114,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<ImageSource?> _showImageSourceSheet() async {
     return showModalBottomSheet<ImageSource>(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: AppColors.background,
       shape: const RoundedRectangleBorder(
         borderRadius:
             BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusXl)),
@@ -136,13 +136,13 @@ class _ChatScreenState extends State<ChatScreen> {
               const SizedBox(height: AppSpacing.lg),
               ListTile(
                 leading: const Icon(Icons.camera_alt_outlined,
-                    color: AppColors.teal),
+                    color: AppColors.navy),
                 title: Text('Câmera', style: AppTextStyles.titleMedium),
                 onTap: () => Navigator.pop(context, ImageSource.camera),
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined,
-                    color: AppColors.teal),
+                    color: AppColors.navy),
                 title: Text('Galeria', style: AppTextStyles.titleMedium),
                 onTap: () => Navigator.pop(context, ImageSource.gallery),
               ),
@@ -161,14 +161,20 @@ class _ChatScreenState extends State<ChatScreen> {
         vm.friends.where((u) => u.id == widget.userId).firstOrNull;
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
+        backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios),
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.navy),
           onPressed: () => context.pop(),
         ),
         titleSpacing: 0,
         title: friend == null
-            ? Text('Chat', style: AppTextStyles.titleLarge)
+            ? Text('Chat',
+                style: AppTextStyles.titleLarge
+                    .copyWith(fontWeight: FontWeight.w800))
             : Row(
                 children: [
                   AppAvatar(
@@ -184,7 +190,8 @@ class _ChatScreenState extends State<ChatScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(friend.name,
-                            style: AppTextStyles.titleLarge,
+                            style: AppTextStyles.titleLarge
+                                .copyWith(fontWeight: FontWeight.w800),
                             overflow: TextOverflow.ellipsis),
                         Text(
                           friend.isOnline ? 'Online' : 'Offline',
@@ -233,22 +240,25 @@ class _ChatScreenState extends State<ChatScreen> {
                   // Botão de imagem
                   _sendingImage
                       ? const SizedBox(
-                          width: 36,
-                          height: 36,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: AppColors.teal),
+                          width: 40,
+                          height: 40,
+                          child: Padding(
+                            padding: EdgeInsets.all(8),
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: AppColors.navy),
+                          ),
                         )
                       : GestureDetector(
                           onTap: _pickImage,
                           child: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: AppColors.surfaceVariant,
+                            width: 40,
+                            height: 40,
+                            decoration: const BoxDecoration(
+                              color: AppColors.inputFill,
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(Icons.image_outlined,
-                                color: AppColors.textMuted, size: 20),
+                                color: AppColors.navy, size: 20),
                           ),
                         ),
                   const SizedBox(width: AppSpacing.sm),
@@ -259,14 +269,15 @@ class _ChatScreenState extends State<ChatScreen> {
                       onSubmitted: (_) => _sendMessage(),
                       decoration: InputDecoration(
                         hintText: 'Mensagem...',
-                        hintStyle: AppTextStyles.bodyMedium,
+                        hintStyle: AppTextStyles.bodyMedium
+                            .copyWith(color: AppColors.textMuted),
                         border: OutlineInputBorder(
                           borderRadius:
                               BorderRadius.circular(AppSpacing.radiusFull),
                           borderSide: BorderSide.none,
                         ),
                         filled: true,
-                        fillColor: AppColors.surfaceVariant,
+                        fillColor: AppColors.inputFill,
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
                       ),
@@ -279,9 +290,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       width: 44,
                       height: 44,
                       decoration: const BoxDecoration(
-                          color: AppColors.teal, shape: BoxShape.circle),
+                          color: AppColors.navy, shape: BoxShape.circle),
                       child: const Icon(Icons.send,
-                          color: AppColors.deepNavy, size: 20),
+                          color: Colors.white, size: 20),
                     ),
                   ),
                 ],
@@ -309,7 +320,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 imageUrl: imageUrl,
                 fit: BoxFit.contain,
                 placeholder: (_, __) => const Center(
-                    child: CircularProgressIndicator(color: AppColors.teal)),
+                    child: CircularProgressIndicator(color: AppColors.navy)),
                 errorWidget: (_, __, ___) =>
                     const Icon(Icons.broken_image, color: AppColors.textMuted),
               ),
@@ -340,7 +351,7 @@ class _ChatBubble extends StatelessWidget {
         constraints: BoxConstraints(
             maxWidth: MediaQuery.of(context).size.width * 0.72),
         decoration: BoxDecoration(
-          color: isMe ? AppColors.teal : AppColors.card,
+          color: isMe ? AppColors.navy : AppColors.surfaceVariant,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(AppSpacing.radiusLg),
             topRight: const Radius.circular(AppSpacing.radiusLg),
@@ -370,14 +381,14 @@ class _ChatBubble extends StatelessWidget {
                       fit: BoxFit.cover,
                       placeholder: (_, __) => Container(
                         height: 180,
-                        color: AppColors.surfaceVariant,
+                        color: AppColors.inputFill,
                         child: const Center(
                             child: CircularProgressIndicator(
-                                color: AppColors.teal, strokeWidth: 2)),
+                                color: AppColors.navy, strokeWidth: 2)),
                       ),
                       errorWidget: (_, __, ___) => Container(
                         height: 100,
-                        color: AppColors.surfaceVariant,
+                        color: AppColors.inputFill,
                         child: const Center(
                             child: Icon(Icons.broken_image,
                                 color: AppColors.textMuted)),
@@ -411,9 +422,8 @@ class _ChatBubble extends StatelessWidget {
                     Text(
                       msg.content,
                       style: AppTextStyles.bodyMedium.copyWith(
-                          color: isMe
-                              ? AppColors.deepNavy
-                              : AppColors.textPrimary),
+                          color:
+                              isMe ? Colors.white : AppColors.textPrimary),
                     ),
                     const SizedBox(height: 2),
                   ],
@@ -421,7 +431,7 @@ class _ChatBubble extends StatelessWidget {
                     msg.sentAt.formattedTime,
                     style: AppTextStyles.labelSmall.copyWith(
                         color: isMe
-                            ? AppColors.deepNavy.withOpacity(0.7)
+                            ? Colors.white.withOpacity(0.7)
                             : AppColors.textMuted),
                   ),
                 ],

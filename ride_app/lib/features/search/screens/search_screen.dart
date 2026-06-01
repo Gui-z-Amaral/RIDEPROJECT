@@ -1,11 +1,17 @@
 import 'dart:async';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/models/trip_model.dart';
 import '../../../core/models/ride_model.dart';
+import '../../../core/models/event_model.dart';
+import '../../../core/services/places_service.dart';
 import '../../../core/services/supabase_social_service.dart';
+import '../../../core/services/supabase_event_service.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_spacing.dart';
@@ -24,10 +30,23 @@ class _SearchScreenState extends State<SearchScreen> {
   final _ctrl = TextEditingController();
   final _focusNode = FocusNode();
   Timer? _debounce;
+  // Token incremental para descartar respostas obsoletas (ex: o usuário
+  // continuou digitando antes da request anterior terminar).
+  int _searchToken = 0;
 
   String _query = '';
   List<UserModel> _users = [];
+  List<PlaceRecommendation> _places = [];
+  List<EventModel> _events = [];
   bool _isSearchingUsers = false;
+  bool _isSearchingPlaces = false;
+  bool _isSearchingEvents = false;
+
+  // Localização do dispositivo, usada para ranquear lugares por proximidade.
+  // Resultado fica null se a permissão for negada — a busca ainda funciona,
+  // só não prioriza os mais próximos.
+  double? _deviceLat;
+  double? _deviceLng;
 
   @override
   void initState() {
@@ -39,9 +58,32 @@ class _SearchScreenState extends State<SearchScreen> {
       if (tripVm.trips.isEmpty) tripVm.loadTrips();
       if (rideVm.rides.isEmpty) rideVm.loadRides();
     });
+    _fetchDeviceLocation();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
     });
+  }
+
+  Future<void> _fetchDeviceLocation() async {
+    try {
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) return;
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.reduced,
+          timeLimit: Duration(seconds: 8),
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _deviceLat = pos.latitude;
+        _deviceLng = pos.longitude;
+      });
+    } catch (_) {}
   }
 
   @override
@@ -59,27 +101,110 @@ class _SearchScreenState extends State<SearchScreen> {
     if (trimmed.isEmpty) {
       setState(() {
         _users = [];
+        _places = [];
+        _events = [];
         _isSearchingUsers = false;
+        _isSearchingPlaces = false;
+        _isSearchingEvents = false;
       });
       return;
     }
-    setState(() => _isSearchingUsers = true);
-    _debounce = Timer(const Duration(milliseconds: 300), _runUserSearch);
+    setState(() {
+      _isSearchingUsers = true;
+      _isSearchingPlaces = true;
+      _isSearchingEvents = true;
+    });
+    _debounce = Timer(const Duration(milliseconds: 350), _runRemoteSearches);
   }
 
-  Future<void> _runUserSearch() async {
+  /// Dispara busca de usuários (Supabase) e lugares (Google Places) em
+  /// paralelo. Cada uma usa o mesmo `_searchToken` para descartar respostas
+  /// obsoletas se o usuário continuar digitando.
+  Future<void> _runRemoteSearches() async {
     final q = _query;
     if (q.isEmpty) return;
-    try {
-      final res = await SupabaseSocialService.searchUsers(q);
-      if (!mounted || q != _query) return;
+    final myToken = ++_searchToken;
+
+    // Usuários
+    SupabaseSocialService.searchUsers(q).then((res) {
+      if (!mounted || myToken != _searchToken) return;
       setState(() {
         _users = res;
         _isSearchingUsers = false;
       });
-    } catch (_) {
-      if (mounted) setState(() => _isSearchingUsers = false);
-    }
+    }).catchError((_) {
+      if (!mounted || myToken != _searchToken) return;
+      setState(() => _isSearchingUsers = false);
+    });
+
+    // Lugares (Google Places)
+    PlacesService.searchPlaces(
+      query: q,
+      lat: _deviceLat,
+      lng: _deviceLng,
+    ).then((res) {
+      if (!mounted || myToken != _searchToken) return;
+      setState(() {
+        _places = res;
+        _isSearchingPlaces = false;
+      });
+    }).catchError((_) {
+      if (!mounted || myToken != _searchToken) return;
+      setState(() => _isSearchingPlaces = false);
+    });
+
+    // Eventos (Supabase)
+    SupabaseEventService.searchEvents(q).then((res) {
+      if (!mounted || myToken != _searchToken) return;
+      setState(() {
+        _events = res;
+        _isSearchingEvents = false;
+      });
+    }).catchError((_) {
+      if (!mounted || myToken != _searchToken) return;
+      setState(() => _isSearchingEvents = false);
+    });
+  }
+
+  void _showPlaceActions(PlaceRecommendation place) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusXl)),
+      ),
+      builder: (sheetCtx) => _PlaceActionsSheet(
+        place: place,
+        onStartRide: () {
+          Navigator.pop(sheetCtx);
+          context.push('/rides/start', extra: {
+            'lat': place.lat,
+            'lng': place.lng,
+            'name': place.name,
+            'address': place.vicinity,
+          });
+        },
+        onStartTrip: () {
+          Navigator.pop(sheetCtx);
+          context.push('/trips/start', extra: {
+            'lat': place.lat,
+            'lng': place.lng,
+            'name': place.name,
+            'address': place.vicinity,
+            'originLat': _deviceLat,
+            'originLng': _deviceLng,
+          });
+        },
+        onOpenMaps: () async {
+          Navigator.pop(sheetCtx);
+          final uri = Uri.parse(place.googleMapsUrl);
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          }
+        },
+      ),
+    );
   }
 
   @override
@@ -103,11 +228,15 @@ class _SearchScreenState extends State<SearchScreen> {
                 (r.meetingPoint.address?.toLowerCase().contains(q) ?? false);
           }).toList();
 
-    final hasAnyResult =
-        _users.isNotEmpty || trips.isNotEmpty || rides.isNotEmpty;
-    final showEmptyResults = _query.isNotEmpty &&
-        !_isSearchingUsers &&
-        !hasAnyResult;
+    final isLoadingAny =
+        _isSearchingUsers || _isSearchingPlaces || _isSearchingEvents;
+    final hasAnyResult = _users.isNotEmpty ||
+        _places.isNotEmpty ||
+        _events.isNotEmpty ||
+        trips.isNotEmpty ||
+        rides.isNotEmpty;
+    final showEmptyResults =
+        _query.isNotEmpty && !isLoadingAny && !hasAnyResult;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -147,7 +276,7 @@ class _SearchScreenState extends State<SearchScreen> {
           ? const _HintState(
               icon: Icons.search,
               message: 'Comece a digitar para pesquisar',
-              hint: 'Busque por amigos, viagens ou rolês',
+              hint: 'Busque por lugares, amigos, viagens ou rolês',
             )
           : showEmptyResults
               ? _HintState(
@@ -162,31 +291,51 @@ class _SearchScreenState extends State<SearchScreen> {
                       AppSpacing.lg,
                       AppSpacing.md + MediaQuery.of(context).padding.bottom),
                   children: [
+                    // ── EVENTOS (Supabase) ───────────────────────────────
+                    if (_isSearchingEvents && _events.isEmpty) ...[
+                      const _SectionHeader('EVENTOS'),
+                      const _LoadingRow(),
+                      const SizedBox(height: AppSpacing.md),
+                    ] else if (_events.isNotEmpty) ...[
+                      const _SectionHeader('EVENTOS'),
+                      ..._events.map((e) => _EventTile(event: e)),
+                      const SizedBox(height: AppSpacing.md),
+                    ],
+
+                    // ── LUGARES (Google Places) ──────────────────────────
+                    if (_isSearchingPlaces && _places.isEmpty) ...[
+                      const _SectionHeader('LUGARES'),
+                      const _LoadingRow(),
+                      const SizedBox(height: AppSpacing.md),
+                    ] else if (_places.isNotEmpty) ...[
+                      const _SectionHeader('LUGARES'),
+                      ..._places
+                          .map((p) => _PlaceTile(
+                                place: p,
+                                onTap: () => _showPlaceActions(p),
+                              )),
+                      const SizedBox(height: AppSpacing.md),
+                    ],
+
+                    // ── PESSOAS ───────────────────────────────────────────
                     if (_isSearchingUsers && _users.isEmpty) ...[
                       const _SectionHeader('PESSOAS'),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(
-                            vertical: AppSpacing.md),
-                        child: Center(
-                          child: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: AppColors.navy),
-                          ),
-                        ),
-                      ),
+                      const _LoadingRow(),
                       const SizedBox(height: AppSpacing.md),
                     ] else if (_users.isNotEmpty) ...[
                       const _SectionHeader('PESSOAS'),
                       ..._users.map((u) => _UserTile(user: u)),
                       const SizedBox(height: AppSpacing.md),
                     ],
+
+                    // ── VIAGENS (locais carregados) ──────────────────────
                     if (trips.isNotEmpty) ...[
                       const _SectionHeader('VIAGENS'),
                       ...trips.map((t) => _TripTile(trip: t)),
                       const SizedBox(height: AppSpacing.md),
                     ],
+
+                    // ── ROLÊS (locais carregados) ────────────────────────
                     if (rides.isNotEmpty) ...[
                       const _SectionHeader('ROLÊS'),
                       ...rides.map((r) => _RideTile(ride: r)),
@@ -212,6 +361,293 @@ class _SectionHeader extends StatelessWidget {
           color: AppColors.textMuted,
           fontWeight: FontWeight.w800,
           letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+}
+
+class _LoadingRow extends StatelessWidget {
+  const _LoadingRow();
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+      child: Center(
+        child: SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+              strokeWidth: 2, color: AppColors.navy),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlaceTile extends StatelessWidget {
+  final PlaceRecommendation place;
+  final VoidCallback onTap;
+  const _PlaceTile({required this.place, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: Row(
+          children: [
+            // Foto do lugar (Google Places Photo) ou ícone fallback
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              child: SizedBox(
+                width: 56,
+                height: 56,
+                child: place.photoUrl.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: place.photoUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => Container(
+                          color: AppColors.inputFill,
+                        ),
+                        errorWidget: (_, __, ___) => Container(
+                          color: AppColors.inputFill,
+                          child: const Icon(Icons.place,
+                              color: AppColors.textMuted, size: 24),
+                        ),
+                      )
+                    : Container(
+                        color: AppColors.inputFill,
+                        child: const Icon(Icons.place,
+                            color: AppColors.textMuted, size: 24),
+                      ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(place.name,
+                      style: AppTextStyles.titleMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  if (place.vicinity.isNotEmpty)
+                    Text(
+                      place.vicinity,
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.textMuted),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  if (place.rating != null) ...[
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        const Icon(Icons.star,
+                            size: 12, color: Colors.amber),
+                        const SizedBox(width: 3),
+                        Text(
+                          place.rating!.toStringAsFixed(1),
+                          style: AppTextStyles.labelSmall.copyWith(
+                              fontWeight: FontWeight.w700),
+                        ),
+                        if (place.distanceKm > 0) ...[
+                          const SizedBox(width: 8),
+                          Text('• ${place.distanceLabel}',
+                              style: AppTextStyles.labelSmall.copyWith(
+                                  color: AppColors.textMuted)),
+                        ],
+                      ],
+                    ),
+                  ] else if (place.distanceKm > 0) ...[
+                    const SizedBox(height: 2),
+                    Text(place.distanceLabel,
+                        style: AppTextStyles.labelSmall
+                            .copyWith(color: AppColors.textMuted)),
+                  ],
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.textMuted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PlaceActionsSheet extends StatelessWidget {
+  final PlaceRecommendation place;
+  final VoidCallback onStartRide;
+  final VoidCallback onStartTrip;
+  final VoidCallback onOpenMaps;
+
+  const _PlaceActionsSheet({
+    required this.place,
+    required this.onStartRide,
+    required this.onStartTrip,
+    required this.onOpenMaps,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: AppSpacing.lg,
+        right: AppSpacing.lg,
+        top: AppSpacing.lg,
+        bottom: MediaQuery.of(context).padding.bottom + AppSpacing.lg,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+
+          // Cabeçalho do lugar
+          Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                child: SizedBox(
+                  width: 60,
+                  height: 60,
+                  child: place.photoUrl.isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: place.photoUrl,
+                          fit: BoxFit.cover,
+                          errorWidget: (_, __, ___) => Container(
+                            color: AppColors.inputFill,
+                            child: const Icon(Icons.place,
+                                color: AppColors.textMuted),
+                          ),
+                        )
+                      : Container(
+                          color: AppColors.inputFill,
+                          child: const Icon(Icons.place,
+                              color: AppColors.textMuted),
+                        ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(place.name,
+                        style: AppTextStyles.titleLarge,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                    if (place.vicinity.isNotEmpty)
+                      Text(place.vicinity,
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.textMuted),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xl),
+
+          // Ações
+          _ActionButton(
+            icon: Icons.groups,
+            label: 'Iniciar rolê aqui',
+            subtitle: 'Convide amigos para um rolê neste lugar',
+            color: const Color(0xFF9C6FE4),
+            onTap: onStartRide,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _ActionButton(
+            icon: Icons.route,
+            label: 'Iniciar viagem para cá',
+            subtitle: 'Defina destino e crie um roteiro',
+            color: AppColors.teal,
+            onTap: onStartTrip,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _ActionButton(
+            icon: Icons.map_outlined,
+            label: 'Ver no Google Maps',
+            subtitle: 'Abrir rota no app do Google Maps',
+            color: AppColors.navy,
+            onTap: onOpenMaps,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          border: Border.all(color: AppColors.divider),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              ),
+              child: Icon(icon, color: color),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: AppTextStyles.titleMedium.copyWith(
+                          fontWeight: FontWeight.w800)),
+                  Text(subtitle,
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.textMuted)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.textMuted),
+          ],
         ),
       ),
     );
@@ -298,6 +734,84 @@ class _TripTile extends StatelessWidget {
                             .copyWith(color: AppColors.textMuted),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.textMuted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EventTile extends StatelessWidget {
+  final EventModel event;
+  const _EventTile({required this.event});
+
+  @override
+  Widget build(BuildContext context) {
+    final d = event.startsAt;
+    final dateLabel =
+        '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
+    final subtitle = [
+      dateLabel,
+      if ((event.locationLabel ?? event.city ?? '').isNotEmpty)
+        (event.locationLabel ?? event.city),
+    ].whereType<String>().join(' · ');
+
+    return InkWell(
+      onTap: () => context.push('/events/${event.id}'),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              child: SizedBox(
+                width: 56,
+                height: 56,
+                child: event.bannerUrl != null
+                    ? CachedNetworkImage(
+                        imageUrl: event.bannerUrl!,
+                        fit: BoxFit.cover,
+                        errorWidget: (_, __, ___) => Container(
+                          color: AppColors.navy.withOpacity(0.1),
+                          child: const Icon(Icons.event, color: AppColors.navy),
+                        ),
+                      )
+                    : Container(
+                        color: AppColors.navy.withOpacity(0.1),
+                        child: const Icon(Icons.event, color: AppColors.navy),
+                      ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(event.title,
+                      style: AppTextStyles.titleMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  if (subtitle.isNotEmpty)
+                    Text(subtitle,
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.textMuted),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                  Row(
+                    children: [
+                      const Icon(Icons.people_outline,
+                          size: 12, color: AppColors.textMuted),
+                      const SizedBox(width: 3),
+                      Text('${event.interestsCount}',
+                          style: AppTextStyles.labelSmall
+                              .copyWith(color: AppColors.textMuted)),
+                    ],
+                  ),
                 ],
               ),
             ),

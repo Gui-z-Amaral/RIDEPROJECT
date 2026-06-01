@@ -34,12 +34,29 @@ class SupabaseAuthService {
     );
     if (res.user == null) return null;
 
-    // Upsert profile (trigger already creates it, this ensures fields)
-    await _db.from('profiles').upsert({
-      'id': res.user!.id,
-      'name': name,
-      'username': u,
-    });
+    // Quando email confirmation está ligado no GoTrue, signUp cria o usuário
+    // mas devolve session=null (esperando o e-mail ser clicado). Sem sessão o
+    // app não consegue rodar inserts autenticados — falha com mensagem clara
+    // em vez de cair no catch genérico de "erro inesperado".
+    if (res.session == null) {
+      throw Exception(
+        'Confirme seu email para entrar. Se sua instalação não envia emails, '
+        'ative ENABLE_EMAIL_AUTOCONFIRM=true no GoTrue.',
+      );
+    }
+
+    // O trigger handle_new_user já criou o profile a partir dos metadados.
+    // O upsert abaixo é só defesa em profundidade caso o trigger não tenha
+    // rodado por algum motivo; se falhar não vamos quebrar o cadastro inteiro.
+    try {
+      await _db.from('profiles').upsert({
+        'id': res.user!.id,
+        'name': name,
+        'username': u,
+      });
+    } catch (e) {
+      debugPrint('register: upsert profile fallback falhou (ok se o trigger criou): $e');
+    }
 
     return _fetchProfile(res.user!.id);
   }
@@ -107,7 +124,18 @@ class SupabaseAuthService {
     String? motoModel,
     String? motoYear,
     String? avatarUrl,
+    String? accountType,
     Object? tripStyle = _unset, // null = limpa, _unset = não tocar
+    // ── Business ──
+    String? businessName,
+    String? businessDescription,
+    String? businessBannerUrl,
+    String? businessAddressStreet,
+    String? businessAddressNumber,
+    String? businessAddressNeighborhood,
+    String? businessAddressCity,
+    String? businessAddressState,
+    List<String>? businessCategories,
   }) async {
     final u = currentAuthUser;
     if (u == null) return null;
@@ -119,7 +147,33 @@ class SupabaseAuthService {
     if (motoModel != null) updates['moto_model'] = motoModel;
     if (motoYear != null) updates['moto_year'] = motoYear;
     if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
+    if (accountType != null) updates['account_type'] = accountType;
     if (tripStyle != _unset) updates['trip_style'] = tripStyle;
+    if (businessName != null) updates['business_name'] = businessName;
+    if (businessDescription != null) {
+      updates['business_description'] = businessDescription;
+    }
+    if (businessBannerUrl != null) {
+      updates['business_banner_url'] = businessBannerUrl;
+    }
+    if (businessAddressStreet != null) {
+      updates['business_address_street'] = businessAddressStreet;
+    }
+    if (businessAddressNumber != null) {
+      updates['business_address_number'] = businessAddressNumber;
+    }
+    if (businessAddressNeighborhood != null) {
+      updates['business_address_neighborhood'] = businessAddressNeighborhood;
+    }
+    if (businessAddressCity != null) {
+      updates['business_address_city'] = businessAddressCity;
+    }
+    if (businessAddressState != null) {
+      updates['business_address_state'] = businessAddressState;
+    }
+    if (businessCategories != null) {
+      updates['business_categories'] = businessCategories;
+    }
     if (updates.isEmpty) return getCurrentUser();
 
     await _updateWithRetry(u.id, updates);

@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
 import '../models/friend_request_model.dart';
 import '../models/message_model.dart';
+import '../utils/image_utils.dart';
 
 class FriendTripStory {
   final UserModel friend;
@@ -356,14 +357,20 @@ class SupabaseSocialService {
   static Future<String> uploadChatImage(
       String otherUserId, Uint8List bytes, String extension) async {
     final chatId = canonicalChatId(otherUserId);
+    // Comprime para JPEG ≤ 360KB antes de subir.
+    final jpeg = await ImageUtils.compressToJpeg(bytes);
     final path =
-        'chat/$chatId/${DateTime.now().millisecondsSinceEpoch}.$extension';
+        'chat/$chatId/${DateTime.now().millisecondsSinceEpoch}.jpg';
     await _db.storage.from('chat-images').uploadBinary(
           path,
-          bytes,
-          fileOptions: FileOptions(contentType: 'image/$extension', upsert: false),
+          jpeg,
+          fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: false),
         );
-    return _db.storage.from('chat-images').getPublicUrl(path);
+    final url = _db.storage.from('chat-images').getPublicUrl(path);
+    // Pré-popula o cache local com os bytes que já temos, pra quem ENVIA não
+    // precisar baixar de novo. Quem RECEBE cacheia ao visualizar (CachedNetworkImage).
+    await ImageUtils.cacheBytes(url, jpeg);
+    return url;
   }
 
   static MessageModel _rowToMessage(Map<String, dynamic> r, String chatId) {

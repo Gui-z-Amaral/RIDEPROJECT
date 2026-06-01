@@ -16,6 +16,9 @@ import '../../../core/models/ride_model.dart';
 import '../../../core/models/trip_photo_model.dart';
 import '../../../core/services/places_service.dart';
 import '../../../core/services/supabase_social_service.dart';
+import '../../../core/services/geocoding_service.dart';
+import '../../../core/models/event_model.dart';
+import '../../events/viewmodels/event_viewmodel.dart';
 import '../../../shared/widgets/app_avatar.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -61,6 +64,11 @@ class _HomeScreenState extends State<HomeScreen> {
         context
             .read<HomeViewModel>()
             .loadRecommendations(pos.latitude, pos.longitude);
+      }
+      // Resolve a UF atual e carrega eventos desse estado.
+      final uf = await GeocodingService.getStateUf(pos.latitude, pos.longitude);
+      if (uf != null && mounted) {
+        context.read<EventViewModel>().loadNearby(uf);
       }
     } catch (_) {}
   }
@@ -261,6 +269,67 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: AppSpacing.lg),
                   ],
+
+                  // ── EVENTOS PERTO DE VOCÊ ─────────────────────────
+                  Builder(builder: (context) {
+                    final eventVm = context.watch<EventViewModel>();
+                    if (!eventVm.isLoadingNearby &&
+                        eventVm.nearbyEvents.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            _SectionLabel(
+                                label: eventVm.loadedUf != null
+                                    ? 'EVENTOS EM ${eventVm.loadedUf}'
+                                    : 'EVENTOS PERTO DE VOCÊ'),
+                            const Spacer(),
+                            if (eventVm.isLoadingNearby)
+                              const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: AppColors.navy),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        SizedBox(
+                          height: 184,
+                          child: eventVm.isLoadingNearby &&
+                                  eventVm.nearbyEvents.isEmpty
+                              ? ListView.separated(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: 2,
+                                  separatorBuilder: (_, __) =>
+                                      const SizedBox(width: AppSpacing.md),
+                                  itemBuilder: (_, __) => Container(
+                                    width: 240,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.inputFill,
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                )
+                              : ListView.separated(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: eventVm.nearbyEvents.length,
+                                  separatorBuilder: (_, __) =>
+                                      const SizedBox(width: AppSpacing.md),
+                                  itemBuilder: (_, i) => _EventCard(
+                                    event: eventVm.nearbyEvents[i],
+                                    onTap: () => context.push(
+                                        '/events/${eventVm.nearbyEvents[i].id}'),
+                                  ),
+                                ),
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                      ],
+                    );
+                  }),
 
                   // ── PRÓXIMA VIAGEM ────────────────────────────────
                   _SectionLabel(label: 'PRÓXIMA VIAGEM'),
@@ -1385,6 +1454,183 @@ class _HighlightsStrip extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+// ─── Event card (home) ────────────────────────────────────────────────────────
+
+class _EventCard extends StatelessWidget {
+  final EventModel event;
+  final VoidCallback onTap;
+  const _EventCard({required this.event, required this.onTap});
+
+  static const _months = [
+    '', 'JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN',
+    'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final d = event.startsAt;
+    final dateLabel =
+        '${d.day.toString().padLeft(2, '0')} ${_months[d.month]}';
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 240,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 6,
+                offset: const Offset(0, 2)),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (event.bannerUrl != null)
+                CachedNetworkImage(
+                  imageUrl: event.bannerUrl!,
+                  fit: BoxFit.cover,
+                  errorWidget: (_, __, ___) => Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [AppColors.navy, AppColors.mediumBlue],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [AppColors.navy, AppColors.mediumBlue],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: const Center(
+                    child: Icon(Icons.event, color: Colors.white24, size: 48),
+                  ),
+                ),
+              // Overlay
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  height: 120,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.transparent, Colors.black87],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                  ),
+                ),
+              ),
+              // Badge de data
+              Positioned(
+                top: 10,
+                left: 10,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.navy,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(dateLabel,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800)),
+                ),
+              ),
+              // Contador de interesse
+              Positioned(
+                top: 10,
+                right: 10,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                          event.isInterested
+                              ? Icons.star
+                              : Icons.people_outline,
+                          color: event.isInterested
+                              ? AppColors.teal
+                              : Colors.white,
+                          size: 12),
+                      const SizedBox(width: 4),
+                      Text('${event.interestsCount}',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ),
+              ),
+              // Conteúdo
+              Positioned(
+                bottom: 12,
+                left: 12,
+                right: 12,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(event.title,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            height: 1.2),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                    if ((event.locationLabel ?? event.city ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          const Icon(Icons.location_on,
+                              color: Colors.white70, size: 12),
+                          const SizedBox(width: 3),
+                          Expanded(
+                            child: Text(
+                              event.locationLabel ?? event.city ?? '',
+                              style: TextStyle(
+                                  color: Colors.white.withOpacity(0.85),
+                                  fontSize: 11),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

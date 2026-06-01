@@ -4,6 +4,7 @@ import '../models/trip_model.dart';
 import '../models/location_model.dart';
 import '../models/user_model.dart';
 import '../models/trip_photo_model.dart';
+import '../utils/image_utils.dart';
 import 'supabase_notification_service.dart';
 import 'supabase_social_service.dart';
 
@@ -305,13 +306,15 @@ class SupabaseTripService {
   // ── Fotos da viagem ────────────────────────────────────────
   static Future<TripPhotoModel> uploadTripPhoto(
       String tripId, Uint8List bytes, String extension) async {
+    // Comprime para JPEG ≤ 360KB antes de subir.
+    final jpeg = await ImageUtils.compressToJpeg(bytes);
     final path =
-        'trip/$tripId/${_uid}_${DateTime.now().millisecondsSinceEpoch}.$extension';
+        'trip/$tripId/${_uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
     await _db.storage.from('trip-photos').uploadBinary(
           path,
-          bytes,
+          jpeg,
           fileOptions:
-              FileOptions(contentType: 'image/$extension', upsert: false),
+              const FileOptions(contentType: 'image/jpeg', upsert: false),
         );
     final url = _db.storage.from('trip-photos').getPublicUrl(path);
 

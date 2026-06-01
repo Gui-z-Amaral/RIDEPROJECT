@@ -149,6 +149,21 @@ class RideViewModel extends ChangeNotifier {
     }
   }
 
+  /// Remove o rolê do perfil/histórico. Se o usuário é o criador, deleta o
+  /// rolê inteiro; caso contrário, apaga só a própria participação.
+  Future<void> removeFromHistory(String id, {required bool isOwner}) async {
+    try {
+      if (isOwner) {
+        await SupabaseRideService.deleteRide(id);
+      } else {
+        await SupabaseRideService.removeFromHistory(id);
+      }
+      _removeRideLocally(id);
+    } catch (e) {
+      debugPrint('🔴 [RideViewModel.removeFromHistory] erro: $e');
+    }
+  }
+
   void _removeRideLocally(String id) {
     _rides = _rides.where((r) => r.id != id).toList();
     _activeUserRides = _activeUserRides.where((e) => e.rideId != id).toList();

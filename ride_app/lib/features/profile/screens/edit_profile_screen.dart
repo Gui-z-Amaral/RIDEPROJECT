@@ -7,6 +7,7 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../viewmodels/profile_viewmodel.dart';
 import '../../../core/utils/extensions.dart';
+import '../../../core/utils/image_utils.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -93,9 +94,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       // Sobrescreve sempre o mesmo arquivo para não acumular versões
       final path = '$uid/avatar.jpg';
       final bytes = await file.readAsBytes();
+      final jpeg = await ImageUtils.compressToJpeg(bytes);
       await Supabase.instance.client.storage
           .from('avatars')
-          .uploadBinary(path, bytes,
+          .uploadBinary(path, jpeg,
               fileOptions: const FileOptions(
                   contentType: 'image/jpeg', upsert: true));
       // Adiciona cache-buster para forçar reload da imagem

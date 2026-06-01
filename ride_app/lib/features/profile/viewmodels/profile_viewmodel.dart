@@ -43,7 +43,18 @@ class ProfileViewModel extends ChangeNotifier {
     String? motoModel,
     String? motoYear,
     String? avatarUrl,
+    String? accountType,
     Object? tripStyle = _unset, // null = limpa, _unset = não tocar
+    // ── Business ──
+    String? businessName,
+    String? businessDescription,
+    String? businessBannerUrl,
+    String? businessAddressStreet,
+    String? businessAddressNumber,
+    String? businessAddressNeighborhood,
+    String? businessAddressCity,
+    String? businessAddressState,
+    List<String>? businessCategories,
   }) async {
     _isSaving = true;
     _saveError = null;
@@ -57,7 +68,17 @@ class ProfileViewModel extends ChangeNotifier {
         motoModel: motoModel,
         motoYear: motoYear,
         avatarUrl: avatarUrl,
+        accountType: accountType,
         tripStyle: tripStyle,
+        businessName: businessName,
+        businessDescription: businessDescription,
+        businessBannerUrl: businessBannerUrl,
+        businessAddressStreet: businessAddressStreet,
+        businessAddressNumber: businessAddressNumber,
+        businessAddressNeighborhood: businessAddressNeighborhood,
+        businessAddressCity: businessAddressCity,
+        businessAddressState: businessAddressState,
+        businessCategories: businessCategories,
       );
       if (updated != null) {
         _user = updated;
@@ -76,6 +97,13 @@ class ProfileViewModel extends ChangeNotifier {
     _isSaving = false;
     notifyListeners();
     return false;
+  }
+
+  /// Muda o tipo de conta (pessoal ↔ empresa) e persiste.
+  /// Retorna `true` se salvou com sucesso.
+  Future<bool> setAccountType(String accountType) async {
+    if (_user?.accountType == accountType) return true;
+    return updateProfile(accountType: accountType);
   }
 
   /// Limpa estado — chamado no logout.

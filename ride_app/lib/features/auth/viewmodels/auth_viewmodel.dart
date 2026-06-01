@@ -84,6 +84,7 @@ class AuthViewModel extends ChangeNotifier {
       _error = 'Erro ao criar conta';
       _state = AuthState.error;
     } catch (e) {
+      debugPrint('AuthViewModel.register: $e');
       _error = _friendlyError(e.toString());
       _state = AuthState.error;
     }
@@ -130,6 +131,31 @@ class AuthViewModel extends ChangeNotifier {
     if (msg.contains('Invalid login credentials')) return 'Email ou senha incorretos';
     if (msg.contains('Email not confirmed')) return 'Confirme seu email antes de entrar';
     if (msg.contains('User already registered')) return 'Este email já está cadastrado';
+    if (msg.contains('Confirme seu email para entrar')) {
+      return 'Confirme seu email para entrar. Cheque sua caixa de entrada.';
+    }
+    if (msg.contains('Signups not allowed') ||
+        msg.contains('Email signups are disabled') ||
+        msg.contains('signup_disabled')) {
+      return 'Cadastro por email está desativado no servidor.';
+    }
+    if (msg.contains('Database error saving new user')) {
+      return 'Erro no banco ao criar conta. Verifique o trigger handle_new_user.';
+    }
+    if (msg.contains('Error sending confirmation email')) {
+      return 'Servidor não consegue enviar o email de confirmação. '
+          'Ative ENABLE_EMAIL_AUTOCONFIRM=true no GoTrue (ou configure SMTP).';
+    }
+    if (msg.contains('weak_password') || msg.contains('Password should be')) {
+      return 'Senha fraca. Use ao menos 6 caracteres.';
+    }
+    if (msg.contains('invalid_email') || msg.contains('Unable to validate email')) {
+      return 'Email inválido.';
+    }
+    if (msg.contains('over_email_send_rate_limit') ||
+        msg.contains('rate limit')) {
+      return 'Muitas tentativas. Aguarde alguns minutos e tente de novo.';
+    }
     if (msg.contains('network')) return 'Sem conexão com a internet';
     // Google Sign-In errors
     if (msg.contains('sign_in_cancelled') || msg.contains('PlatformException(sign_in_canceled')) return 'Login cancelado';

@@ -13,8 +13,12 @@ import '../../home/viewmodels/home_viewmodel.dart';
 import '../../rides/viewmodels/ride_viewmodel.dart';
 import '../../active_session/viewmodels/active_session_viewmodel.dart';
 import '../../notifications/viewmodels/notifications_viewmodel.dart';
+import '../../events/viewmodels/event_viewmodel.dart';
+import '../../../core/constants/business_categories.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/models/trip_model.dart';
+import '../../../core/models/event_model.dart';
+import '../../../core/utils/image_utils.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -24,6 +28,10 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  // Guarda o uid pra qual já carregamos os eventos da empresa (evita recarga
+  // em todo rebuild). Resetado quando o uid muda.
+  String? _eventsLoadedForUid;
+
   // ── Logout: zera todos os viewmodels antes do signOut ─────
   Future<void> _handleLogout(BuildContext context) async {
     final auth = context.read<AuthViewModel>();
@@ -34,6 +42,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     context.read<TripViewModel>().reset();
     context.read<RideViewModel>().reset();
     context.read<NotificationsViewModel>().reset();
+    context.read<EventViewModel>().reset();
     context.read<ActiveSessionViewModel>().endSession();
 
     await auth.logout();
@@ -85,9 +94,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       // pasta uid/ garante que a policy de RLS aceite o upload
       final fileName = '$uid/${DateTime.now().millisecondsSinceEpoch}.jpg';
       final bytes = await file.readAsBytes();
+      final jpeg = await ImageUtils.compressToJpeg(bytes);
       await Supabase.instance.client.storage
           .from('user-photos')
-          .uploadBinary(fileName, bytes,
+          .uploadBinary(fileName, jpeg,
               fileOptions: const FileOptions(contentType: 'image/jpeg'));
       final url = Supabase.instance.client.storage
           .from('user-photos')
@@ -258,8 +268,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final vm = context.watch<ProfileViewModel>();
     final socialVm = context.watch<SocialViewModel>();
     final tripVm = context.watch<TripViewModel>();
+    final eventVm = context.watch<EventViewModel>();
     final user = vm.user;
     final bottomPad = MediaQuery.of(context).padding.bottom;
+
+    // Carrega os eventos da empresa uma vez por usuário (perfil empresa).
+    if ((user?.isBusiness ?? false) && user!.id != _eventsLoadedForUid) {
+      _eventsLoadedForUid = user.id;
+      Future.microtask(() {
+        if (mounted) context.read<EventViewModel>().loadMyEvents(user.id);
+      });
+    }
 
     // Separa viagens ativas/planejadas vs concluídas
     final ongoingTrips = tripVm.trips
@@ -320,6 +339,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       color: AppColors.navy),
                   onPressed: () => context.push('/friends/search'),
                 ),
+                // Configurações
+                IconButton(
+                  icon: const Icon(Icons.settings_outlined,
+                      color: AppColors.navy),
+                  onPressed: () => context.push('/profile/settings'),
+                ),
                 // Logout
                 IconButton(
                   icon: const Icon(Icons.logout, color: AppColors.navy),
@@ -330,7 +355,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
 
           SliverToBoxAdapter(
-            child: Column(
+            child: (user?.isBusiness ?? false)
+                ? _buildBusinessBody(user, vm, eventVm, bottomPad)
+                : Column(
               children: [
                 // ── Avatar + nome ───────────────────────────────
                 const SizedBox(height: 8),
@@ -795,6 +822,381 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Layout do perfil EMPRESA. Renderizado quando user.isBusiness é true.
+  // Mantém o mesmo AppBar do perfil pessoal (amigos / convidar / settings /
+  // sair); só o body muda.
+  // ───────────────────────────────────────────────────────────────────────────
+  Widget _buildBusinessBody(
+      UserModel? user, ProfileViewModel vm, EventViewModel eventVm,
+      double bottomPad) {
+    final categoriesLabels =
+        resolveBusinessCategoryLabels(user?.businessCategories ?? const []);
+    final typeLabel = categoriesLabels.isEmpty
+        ? 'Tipo de estabelecimento'
+        : (categoriesLabels.length > 2
+            ? '${categoriesLabels.take(2).join(' · ')} · +${categoriesLabels.length - 2}'
+            : categoriesLabels.join(' · '));
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 12),
+
+          // ── Banner ───────────────────────────────────────────
+          Container(
+            height: 160,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: AppColors.inputFill,
+              border: Border.all(color: AppColors.divider),
+              borderRadius: BorderRadius.circular(12),
+              image: (user?.businessBannerUrl != null)
+                  ? DecorationImage(
+                      image: NetworkImage(user!.businessBannerUrl!),
+                      fit: BoxFit.cover)
+                  : null,
+            ),
+            child: (user?.businessBannerUrl == null)
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.image_outlined,
+                            color: AppColors.navy.withOpacity(0.4), size: 36),
+                        const SizedBox(height: 6),
+                        Text('Foto de banner da empresa',
+                            style: AppTextStyles.bodySmall
+                                .copyWith(color: AppColors.textMuted)),
+                      ],
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(height: 16),
+
+          // ── Nome + tipo ──────────────────────────────────────
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  (user?.displayName ?? '').toUpperCase(),
+                  style: AppTextStyles.headlineLarge.copyWith(
+                      fontWeight: FontWeight.w800, fontSize: 18),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: categoriesLabels.isEmpty
+                        ? Colors.transparent
+                        : AppColors.teal.withOpacity(0.15),
+                    border: Border.all(
+                        color: categoriesLabels.isEmpty
+                            ? AppColors.divider
+                            : Colors.transparent),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.storefront_outlined,
+                          size: 12,
+                          color: categoriesLabels.isEmpty
+                              ? AppColors.textMuted
+                              : AppColors.teal),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(typeLabel,
+                            style: AppTextStyles.labelSmall.copyWith(
+                                color: categoriesLabels.isEmpty
+                                    ? AppColors.textMuted
+                                    : AppColors.teal,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 10),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // ── Editar perfil empresa ────────────────────────────
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              onPressed: () => context.push('/profile/business/edit'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.navy,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+                elevation: 0,
+              ),
+              child: Text('EDITAR O PERFIL DA SUA EMPRESA',
+                  style: AppTextStyles.labelMedium.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5)),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // ── Descrição (se preenchida) ────────────────────────
+          if ((user?.businessDescription?.isNotEmpty ?? false)) ...[
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            const SizedBox(height: 16),
+            Text(user!.businessDescription!,
+                style: AppTextStyles.bodyMedium
+                    .copyWith(color: AppColors.textSecondary, height: 1.5)),
+            const SizedBox(height: 8),
+          ],
+
+          const SizedBox(height: 20),
+          const Divider(height: 1),
+          const SizedBox(height: 20),
+
+          // ── Eventos ──────────────────────────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Seus eventos',
+                  style: AppTextStyles.headlineMedium
+                      .copyWith(fontWeight: FontWeight.w800)),
+              GestureDetector(
+                onTap: () => context.push('/events/create'),
+                child: Row(
+                  children: [
+                    const Icon(Icons.add, color: AppColors.navy, size: 18),
+                    const SizedBox(width: 4),
+                    Text('Criar',
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.navy)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (eventVm.isLoadingMine && eventVm.myEvents.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                  child: CircularProgressIndicator(color: AppColors.navy)),
+            )
+          else if (eventVm.myEvents.isEmpty)
+            _BusinessEmptyCard(
+              icon: Icons.event_outlined,
+              title: 'Nenhum evento criado',
+              subtitle: 'Toque para criar',
+              onTap: () => context.push('/events/create'),
+            )
+          else
+            ...eventVm.myEvents.take(5).map((e) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _BusinessEventTile(
+                    event: e,
+                    onTap: () => context.push('/events/${e.id}'),
+                  ),
+                )),
+
+          const SizedBox(height: 24),
+
+          // ── Seus anúncios ────────────────────────────────────
+          Text('Seus anúncios',
+              style: AppTextStyles.headlineMedium
+                  .copyWith(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 12),
+          _BusinessEmptyCard(
+            icon: Icons.campaign_outlined,
+            title: 'Nenhum anúncio publicado',
+            subtitle: 'Toque para publicar',
+            onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content:
+                      Text('Publicação de anúncios chega em breve.')),
+            ),
+          ),
+
+          const SizedBox(height: 32),
+          const Divider(height: 1),
+          const SizedBox(height: 20),
+
+          // ── Voltar para perfil pessoal ───────────────────────
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton(
+              onPressed: vm.isSaving
+                  ? null
+                  : () async {
+                      final ok = await vm.setAccountType('personal');
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                            content: Text(ok
+                                ? 'Voltou para o perfil pessoal.'
+                                : 'Não foi possível alterar agora.')),
+                      );
+                    },
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.navy, width: 1.5),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              child: Text('VOLTAR PARA O PERFIL PESSOAL',
+                  style: AppTextStyles.labelMedium.copyWith(
+                      color: AppColors.navy,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5)),
+            ),
+          ),
+
+          SizedBox(height: bottomPad + 40),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Business event tile ─────────────────────────────────────────────────────
+
+class _BusinessEventTile extends StatelessWidget {
+  final EventModel event;
+  final VoidCallback onTap;
+  const _BusinessEventTile({required this.event, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final d = event.startsAt;
+    final dateLabel =
+        '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.navy,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: event.bannerUrl != null
+                    ? Image.network(event.bannerUrl!, fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                            color: Colors.white24,
+                            child: const Icon(Icons.event,
+                                color: Colors.white70, size: 22)))
+                    : Container(
+                        color: Colors.white24,
+                        child: const Icon(Icons.event,
+                            color: Colors.white70, size: 22)),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(event.title,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Text(dateLabel,
+                          style: TextStyle(
+                              color: Colors.white.withOpacity(0.7),
+                              fontSize: 11)),
+                      const SizedBox(width: 10),
+                      const Icon(Icons.people,
+                          color: Colors.white54, size: 12),
+                      const SizedBox(width: 3),
+                      Text('${event.interestsCount}',
+                          style: TextStyle(
+                              color: Colors.white.withOpacity(0.7),
+                              fontSize: 11)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Colors.white54, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Business empty card ─────────────────────────────────────────────────────
+
+class _BusinessEmptyCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  const _BusinessEmptyCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.divider),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Center(
+          child: Column(
+            children: [
+              Icon(icon,
+                  color: AppColors.navy.withOpacity(0.4), size: 36),
+              const SizedBox(height: 10),
+              Text(title,
+                  style: AppTextStyles.bodyMedium
+                      .copyWith(color: AppColors.textSecondary)),
+              const SizedBox(height: 2),
+              Text(subtitle,
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: AppColors.navy)),
+            ],
+          ),
+        ),
       ),
     );
   }

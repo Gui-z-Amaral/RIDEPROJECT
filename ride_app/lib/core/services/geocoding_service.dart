@@ -222,6 +222,40 @@ class GeocodingService {
     }
   }
 
+  /// Reverse-geocodes [lat]/[lng] e retorna só a UF (ex: 'SC') a partir do
+  /// short_name de administrative_area_level_1. Usado pra filtrar eventos na
+  /// home pelo estado atual do usuário. Retorna null se não conseguir resolver.
+  static Future<String?> getStateUf(double lat, double lng) async {
+    try {
+      final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/geocode/json'
+        '?latlng=$lat,$lng'
+        '&language=pt-BR'
+        '&result_type=administrative_area_level_1'
+        '&key=${AppConfig.googleMapsApiKey}',
+      );
+      final response = await http.get(url).timeout(const Duration(seconds: 8));
+      if (response.statusCode != 200) return null;
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (data['status'] != 'OK') return null;
+      final results = (data['results'] as List<dynamic>? ?? []);
+      for (final r in results.cast<Map<String, dynamic>>()) {
+        final comps =
+            (r['address_components'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+        for (final c in comps) {
+          final types = (c['types'] as List<dynamic>? ?? []).cast<String>();
+          if (types.contains('administrative_area_level_1')) {
+            final short = c['short_name'] as String?;
+            if (short != null && short.isNotEmpty) return short.toUpperCase();
+          }
+        }
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   static String? categoryFromTypes(List<String> types) => _categoryFromTypes(types);
 
   static String? _categoryFromTypes(List<String> types) {

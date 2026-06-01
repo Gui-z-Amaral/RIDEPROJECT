@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../constants/app_config.dart';
 
@@ -114,7 +115,21 @@ class PlaceRecommendation {
 class PlacesService {
   static const _baseUrl =
       'https://maps.googleapis.com/maps/api/place/nearbysearch/json';
+  static const _textSearchUrl =
+      'https://maps.googleapis.com/maps/api/place/textsearch/json';
   static String get _key => AppConfig.googleMapsApiKey;
+
+  // Cliente HTTP injetável — em produção é o default do package:http;
+  // em testes pode ser substituído por um MockClient via [debugSetClient].
+  static http.Client _client = http.Client();
+
+  /// Permite substituir o cliente HTTP em testes.
+  /// Use [debugResetClient] no tearDown para restaurar o default.
+  @visibleForTesting
+  static void debugSetClient(http.Client client) => _client = client;
+
+  @visibleForTesting
+  static void debugResetClient() => _client = http.Client();
 
   // ── Haversine distance (km) ────────────────────────────────────────────────
   static double _dist(double lat1, double lng1, double lat2, double lng2) {
@@ -154,7 +169,7 @@ class PlacesService {
 
       final url = Uri.parse(_baseUrl).replace(queryParameters: params);
       final res =
-          await http.get(url).timeout(const Duration(seconds: 8));
+          await _client.get(url).timeout(const Duration(seconds: 8));
       if (res.statusCode != 200) return [];
 
       final data = jsonDecode(res.body) as Map<String, dynamic>;
@@ -189,7 +204,10 @@ class PlacesService {
     return PlaceRecommendation(
       placeId: place['place_id'] as String? ?? '',
       name: place['name'] as String? ?? '',
-      vicinity: place['vicinity'] as String? ?? '',
+      // Nearby Search usa 'vicinity'; Text Search usa 'formatted_address'.
+      vicinity: (place['vicinity'] as String?) ??
+          (place['formatted_address'] as String?) ??
+          '',
       rating: (place['rating'] as num?)?.toDouble(),
       userRatingsTotal: place['user_ratings_total'] as int?,
       type: type,
@@ -354,5 +372,83 @@ class PlacesService {
               RecommendationReason.trustedBusiness,
             ))
         .toList();
+  }
+
+  /// Busca livre de lugares por texto via Google Places Text Search.
+  /// Quando [lat]/[lng] são informados, prioriza resultados próximos
+  /// (dentro do [radiusMeters]). Sem coordenadas, faz busca global.
+  ///
+  /// Usado pela tela de busca para o usuário digitar coisas como
+  /// "mirante", "cachoeira", "praia" e ver lugares reais para iniciar
+  /// rolê / viagem ou abrir no Google Maps.
+  static Future<List<PlaceRecommendation>> searchPlaces({
+    required String query,
+    double? lat,
+    double? lng,
+    int radiusMeters = 50000,
+    int limit = 12,
+  }) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return [];
+
+    try {
+      final params = <String, String>{
+        'query': trimmed,
+        'key': _key,
+        'language': 'pt-BR',
+      };
+      if (lat != null && lng != null) {
+        params['location'] = '$lat,$lng';
+        params['radius'] = radiusMeters.toString();
+      }
+
+      final url = Uri.parse(_textSearchUrl).replace(queryParameters: params);
+      final res = await _client.get(url).timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return [];
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final status = data['status'] as String?;
+      if (status != 'OK' && status != 'ZERO_RESULTS') return [];
+
+      final results = List<Map<String, dynamic>>.from(
+          (data['results'] as List?) ?? []);
+
+      // Origem usada para calcular distância (lat/lng do dispositivo se houver,
+      // senão a coordenada do próprio resultado — distância vira 0 nesse caso).
+      final originLat = lat ?? 0;
+      final originLng = lng ?? 0;
+
+      final parsed = results.take(limit).map((r) {
+        // Quando não temos a localização do usuário, usa a do próprio lugar
+        // como origem para evitar números absurdos no label de distância.
+        if (lat == null || lng == null) {
+          final geo =
+              (r['geometry'] as Map<String, dynamic>)['location']
+                  as Map<String, dynamic>;
+          final pLat = (geo['lat'] as num).toDouble();
+          final pLng = (geo['lng'] as num).toDouble();
+          return _parse(
+            r,
+            pLat,
+            pLng,
+            'place',
+            'Lugar',
+            RecommendationReason.trustedBusiness,
+          );
+        }
+        return _parse(
+          r,
+          originLat,
+          originLng,
+          'place',
+          'Lugar',
+          RecommendationReason.trustedBusiness,
+        );
+      }).toList();
+
+      return parsed;
+    } catch (_) {
+      return [];
+    }
   }
 }
