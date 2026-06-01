@@ -336,14 +336,6 @@ class SupabaseTripService {
     return (rows as List).map((r) => TripPhotoModel.fromRow(r)).toList();
   }
 
-  static Future<void> deleteTripPhoto(String photoId) async {
-    await _db
-        .from('trip_photos')
-        .delete()
-        .eq('id', photoId)
-        .eq('uploaded_by', _uid);
-  }
-
   // ── Destaques (featured photo) ─────────────────────────────
   /// Define a foto destacada do usuário atual. Substitui qualquer destaque
   /// anterior (PRIMARY KEY user_id). Expira em 7 dias.

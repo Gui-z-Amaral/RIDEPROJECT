@@ -629,50 +629,6 @@ class _MapViewState extends State<_MapView> {
   }
 }
 
-class _FallbackActiveMap extends StatelessWidget {
-  final List<SessionParticipant> participants;
-  const _FallbackActiveMap({required this.participants});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(colors: [AppColors.darkNavy, AppColors.mediumBlue], begin: Alignment.topLeft, end: Alignment.bottomRight),
-      ),
-      child: CustomPaint(painter: _ActiveMapPainter(participants: participants), child: Container()),
-    );
-  }
-}
-
-class _ActiveMapPainter extends CustomPainter {
-  final List<SessionParticipant> participants;
-  _ActiveMapPainter({required this.participants});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final gridPaint = Paint()..color = AppColors.teal.withOpacity(0.06)..strokeWidth = 0.5;
-    const step = 30.0;
-    for (double x = 0; x < size.width; x += step) { canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint); }
-    for (double y = 0; y < size.height; y += step) { canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint); }
-
-    final linePaint = Paint()..color = AppColors.teal.withOpacity(0.4)..strokeWidth = 2..style = PaintingStyle.stroke;
-    final path = Path();
-    path.moveTo(size.width * 0.2, size.height * 0.7);
-    path.cubicTo(size.width * 0.3, size.height * 0.5, size.width * 0.6, size.height * 0.4, size.width * 0.8, size.height * 0.3);
-    canvas.drawPath(path, linePaint);
-
-    for (int i = 0; i < participants.length; i++) {
-      final markerPaint = Paint()..color = AppColors.teal..style = PaintingStyle.fill;
-      final x = size.width * (0.25 + i * 0.15);
-      final y = size.height * (0.55 - i * 0.05);
-      canvas.drawCircle(Offset(x, y), 8, markerPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_ActiveMapPainter old) => true;
-}
-
 class _VoiceChannelPanel extends StatelessWidget {
   final ActiveSessionViewModel vm;
   const _VoiceChannelPanel({required this.vm});

@@ -4,7 +4,6 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_spacing.dart';
 import 'app_avatar.dart';
-import 'app_button.dart';
 
 enum FriendTileAction { chat, add, remove, accept, reject }
 

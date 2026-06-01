@@ -3,7 +3,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../core/models/location_model.dart';
 import '../../theme/app_colors.dart';
-import '../../theme/app_text_styles.dart';
 import '../../theme/app_spacing.dart';
 
 /// Mapa Google Maps interativo com suporte a localização do dispositivo.
@@ -179,14 +178,3 @@ class _AppMapState extends State<AppMap> {
   }
 }
 
-class _GridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = AppColors.teal.withOpacity(0.07)..strokeWidth = 0.5;
-    const step = 30.0;
-    for (double x = 0; x < size.width; x += step) canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    for (double y = 0; y < size.height; y += step) canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-  }
-  @override
-  bool shouldRepaint(_) => false;
-}

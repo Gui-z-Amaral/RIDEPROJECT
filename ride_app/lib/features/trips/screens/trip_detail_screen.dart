@@ -11,7 +11,6 @@ import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_map.dart';
 import '../../../shared/widgets/stop_card.dart';
-import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/loading_widget.dart';
 import '../../../core/models/trip_model.dart';
 import '../../../core/models/trip_photo_model.dart';

@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
-import '../../../theme/app_spacing.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../../../core/utils/extensions.dart';
 import '../../../core/constants/supabase_config.dart';

@@ -7,7 +7,6 @@ import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
-import '../../../theme/app_spacing.dart';
 import '../../../core/models/location_model.dart';
 import '../../../core/models/trip_model.dart';
 import '../../../core/models/user_model.dart';
@@ -1643,56 +1642,3 @@ class _SuggestedStopCard extends StatelessWidget {
   }
 }
 
-class _RouteOption extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  const _RouteOption(
-      {required this.label,
-      required this.selected,
-      required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(
-            horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppColors.navy.withOpacity(0.08)
-              : AppColors.background,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color:
-                selected ? AppColors.navy : AppColors.divider,
-            width: selected ? 2 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              Icons.route,
-              color: selected
-                  ? AppColors.navy
-                  : AppColors.textMuted,
-              size: 18,
-            ),
-            const SizedBox(width: 10),
-            Text(label,
-                style: AppTextStyles.titleMedium.copyWith(
-                    color: selected
-                        ? AppColors.navy
-                        : AppColors.textSecondary)),
-            const Spacer(),
-            if (selected)
-              const Icon(Icons.check_circle,
-                  color: AppColors.navy, size: 18),
-          ],
-        ),
-      ),
-    );
-  }
-}

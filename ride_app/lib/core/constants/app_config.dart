@@ -14,7 +14,6 @@
 ///   Adicione em android/local.properties:
 ///   GOOGLE_MAPS_API_KEY=AIza...
 ///   E leia com project.findProperty("GOOGLE_MAPS_API_KEY") no build.gradle.kts
-
 class AppConfig {
   static const String googleMapsApiKey = String.fromEnvironment(
     'GOOGLE_MAPS_API_KEY',

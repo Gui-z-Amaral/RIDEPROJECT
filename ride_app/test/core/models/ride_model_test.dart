@@ -50,6 +50,29 @@ void main() {
     });
   });
 
+  group('RideHistoryEntry.creatorId', () {
+    test('default é null e guarda o id quando informado', () {
+      final semCriador = RideHistoryEntry(
+        rideId: 'r',
+        title: 't',
+        meetingName: 'mp',
+        status: RideStatus.completed,
+        createdAt: DateTime.now(),
+      );
+      expect(semCriador.creatorId, isNull);
+
+      final comCriador = RideHistoryEntry(
+        rideId: 'r',
+        title: 't',
+        meetingName: 'mp',
+        status: RideStatus.completed,
+        creatorId: 'user-1',
+        createdAt: DateTime.now(),
+      );
+      expect(comCriador.creatorId, 'user-1');
+    });
+  });
+
   group('RideHistoryEntry.isActive', () {
     test('considera ativa somente se leftAt é null e status ativo/waiting',
         () {
