@@ -56,6 +56,25 @@ class SupabaseNotificationService {
     );
   }
 
+  // ── Push: registro de token FCM do aparelho ────────────────
+  /// Salva (ou move) o token FCM do aparelho para o usuário logado.
+  /// onConflict no token: se o mesmo aparelho logar com outra conta, o token
+  /// passa a apontar para o novo dono.
+  static Future<void> saveDeviceToken(String token,
+      {String platform = 'android'}) async {
+    await _db.from('device_tokens').upsert({
+      'token': token,
+      'user_id': _uid,
+      'platform': platform,
+      'updated_at': DateTime.now().toIso8601String(),
+    }, onConflict: 'token');
+  }
+
+  /// Remove o token do aparelho (chamado no logout).
+  static Future<void> removeDeviceToken(String token) async {
+    await _db.from('device_tokens').delete().eq('token', token);
+  }
+
   // ── Tempo real: novas notificações chegando ────────────────
   static RealtimeChannel subscribeToNotifications(
       void Function(NotificationModel) onNew) {

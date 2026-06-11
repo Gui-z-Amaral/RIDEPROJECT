@@ -851,3 +851,26 @@ ALTER TABLE trip_photos
     DROP CONSTRAINT IF EXISTS trip_photos_trip_id_fkey;
 ALTER TABLE featured_photos
     DROP CONSTRAINT IF EXISTS featured_photos_trip_id_fkey;
+
+-- ═════════════════════════════════════════════════════════════════════════════
+-- 017_device_tokens.sql
+-- ═════════════════════════════════════════════════════════════════════════════
+-- Tokens FCM por usuário (push). PK no token; worker lê via service_role.
+CREATE TABLE IF NOT EXISTS device_tokens (
+    token      TEXT PRIMARY KEY,
+    user_id    UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+    platform   TEXT NOT NULL DEFAULT 'android',
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_tokens(user_id);
+
+ALTER TABLE device_tokens ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "device_tokens_select" ON device_tokens;
+CREATE POLICY "device_tokens_select" ON device_tokens FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "device_tokens_insert" ON device_tokens;
+CREATE POLICY "device_tokens_insert" ON device_tokens FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "device_tokens_update" ON device_tokens;
+CREATE POLICY "device_tokens_update" ON device_tokens FOR UPDATE USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "device_tokens_delete" ON device_tokens;
+CREATE POLICY "device_tokens_delete" ON device_tokens FOR DELETE USING (auth.uid() = user_id);

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/services/supabase_auth_service.dart';
+import '../../../core/services/push_notification_service.dart';
 
 enum AuthState { initial, loading, authenticated, unauthenticated, error }
 
@@ -58,6 +59,8 @@ class AuthViewModel extends ChangeNotifier {
       if (_user != null) {
         _state = AuthState.authenticated;
         notifyListeners();
+        // Registra o token de push deste aparelho (fire-and-forget).
+        PushNotificationService.instance.registerForCurrentUser();
         return true;
       }
       _error = 'Credenciais inválidas';
@@ -79,6 +82,8 @@ class AuthViewModel extends ChangeNotifier {
       if (_user != null) {
         _state = AuthState.authenticated;
         notifyListeners();
+        // Registra o token de push deste aparelho (fire-and-forget).
+        PushNotificationService.instance.registerForCurrentUser();
         return true;
       }
       _error = 'Erro ao criar conta';
@@ -101,6 +106,8 @@ class AuthViewModel extends ChangeNotifier {
       if (_user != null) {
         _state = AuthState.authenticated;
         notifyListeners();
+        // Registra o token de push deste aparelho (fire-and-forget).
+        PushNotificationService.instance.registerForCurrentUser();
         return true;
       }
       // signInWithGoogle retornou null (idToken ou accessToken veio vazio)
@@ -116,6 +123,8 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    // Remove o token deste aparelho ANTES do signOut (precisa do uid).
+    await PushNotificationService.instance.removeForCurrentUser();
     await SupabaseAuthService.logout();
     _user = null;
     _state = AuthState.unauthenticated;

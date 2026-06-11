@@ -5,6 +5,8 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    // Firebase (push notifications) — lê o google-services.json.
+    id("com.google.gms.google-services")
 }
 
 // Lê local.properties para pegar a chave do Google Maps
@@ -21,6 +23,8 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // Exigido pelo flutter_local_notifications.
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -50,4 +54,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Suporte a APIs Java 8+ em minSdk baixos (flutter_local_notifications).
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
