@@ -351,20 +351,23 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                       variant: AppButtonVariant.outline,
                       onPressed: () => _openMaps(trip),
                     ),
-                    const SizedBox(height: AppSpacing.md),
-                    AppButton(
-                      label: 'Iniciar Viagem',
-                      icon: Icons.play_arrow,
-                      onPressed: () {
-                        context.read<ActiveSessionViewModel>().startSession(
-                          id: trip.id,
-                          title: trip.title,
-                          isRide: false,
-                          participants: trip.participants,
-                        );
-                        context.push('/session/waiting/${trip.id}');
-                      },
-                    ),
+                    // Só o criador inicia a viagem.
+                    if (_canEdit(trip)) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      AppButton(
+                        label: 'Iniciar Viagem',
+                        icon: Icons.play_arrow,
+                        onPressed: () {
+                          context.read<ActiveSessionViewModel>().startSession(
+                            id: trip.id,
+                            title: trip.title,
+                            isRide: false,
+                            participants: trip.participants,
+                          );
+                          context.push('/session/waiting/${trip.id}');
+                        },
+                      ),
+                    ],
                   ],
                   SizedBox(
                       height: AppSpacing.xxxl +

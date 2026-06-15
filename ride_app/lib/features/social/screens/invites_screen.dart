@@ -5,7 +5,12 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
 import '../viewmodels/social_viewmodel.dart';
+import '../../../core/models/session_invite.dart';
+import '../../../core/services/supabase_ride_service.dart';
+import '../../../core/services/supabase_trip_service.dart';
 import '../../../core/utils/extensions.dart';
+import '../../trips/viewmodels/trip_viewmodel.dart';
+import '../../rides/viewmodels/ride_viewmodel.dart';
 
 class InvitesScreen extends StatefulWidget {
   const InvitesScreen({super.key});
@@ -15,11 +20,75 @@ class InvitesScreen extends StatefulWidget {
 }
 
 class _InvitesScreenState extends State<InvitesScreen> {
+  List<SessionInvite> _sessionInvites = [];
+  bool _respondingId = false;
+
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => context.read<SocialViewModel>().loadRequests());
+    Future.microtask(() {
+      context.read<SocialViewModel>().loadRequests();
+      _loadSessionInvites();
+    });
   }
+
+  Future<void> _loadSessionInvites() async {
+    try {
+      final results = await Future.wait([
+        SupabaseRideService.getPendingInvites(),
+        SupabaseTripService.getPendingInvites(),
+      ]);
+      if (!mounted) return;
+      setState(() => _sessionInvites = [...results[0], ...results[1]]);
+    } catch (_) {
+      if (mounted) setState(() => _sessionInvites = []);
+    }
+  }
+
+  Future<void> _respondSession(SessionInvite invite, bool accept) async {
+    if (_respondingId) return;
+    setState(() => _respondingId = true);
+    try {
+      if (invite.isRide) {
+        accept
+            ? await SupabaseRideService.confirmParticipation(invite.sessionId)
+            : await SupabaseRideService.declineParticipation(invite.sessionId);
+      } else {
+        accept
+            ? await SupabaseTripService.confirmParticipation(invite.sessionId)
+            : await SupabaseTripService.declineParticipation(invite.sessionId);
+      }
+      if (mounted) {
+        setState(() =>
+            _sessionInvites.removeWhere((i) => i.sessionId == invite.sessionId));
+        // Atualiza as listas pra refletir na hora (sem precisar reentrar).
+        if (invite.isRide) {
+          context.read<RideViewModel>().loadRides();
+        } else {
+          context.read<TripViewModel>().loadTrips();
+        }
+        context.showSnack(accept
+            ? 'Convite aceito! Você entrou ${invite.isRide ? 'no rolê' : 'na viagem'}.'
+            : 'Convite recusado.');
+      }
+    } catch (_) {
+      if (mounted) context.showSnack('Erro ao responder. Tente novamente.', isError: true);
+    } finally {
+      if (mounted) setState(() => _respondingId = false);
+    }
+  }
+
+  Widget _sectionLabel(String text) => SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.sm),
+          child: Text(text,
+              style: AppTextStyles.labelMedium.copyWith(
+                  color: AppColors.textMuted,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5)),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -74,25 +143,31 @@ class _InvitesScreenState extends State<InvitesScreen> {
             ),
           ),
 
-          // ── Lista de convites ────────────────────────────────────
-          if (vm.receivedRequests.isEmpty)
-            SliverFillRemaining(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.inbox_outlined,
-                        size: 56,
-                        color: AppColors.textMuted.withOpacity(0.4)),
-                    const SizedBox(height: 12),
-                    Text('Nenhum convite pendente',
-                        style: AppTextStyles.titleLarge
-                            .copyWith(color: AppColors.textSecondary)),
-                  ],
-                ),
+          // ── Rolês e viagens ──────────────────────────────────────
+          if (_sessionInvites.isNotEmpty) ...[
+            _sectionLabel('ROLÊS E VIAGENS'),
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (_, i) {
+                  final inv = _sessionInvites[i];
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.md),
+                    child: _SessionInviteCard(
+                      invite: inv,
+                      onAccept: () => _respondSession(inv, true),
+                      onReject: () => _respondSession(inv, false),
+                    ),
+                  );
+                },
+                childCount: _sessionInvites.length,
               ),
-            )
-          else
+            ),
+          ],
+
+          // ── Amizades ─────────────────────────────────────────────
+          if (vm.receivedRequests.isNotEmpty) ...[
+            _sectionLabel('AMIZADES'),
             SliverList(
               delegate: SliverChildBuilderDelegate(
                 (_, i) {
@@ -115,6 +190,29 @@ class _InvitesScreenState extends State<InvitesScreen> {
                   );
                 },
                 childCount: vm.receivedRequests.length,
+              ),
+            ),
+          ],
+
+          // ── Empty state (nenhum convite de nenhum tipo) ──────────
+          if (_sessionInvites.isEmpty && vm.receivedRequests.isEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 60),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.inbox_outlined,
+                          size: 56,
+                          color: AppColors.textMuted.withOpacity(0.4)),
+                      const SizedBox(height: 12),
+                      Text('Nenhum convite pendente',
+                          style: AppTextStyles.titleLarge
+                              .copyWith(color: AppColors.textSecondary)),
+                    ],
+                  ),
+                ),
               ),
             ),
 
@@ -294,6 +392,114 @@ class _InviteCard extends StatelessWidget {
         'Novembro',
         'Dezembro'
       ][m];
+}
+
+// ─── Card de convite de rolê/viagem ───────────────────────────────────────────
+
+class _SessionInviteCard extends StatelessWidget {
+  final SessionInvite invite;
+  final VoidCallback onAccept;
+  final VoidCallback onReject;
+
+  const _SessionInviteCard({
+    required this.invite,
+    required this.onAccept,
+    required this.onReject,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = invite.isRide ? const Color(0xFF9C6FE4) : AppColors.teal;
+    final icon = invite.isRide ? Icons.groups : Icons.map_outlined;
+    final tipo = invite.isRide ? 'Rolê' : 'Viagem';
+    final d = invite.scheduledAt;
+    final dateLabel = d != null
+        ? '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}'
+        : null;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: accent, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Convite de $tipo',
+                        style: AppTextStyles.labelSmall
+                            .copyWith(color: accent, fontWeight: FontWeight.w800)),
+                    Text(invite.title,
+                        style: AppTextStyles.titleMedium
+                            .copyWith(fontWeight: FontWeight.w700),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                    if (dateLabel != null)
+                      Text(dateLabel,
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.textMuted)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: onAccept,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.navy,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6)),
+                    elevation: 0,
+                  ),
+                  child: Text('ACEITAR',
+                      style: AppTextStyles.labelSmall.copyWith(
+                          color: Colors.white, fontWeight: FontWeight.w800)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onReject,
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.navy, width: 1.5),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6)),
+                  ),
+                  child: Text('RECUSAR',
+                      style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.navy, fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ─── Sent request card ────────────────────────────────────────────────────────

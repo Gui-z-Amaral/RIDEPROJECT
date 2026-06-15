@@ -18,12 +18,10 @@ import '../features/social/screens/invites_screen.dart';
 import '../features/trips/screens/trips_list_screen.dart';
 import '../features/trips/screens/trip_detail_screen.dart';
 import '../features/trips/screens/create_trip_screen.dart';
-import '../features/trips/screens/start_trip_screen.dart';
 import '../features/rides/screens/rides_list_screen.dart';
 import '../features/rides/screens/ride_detail_screen.dart';
 import '../features/rides/screens/create_ride_screen.dart';
 import '../features/rides/screens/schedule_ride_screen.dart';
-import '../features/rides/screens/start_ride_screen.dart';
 import '../features/active_session/screens/waiting_screen.dart';
 import '../features/active_session/screens/active_map_screen.dart';
 import '../features/active_session/screens/guest_confirm_screen.dart';
@@ -90,21 +88,6 @@ final router = GoRouter(
 
     GoRoute(path: '/trips/create', builder: (_, __) => const CreateTripScreen()),
     GoRoute(
-      path: '/trips/start',
-      builder: (_, state) {
-        final e = state.extra as Map<String, dynamic>;
-        return StartTripScreen(
-          lat: (e['lat'] as num).toDouble(),
-          lng: (e['lng'] as num).toDouble(),
-          placeName: e['name'] as String,
-          placeAddress: e['address'] as String,
-          originLat: (e['originLat'] as num?)?.toDouble(),
-          originLng: (e['originLng'] as num?)?.toDouble(),
-        );
-      },
-    ),
-
-    GoRoute(
       path: '/trips/:id',
       builder: (_, state) => TripDetailScreen(tripId: state.pathParameters['id']!),
     ),
@@ -116,18 +99,6 @@ final router = GoRouter(
 
     GoRoute(path: '/rides/create', builder: (_, __) => const CreateRideScreen()),
     GoRoute(path: '/rides/schedule', builder: (_, __) => const ScheduleRideScreen()),
-    GoRoute(
-      path: '/rides/start',
-      builder: (_, state) {
-        final e = state.extra as Map<String, dynamic>;
-        return StartRideScreen(
-          lat: (e['lat'] as num).toDouble(),
-          lng: (e['lng'] as num).toDouble(),
-          placeName: e['name'] as String,
-          placeAddress: e['address'] as String,
-        );
-      },
-    ),
     GoRoute(
       path: '/rides/:id',
       builder: (_, state) => RideDetailScreen(rideId: state.pathParameters['id']!),

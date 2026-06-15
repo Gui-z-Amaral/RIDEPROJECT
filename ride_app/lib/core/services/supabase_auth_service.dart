@@ -100,6 +100,17 @@ class SupabaseAuthService {
     await _db.auth.signOut();
   }
 
+  // ── Presença (online/offline) ──────────────────────────────
+  /// Marca o usuário logado como online/offline em profiles.is_online.
+  /// Best-effort: não propaga erro (chamado em lifecycle/login/logout).
+  static Future<void> setOnline(bool online) async {
+    final u = currentAuthUser;
+    if (u == null) return;
+    try {
+      await _db.from('profiles').update({'is_online': online}).eq('id', u.id);
+    } catch (_) {}
+  }
+
   // ── Get current user profile ───────────────────────────────
   static Future<UserModel?> getCurrentUser() async {
     final u = currentAuthUser;

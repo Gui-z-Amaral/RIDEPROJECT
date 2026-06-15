@@ -33,14 +33,12 @@ void main() {
       expect(routeForNotification('event_update', {}), '/notifications');
     });
 
-    test('ride_invite usa rideId quando presente, senão lista', () {
-      expect(routeForNotification('ride_invite', {'rideId': 'rd'}), '/rides/rd');
-      expect(routeForNotification('ride_invite', {}), '/rides');
-    });
-
-    test('trip_invite usa tripId quando presente, senão lista', () {
-      expect(routeForNotification('trip_invite', {'tripId': 'tp'}), '/trips/tp');
-      expect(routeForNotification('trip_invite', {}), '/trips');
+    test('ride_invite e trip_invite abrem a aba de Convites (aceitar/recusar)', () {
+      expect(routeForNotification('ride_invite', {'rideId': 'rd'}),
+          '/friends/invites');
+      expect(routeForNotification('trip_invite', {'tripId': 'tp'}),
+          '/friends/invites');
+      expect(routeForNotification('ride_invite', {}), '/friends/invites');
     });
 
     test('tipo desconhecido ou nulo cai para /notifications', () {
@@ -58,6 +56,79 @@ void main() {
     test('valor não-string no id não quebra (cai para fallback)', () {
       expect(routeForNotification('event_update', {'eventId': 123}),
           '/notifications');
+    });
+  });
+
+  group('shouldShowForegroundNotification', () {
+    test('suprime mensagem de quem o usuário já está conversando', () {
+      expect(
+        shouldShowForegroundNotification(
+          type: 'message',
+          payload: {'fromUserId': 'u-1'},
+          activeChatUserId: 'u-1',
+        ),
+        isFalse,
+      );
+    });
+
+    test('exibe mensagem de OUTRA pessoa', () {
+      expect(
+        shouldShowForegroundNotification(
+          type: 'message',
+          payload: {'fromUserId': 'u-2'},
+          activeChatUserId: 'u-1',
+        ),
+        isTrue,
+      );
+    });
+
+    test('exibe mensagem quando não está em nenhum chat', () {
+      expect(
+        shouldShowForegroundNotification(
+          type: 'message',
+          payload: {'fromUserId': 'u-1'},
+          activeChatUserId: null,
+        ),
+        isTrue,
+      );
+    });
+
+    test('outros tipos sempre exibem, mesmo com chat aberto', () {
+      expect(
+        shouldShowForegroundNotification(
+          type: 'event_update',
+          payload: {'eventId': 'e-1'},
+          activeChatUserId: 'u-1',
+        ),
+        isTrue,
+      );
+      expect(
+        shouldShowForegroundNotification(
+          type: 'friend_request',
+          payload: {},
+          activeChatUserId: 'u-1',
+        ),
+        isTrue,
+      );
+    });
+
+    test('fromUserId vazio ou ausente não suprime', () {
+      expect(
+        shouldShowForegroundNotification(
+          type: 'message',
+          payload: {'fromUserId': ''},
+          activeChatUserId: 'u-1',
+        ),
+        isTrue,
+      );
+      expect(
+        shouldShowForegroundNotification(
+          type: 'message',
+          payload: {},
+          activeChatUserId: 'u-1',
+        ),
+        isTrue,
+      );
     });
   });
 }

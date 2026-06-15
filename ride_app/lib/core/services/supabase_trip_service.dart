@@ -4,6 +4,7 @@ import '../models/trip_model.dart';
 import '../models/location_model.dart';
 import '../models/user_model.dart';
 import '../models/trip_photo_model.dart';
+import '../models/session_invite.dart';
 import '../utils/image_utils.dart';
 import 'supabase_notification_service.dart';
 import 'supabase_social_service.dart';
@@ -12,12 +13,32 @@ class SupabaseTripService {
   static SupabaseClient get _db => Supabase.instance.client;
   static String get _uid => _db.auth.currentUser!.id;
 
-  // ── Buscar todas as viagens ────────────────────────────────
+  // ── Buscar MINHAS viagens ──────────────────────────────────
+  // Só viagens que eu criei OU em que aceitei o convite (status confirmed).
+  // Convite ainda não aceito fica só na aba de Convites; recusado/saído some.
   static Future<List<TripModel>> getTrips() async {
-    // Sem PostgREST join — evita hang causado por RLS em joins
+    final created = await _db
+        .from('trips')
+        .select('id')
+        .eq('creator_id', _uid)
+        .timeout(const Duration(seconds: 15));
+    final confirmed = await _db
+        .from('trip_participants')
+        .select('trip_id')
+        .eq('user_id', _uid)
+        .eq('status', 'confirmed')
+        .timeout(const Duration(seconds: 15));
+
+    final myTripIds = <String>{
+      ...(created as List).map((r) => r['id'] as String),
+      ...(confirmed as List).map((r) => r['trip_id'] as String),
+    };
+    if (myTripIds.isEmpty) return [];
+
     final rows = await _db
         .from('trips')
         .select()
+        .inFilter('id', myTripIds.toList())
         .order('created_at', ascending: false)
         .timeout(const Duration(seconds: 15));
 
@@ -268,6 +289,30 @@ class SupabaseTripService {
         .delete()
         .eq('id', tripId)
         .eq('creator_id', _uid);
+  }
+
+  // ── Convites pendentes (participação 'waiting', não-criador) ───
+  static Future<List<SessionInvite>> getPendingInvites() async {
+    final rows = await _db
+        .from('trip_participants')
+        .select('trip:trips!inner(id, title, creator_id, scheduled_at)')
+        .eq('user_id', _uid)
+        .eq('status', 'waiting');
+
+    final out = <SessionInvite>[];
+    for (final r in rows as List) {
+      final trip = r['trip'] as Map<String, dynamic>?;
+      if (trip == null || trip['creator_id'] == _uid) continue; // ignora as minhas
+      out.add(SessionInvite(
+        sessionId: trip['id'] as String,
+        title: trip['title'] as String? ?? 'Viagem',
+        isRide: false,
+        scheduledAt: trip['scheduled_at'] != null
+            ? DateTime.tryParse(trip['scheduled_at'] as String)
+            : null,
+      ));
+    }
+    return out;
   }
 
   // ── Confirmar / recusar participação ──────────────────────

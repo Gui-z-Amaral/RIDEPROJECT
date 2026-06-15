@@ -2,25 +2,33 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/ride_model.dart';
 import '../models/location_model.dart';
 import '../models/user_model.dart';
+import '../models/session_invite.dart';
 
 class SupabaseRideService {
   static SupabaseClient get _db => Supabase.instance.client;
   static String get _uid => _db.auth.currentUser!.id;
 
-  // ── Buscar todos os rolês ──────────────────────────────────
+  // ── Buscar MEUS rolês ──────────────────────────────────────
+  // Só rolês que eu criei OU em que aceitei o convite (status confirmed e
+  // ainda ativo). Convite não aceito fica só na aba de Convites; recusado/
+  // saído (left_at) some da lista.
   static Future<List<RideModel>> getRides() async {
-    // Só retorna rolês onde o usuário atual é participante ativo (left_at IS NULL)
-    final participantRows = await _db
+    final created = await _db
+        .from('rides')
+        .select('id')
+        .eq('creator_id', _uid);
+    final confirmed = await _db
         .from('ride_participants')
         .select('ride_id')
         .eq('user_id', _uid)
+        .eq('status', 'confirmed')
         .isFilter('left_at', null);
 
-    final activeRideIds = (participantRows as List)
-        .map((r) => r['ride_id'] as String)
-        .toList();
-
-    if (activeRideIds.isEmpty) return [];
+    final myRideIds = <String>{
+      ...(created as List).map((r) => r['id'] as String),
+      ...(confirmed as List).map((r) => r['ride_id'] as String),
+    };
+    if (myRideIds.isEmpty) return [];
 
     final rows = await _db
         .from('rides')
@@ -29,7 +37,7 @@ class SupabaseRideService {
           creator:profiles!rides_creator_id_fkey(*),
           participants:ride_participants(user:profiles(*), left_at, status, user_id)
         ''')
-        .inFilter('id', activeRideIds)
+        .inFilter('id', myRideIds.toList())
         .order('created_at', ascending: false);
 
     return rows.map(_rowToRide).toList();
@@ -195,6 +203,31 @@ class SupabaseRideService {
         .from('ride_locations')
         .select('user_id, lat, lng')
         .eq('ride_id', rideId);
+  }
+
+  // ── Convites pendentes (participação 'waiting', não-criador) ───
+  static Future<List<SessionInvite>> getPendingInvites() async {
+    final rows = await _db
+        .from('ride_participants')
+        .select('left_at, ride:rides!inner(id, title, creator_id, scheduled_at)')
+        .eq('user_id', _uid)
+        .eq('status', 'waiting');
+
+    final out = <SessionInvite>[];
+    for (final r in rows as List) {
+      if (r['left_at'] != null) continue;
+      final ride = r['ride'] as Map<String, dynamic>?;
+      if (ride == null || ride['creator_id'] == _uid) continue; // ignora os meus
+      out.add(SessionInvite(
+        sessionId: ride['id'] as String,
+        title: ride['title'] as String? ?? 'Rolê',
+        isRide: true,
+        scheduledAt: ride['scheduled_at'] != null
+            ? DateTime.tryParse(ride['scheduled_at'] as String)
+            : null,
+      ));
+    }
+    return out;
   }
 
   // ── Confirmar / recusar participação ──────────────────────

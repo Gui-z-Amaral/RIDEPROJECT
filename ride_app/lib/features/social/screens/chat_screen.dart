@@ -9,6 +9,7 @@ import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../core/models/message_model.dart';
+import '../../../core/services/push_notification_service.dart';
 import '../viewmodels/social_viewmodel.dart';
 import '../../../core/utils/extensions.dart';
 
@@ -29,6 +30,8 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    // Marca este chat como ativo → não exibe push de mensagem desta pessoa.
+    PushNotificationService.activeChatUserId = widget.userId;
     Future.microtask(() {
       if (!mounted) return;
       context.read<SocialViewModel>().loadMessages(widget.userId);
@@ -43,6 +46,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    // Só limpa se ainda for este chat (evita corrida ao abrir outro).
+    if (PushNotificationService.activeChatUserId == widget.userId) {
+      PushNotificationService.activeChatUserId = null;
+    }
     _socialVm?.unsubscribeMessages();
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
@@ -50,10 +57,11 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _scrollToBottom() {
+    // Lista é reverse:true → a mensagem mais recente fica no offset mínimo (0).
     Future.delayed(const Duration(milliseconds: 100), () {
       if (_scrollCtrl.hasClients) {
         _scrollCtrl.animateTo(
-          _scrollCtrl.position.maxScrollExtent,
+          _scrollCtrl.position.minScrollExtent,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
@@ -212,11 +220,15 @@ class _ChatScreenState extends State<ChatScreen> {
           Expanded(
             child: ListView.builder(
               controller: _scrollCtrl,
+              // Invertida: ancora na mensagem mais recente (embaixo) ao abrir
+              // e ao chegar mensagem nova, sem precisar rolar manualmente.
+              reverse: true,
               padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.lg, vertical: AppSpacing.md),
               itemCount: vm.messages.length,
               itemBuilder: (_, i) {
-                final msg = vm.messages[i];
+                // i=0 é a mais recente (fica embaixo na lista invertida).
+                final msg = vm.messages[vm.messages.length - 1 - i];
                 final isMe = msg.senderId == myId;
                 return _ChatBubble(
                   msg: msg,

@@ -166,45 +166,13 @@ class _SearchScreenState extends State<SearchScreen> {
     });
   }
 
-  void _showPlaceActions(PlaceRecommendation place) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusXl)),
-      ),
-      builder: (sheetCtx) => _PlaceActionsSheet(
-        place: place,
-        onStartRide: () {
-          Navigator.pop(sheetCtx);
-          context.push('/rides/start', extra: {
-            'lat': place.lat,
-            'lng': place.lng,
-            'name': place.name,
-            'address': place.vicinity,
-          });
-        },
-        onStartTrip: () {
-          Navigator.pop(sheetCtx);
-          context.push('/trips/start', extra: {
-            'lat': place.lat,
-            'lng': place.lng,
-            'name': place.name,
-            'address': place.vicinity,
-            'originLat': _deviceLat,
-            'originLng': _deviceLng,
-          });
-        },
-        onOpenMaps: () async {
-          Navigator.pop(sheetCtx);
-          final uri = Uri.parse(place.googleMapsUrl);
-          if (await canLaunchUrl(uri)) {
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-          }
-        },
-      ),
-    );
+  /// Abre o lugar direto no Google Maps. (Criar viagem/rolê é feito pelos
+  /// fluxos próprios, não pela busca.)
+  Future<void> _openPlaceInMaps(PlaceRecommendation place) async {
+    final uri = Uri.parse(place.googleMapsUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   @override
@@ -312,7 +280,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       ..._places
                           .map((p) => _PlaceTile(
                                 place: p,
-                                onTap: () => _showPlaceActions(p),
+                                onTap: () => _openPlaceInMaps(p),
                               )),
                       const SizedBox(height: AppSpacing.md),
                     ],
@@ -468,181 +436,6 @@ class _PlaceTile extends StatelessWidget {
                         style: AppTextStyles.labelSmall
                             .copyWith(color: AppColors.textMuted)),
                   ],
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right, color: AppColors.textMuted),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PlaceActionsSheet extends StatelessWidget {
-  final PlaceRecommendation place;
-  final VoidCallback onStartRide;
-  final VoidCallback onStartTrip;
-  final VoidCallback onOpenMaps;
-
-  const _PlaceActionsSheet({
-    required this.place,
-    required this.onStartRide,
-    required this.onStartTrip,
-    required this.onOpenMaps,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        left: AppSpacing.lg,
-        right: AppSpacing.lg,
-        top: AppSpacing.lg,
-        bottom: MediaQuery.of(context).padding.bottom + AppSpacing.lg,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.divider,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-
-          // Cabeçalho do lugar
-          Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                child: SizedBox(
-                  width: 60,
-                  height: 60,
-                  child: place.photoUrl.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: place.photoUrl,
-                          fit: BoxFit.cover,
-                          errorWidget: (_, __, ___) => Container(
-                            color: AppColors.inputFill,
-                            child: const Icon(Icons.place,
-                                color: AppColors.textMuted),
-                          ),
-                        )
-                      : Container(
-                          color: AppColors.inputFill,
-                          child: const Icon(Icons.place,
-                              color: AppColors.textMuted),
-                        ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(place.name,
-                        style: AppTextStyles.titleLarge,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                    if (place.vicinity.isNotEmpty)
-                      Text(place.vicinity,
-                          style: AppTextStyles.bodySmall
-                              .copyWith(color: AppColors.textMuted),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xl),
-
-          // Ações
-          _ActionButton(
-            icon: Icons.groups,
-            label: 'Iniciar rolê aqui',
-            subtitle: 'Convide amigos para um rolê neste lugar',
-            color: const Color(0xFF9C6FE4),
-            onTap: onStartRide,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          _ActionButton(
-            icon: Icons.route,
-            label: 'Iniciar viagem para cá',
-            subtitle: 'Defina destino e crie um roteiro',
-            color: AppColors.teal,
-            onTap: onStartTrip,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          _ActionButton(
-            icon: Icons.map_outlined,
-            label: 'Ver no Google Maps',
-            subtitle: 'Abrir rota no app do Google Maps',
-            color: AppColors.navy,
-            onTap: onOpenMaps,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String subtitle;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    required this.subtitle,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-          border: Border.all(color: AppColors.divider),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              ),
-              child: Icon(icon, color: color),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label,
-                      style: AppTextStyles.titleMedium.copyWith(
-                          fontWeight: FontWeight.w800)),
-                  Text(subtitle,
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: AppColors.textMuted)),
                 ],
               ),
             ),

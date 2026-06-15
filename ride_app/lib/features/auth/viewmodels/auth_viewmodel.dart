@@ -61,6 +61,7 @@ class AuthViewModel extends ChangeNotifier {
         notifyListeners();
         // Registra o token de push deste aparelho (fire-and-forget).
         PushNotificationService.instance.registerForCurrentUser();
+        SupabaseAuthService.setOnline(true);
         return true;
       }
       _error = 'Credenciais inválidas';
@@ -84,6 +85,7 @@ class AuthViewModel extends ChangeNotifier {
         notifyListeners();
         // Registra o token de push deste aparelho (fire-and-forget).
         PushNotificationService.instance.registerForCurrentUser();
+        SupabaseAuthService.setOnline(true);
         return true;
       }
       _error = 'Erro ao criar conta';
@@ -108,6 +110,7 @@ class AuthViewModel extends ChangeNotifier {
         notifyListeners();
         // Registra o token de push deste aparelho (fire-and-forget).
         PushNotificationService.instance.registerForCurrentUser();
+        SupabaseAuthService.setOnline(true);
         return true;
       }
       // signInWithGoogle retornou null (idToken ou accessToken veio vazio)
@@ -123,7 +126,8 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    // Remove o token deste aparelho ANTES do signOut (precisa do uid).
+    // Marca offline e remove o token deste aparelho ANTES do signOut (precisa do uid).
+    await SupabaseAuthService.setOnline(false);
     await PushNotificationService.instance.removeForCurrentUser();
     await SupabaseAuthService.logout();
     _user = null;

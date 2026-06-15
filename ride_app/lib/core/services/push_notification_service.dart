@@ -24,6 +24,11 @@ class PushNotificationService {
       FlutterLocalNotificationsPlugin();
   bool _initialized = false;
 
+  /// userId da conversa aberta no momento. Setado pela ChatScreen ao entrar e
+  /// limpo ao sair. Usado para NÃO exibir push de mensagem de quem você já
+  /// está conversando (foreground).
+  static String? activeChatUserId;
+
   // Deve casar com o channel_id do worker e do AndroidManifest.
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
     'rideapp_default',
@@ -103,9 +108,25 @@ class PushNotificationService {
     }
   }
 
+  /// Remove as notificações já entregues na bandeja do sistema. Chamado ao
+  /// abrir/voltar para o app (toque no push ou retorno ao foreground).
+  Future<void> clearDeliveredNotifications() async {
+    try {
+      await _local.cancelAll();
+    } catch (_) {}
+  }
+
   Future<void> _showForeground(RemoteMessage m) async {
     final n = m.notification;
     if (n == null) return;
+    // Não notifica mensagem de quem o usuário já está conversando agora.
+    if (!shouldShowForegroundNotification(
+      type: m.data['type'] as String?,
+      payload: _payloadOf(m),
+      activeChatUserId: activeChatUserId,
+    )) {
+      return;
+    }
     await _local.show(
       n.hashCode,
       n.title,
@@ -124,19 +145,22 @@ class PushNotificationService {
     );
   }
 
-  String _routeFrom(RemoteMessage m) {
-    final type = m.data['type'] as String?;
-    var payload = <String, dynamic>{};
+  Map<String, dynamic> _payloadOf(RemoteMessage m) {
     final raw = m.data['payload'];
     if (raw is String && raw.isNotEmpty) {
       try {
-        payload = jsonDecode(raw) as Map<String, dynamic>;
+        return jsonDecode(raw) as Map<String, dynamic>;
       } catch (_) {}
     }
-    return routeForNotification(type, payload);
+    return <String, dynamic>{};
   }
 
+  String _routeFrom(RemoteMessage m) =>
+      routeForNotification(m.data['type'] as String?, _payloadOf(m));
+
   void _navigate(String route) {
+    // Abriu via toque no push → limpa a bandeja.
+    clearDeliveredNotifications();
     try {
       router.push(route);
     } catch (e) {

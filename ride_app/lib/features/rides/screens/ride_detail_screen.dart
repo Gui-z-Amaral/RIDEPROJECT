@@ -178,20 +178,18 @@ class _RideDetailScreenState extends State<RideDetailScreen> {
                 context.push('/session/waiting/${ride.id}');
               },
               onJoin: () {
+                // Participante só entra quando o rolê JÁ está ativo (só o
+                // criador inicia). Entra direto no mapa da sessão ativa.
                 context.read<ActiveSessionViewModel>().startSession(
                   id: ride.id,
                   title: ride.title,
                   isRide: true,
                   participants: ride.participants,
                 );
-                if (ride.status == RideStatus.active) {
-                  context.push(
-                    '/session/active/${ride.id}',
-                    extra: {'isRide': true},
-                  );
-                } else {
-                  context.push('/session/waiting/${ride.id}');
-                }
+                context.push(
+                  '/session/active/${ride.id}',
+                  extra: {'isRide': true},
+                );
               },
             ),
 
@@ -387,10 +385,9 @@ class _LiveParticipantMapState extends State<_LiveParticipantMap> {
       (widget.rideStatus == RideStatus.scheduled ||
           widget.rideStatus == RideStatus.waiting);
 
+  // Participante só entra quando o rolê está ATIVO (só o criador inicia).
   bool get _canJoin =>
-      !widget.isCreator &&
-      (widget.rideStatus == RideStatus.active ||
-          widget.rideStatus == RideStatus.waiting);
+      !widget.isCreator && widget.rideStatus == RideStatus.active;
 
   @override
   Widget build(BuildContext context) {
