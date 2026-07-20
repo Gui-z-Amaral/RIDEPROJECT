@@ -6,6 +6,7 @@ import '../../../theme/app_spacing.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/services/supabase_social_service.dart';
 import '../../../shared/widgets/app_avatar.dart';
+import '../../../shared/widgets/photo_viewer.dart';
 
 class FriendProfileScreen extends StatefulWidget {
   final UserModel user;
@@ -86,23 +87,30 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
                 Stack(
                   alignment: Alignment.bottomRight,
                   children: [
-                    CircleAvatar(
-                      radius: 52,
-                      backgroundColor: AppColors.navy.withOpacity(0.1),
-                      backgroundImage: user.avatarUrl != null
-                          ? NetworkImage(user.avatarUrl!)
+                    GestureDetector(
+                      // Toque abre a foto de perfil ampliada
+                      onTap: user.avatarUrl != null
+                          ? () => showPhotoViewer(context,
+                              urls: [user.avatarUrl!])
                           : null,
-                      child: user.avatarUrl == null
-                          ? Text(
-                              user.name.isNotEmpty
-                                  ? user.name[0].toUpperCase()
-                                  : '?',
-                              style: const TextStyle(
-                                  fontSize: 36,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.navy),
-                            )
-                          : null,
+                      child: CircleAvatar(
+                        radius: 52,
+                        backgroundColor: AppColors.navy.withOpacity(0.1),
+                        backgroundImage: user.avatarUrl != null
+                            ? NetworkImage(user.avatarUrl!)
+                            : null,
+                        child: user.avatarUrl == null
+                            ? Text(
+                                user.name.isNotEmpty
+                                    ? user.name[0].toUpperCase()
+                                    : '?',
+                                style: const TextStyle(
+                                    fontSize: 36,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.navy),
+                              )
+                            : null,
+                      ),
                     ),
                     if (user.isOnline)
                       Container(

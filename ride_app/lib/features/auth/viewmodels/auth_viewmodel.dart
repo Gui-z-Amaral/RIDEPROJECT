@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/services/supabase_auth_service.dart';
 import '../../../core/services/push_notification_service.dart';
+import '../../../core/services/chat_key_service.dart';
 
 enum AuthState { initial, loading, authenticated, unauthenticated, error }
+
+/// Resultado do cadastro: sucesso direto, aguardando código de email, ou falha.
+enum RegisterOutcome { success, needsConfirmation, failed }
 
 class AuthViewModel extends ChangeNotifier {
   AuthState _state = AuthState.initial;
@@ -41,6 +45,10 @@ class AuthViewModel extends ChangeNotifier {
         _user = await SupabaseAuthService.getCurrentUser()
             .timeout(const Duration(seconds: 8));
         _state = _user != null ? AuthState.authenticated : AuthState.unauthenticated;
+        if (_user != null) {
+          // App reaberto já logado → garante chaves E2EE.
+          ChatKeyService.ensureKeys();
+        }
       } else {
         _state = AuthState.unauthenticated;
       }
@@ -48,6 +56,14 @@ class AuthViewModel extends ChangeNotifier {
       _state = AuthState.unauthenticated;
     }
     notifyListeners();
+  }
+
+  /// Pós-autenticação (qualquer caminho: senha, Google ou código de email):
+  /// registra push, marca online e garante as chaves E2EE. Idempotente.
+  void _onAuthenticated() {
+    PushNotificationService.instance.registerForCurrentUser();
+    SupabaseAuthService.setOnline(true);
+    ChatKeyService.ensureKeys();
   }
 
   Future<bool> login(String email, String password) async {
@@ -59,9 +75,7 @@ class AuthViewModel extends ChangeNotifier {
       if (_user != null) {
         _state = AuthState.authenticated;
         notifyListeners();
-        // Registra o token de push deste aparelho (fire-and-forget).
-        PushNotificationService.instance.registerForCurrentUser();
-        SupabaseAuthService.setOnline(true);
+        _onAuthenticated();
         return true;
       }
       _error = 'Credenciais inválidas';
@@ -74,19 +88,25 @@ class AuthViewModel extends ChangeNotifier {
     return false;
   }
 
-  Future<bool> register(String name, String email, String password) async {
+  Future<RegisterOutcome> register(
+      String name, String email, String password) async {
     _state = AuthState.loading;
     _error = null;
     notifyListeners();
     try {
-      _user = await SupabaseAuthService.register(name, email, password);
-      if (_user != null) {
+      final res = await SupabaseAuthService.register(name, email, password);
+      if (res.needsConfirmation) {
+        // Código enviado por email — tela de cadastro navega pra verificação.
+        _state = AuthState.unauthenticated;
+        notifyListeners();
+        return RegisterOutcome.needsConfirmation;
+      }
+      if (res.user != null) {
+        _user = res.user;
         _state = AuthState.authenticated;
         notifyListeners();
-        // Registra o token de push deste aparelho (fire-and-forget).
-        PushNotificationService.instance.registerForCurrentUser();
-        SupabaseAuthService.setOnline(true);
-        return true;
+        _onAuthenticated();
+        return RegisterOutcome.success;
       }
       _error = 'Erro ao criar conta';
       _state = AuthState.error;
@@ -96,7 +116,67 @@ class AuthViewModel extends ChangeNotifier {
       _state = AuthState.error;
     }
     notifyListeners();
+    return RegisterOutcome.failed;
+  }
+
+  /// Confirma o código de 6 dígitos do cadastro. Sucesso = logado.
+  Future<bool> verifySignupCode(String email, String code) async {
+    _state = AuthState.loading;
+    _error = null;
+    notifyListeners();
+    try {
+      _user = await SupabaseAuthService.verifySignupCode(email, code);
+      if (_user != null) {
+        _state = AuthState.authenticated;
+        notifyListeners();
+        _onAuthenticated();
+        return true;
+      }
+      _error = 'Código inválido ou expirado';
+      _state = AuthState.error;
+    } catch (e) {
+      debugPrint('AuthViewModel.verifySignupCode: $e');
+      _error = _friendlyError(e.toString());
+      _state = AuthState.error;
+    }
+    notifyListeners();
     return false;
+  }
+
+  /// Reenvia o código de confirmação do cadastro. Retorna erro amigável ou null.
+  Future<String?> resendSignupCode(String email) async {
+    try {
+      await SupabaseAuthService.resendSignupCode(email);
+      return null;
+    } catch (e) {
+      return _friendlyError(e.toString());
+    }
+  }
+
+  // ── Redefinição de senha por código ─────────────────────────
+  /// Envia o código de recuperação. Retorna erro amigável ou null.
+  Future<String?> sendRecoveryCode(String email) async {
+    try {
+      await SupabaseAuthService.sendRecoveryCode(email);
+      return null;
+    } catch (e) {
+      return _friendlyError(e.toString());
+    }
+  }
+
+  /// Verifica o código e define a nova senha. Retorna erro amigável ou null.
+  Future<String?> confirmPasswordReset(
+      String email, String code, String newPassword) async {
+    try {
+      final ok = await SupabaseAuthService.verifyRecoveryCode(email, code);
+      if (!ok) return 'Código inválido ou expirado';
+      await SupabaseAuthService.updatePassword(newPassword);
+      // O verifyOTP criou sessão — o listener de authState já atualiza o app.
+      return null;
+    } catch (e) {
+      debugPrint('AuthViewModel.confirmPasswordReset: $e');
+      return _friendlyError(e.toString());
+    }
   }
 
   Future<bool> loginWithGoogle(String webClientId) async {
@@ -108,9 +188,7 @@ class AuthViewModel extends ChangeNotifier {
       if (_user != null) {
         _state = AuthState.authenticated;
         notifyListeners();
-        // Registra o token de push deste aparelho (fire-and-forget).
-        PushNotificationService.instance.registerForCurrentUser();
-        SupabaseAuthService.setOnline(true);
+        _onAuthenticated();
         return true;
       }
       // signInWithGoogle retornou null (idToken ou accessToken veio vazio)
@@ -129,6 +207,8 @@ class AuthViewModel extends ChangeNotifier {
     // Marca offline e remove o token deste aparelho ANTES do signOut (precisa do uid).
     await SupabaseAuthService.setOnline(false);
     await PushNotificationService.instance.removeForCurrentUser();
+    // Limpa cache das chaves em memória (a privada continua no secure storage).
+    ChatKeyService.clearCache();
     await SupabaseAuthService.logout();
     _user = null;
     _state = AuthState.unauthenticated;
@@ -168,6 +248,14 @@ class AuthViewModel extends ChangeNotifier {
     if (msg.contains('over_email_send_rate_limit') ||
         msg.contains('rate limit')) {
       return 'Muitas tentativas. Aguarde alguns minutos e tente de novo.';
+    }
+    if (msg.contains('Token has expired') ||
+        msg.contains('otp_expired') ||
+        msg.contains('invalid or has expired')) {
+      return 'Código inválido ou expirado. Peça um novo código.';
+    }
+    if (msg.contains('For security purposes')) {
+      return 'Aguarde alguns segundos antes de pedir outro código.';
     }
     if (msg.contains('network')) return 'Sem conexão com a internet';
     // Google Sign-In errors

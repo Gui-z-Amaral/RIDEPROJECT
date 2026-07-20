@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../viewmodels/profile_viewmodel.dart';
@@ -95,6 +96,32 @@ class SettingsScreen extends StatelessWidget {
             selected: accountType == 'business',
             saving: vm.isSaving,
             onTap: () => _changeAccountType(context, 'business'),
+          ),
+
+          const SizedBox(height: 32),
+
+          // ── Segurança ──────────────────────────────────────────
+          const _SectionLabel('Segurança'),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.inputFill,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.lock_reset, color: AppColors.navy),
+              title: Text('Trocar senha', style: AppTextStyles.bodyMedium),
+              subtitle: Text('Enviaremos um código para o seu email',
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: AppColors.textMuted)),
+              trailing: const Icon(Icons.chevron_right,
+                  color: AppColors.textMuted),
+              onTap: () {
+                final email = Supabase
+                    .instance.client.auth.currentUser?.email;
+                context.push('/forgot-password', extra: email);
+              },
+            ),
           ),
 
           const SizedBox(height: 32),

@@ -119,11 +119,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const Spacer(),
                     GestureDetector(
-                      onTap: () {},
+                      onTap: () => context.push('/forgot-password'),
                       child: Text(
                         'Esqueci minha senha',
                         style: AppTextStyles.bodySmall
-                            .copyWith(color: AppColors.textSecondary),
+                            .copyWith(color: AppColors.navy),
                       ),
                     ),
                   ],

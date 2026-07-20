@@ -24,7 +24,11 @@ class SupabaseAuthService {
   }
 
   // ── Register ───────────────────────────────────────────────
-  static Future<UserModel?> register(
+  /// Cadastra o usuário. Quando a confirmação de email está ligada no GoTrue,
+  /// o signUp cria o usuário mas NÃO devolve sessão — o GoTrue envia um código
+  /// por email e o fluxo continua em [verifySignupCode]. Nesse caso retorna
+  /// `needsConfirmation: true` (e user null).
+  static Future<({UserModel? user, bool needsConfirmation})> register(
       String name, String email, String password, {String? username}) async {
     final u = username ?? _usernameFrom(name);
     final res = await _db.auth.signUp(
@@ -32,17 +36,12 @@ class SupabaseAuthService {
       password: password,
       data: {'name': name, 'username': u},
     );
-    if (res.user == null) return null;
+    if (res.user == null) return (user: null, needsConfirmation: false);
 
-    // Quando email confirmation está ligado no GoTrue, signUp cria o usuário
-    // mas devolve session=null (esperando o e-mail ser clicado). Sem sessão o
-    // app não consegue rodar inserts autenticados — falha com mensagem clara
-    // em vez de cair no catch genérico de "erro inesperado".
     if (res.session == null) {
-      throw Exception(
-        'Confirme seu email para entrar. Se sua instalação não envia emails, '
-        'ative ENABLE_EMAIL_AUTOCONFIRM=true no GoTrue.',
-      );
+      // Confirmação de email ligada: o profile já foi criado pelo trigger
+      // handle_new_user; a sessão vem depois do verifyOTP.
+      return (user: null, needsConfirmation: true);
     }
 
     // O trigger handle_new_user já criou o profile a partir dos metadados.
@@ -58,7 +57,48 @@ class SupabaseAuthService {
       debugPrint('register: upsert profile fallback falhou (ok se o trigger criou): $e');
     }
 
+    return (user: await _fetchProfile(res.user!.id), needsConfirmation: false);
+  }
+
+  // ── Confirmação de email por código (OTP) ──────────────────
+  /// Verifica o código de 6 dígitos enviado por email no cadastro.
+  /// Sucesso cria a sessão (o listener de auth cuida do resto).
+  static Future<UserModel?> verifySignupCode(String email, String code) async {
+    final res = await _db.auth.verifyOTP(
+      type: OtpType.signup,
+      email: email.trim(),
+      token: code.trim(),
+    );
+    if (res.user == null) return null;
     return _fetchProfile(res.user!.id);
+  }
+
+  /// Reenvia o código de confirmação do cadastro.
+  static Future<void> resendSignupCode(String email) async {
+    await _db.auth.resend(type: OtpType.signup, email: email.trim());
+  }
+
+  // ── Redefinição de senha por código (OTP) ──────────────────
+  /// Envia o código de recuperação para o email (esqueci a senha / trocar senha).
+  static Future<void> sendRecoveryCode(String email) async {
+    await _db.auth.resetPasswordForEmail(email.trim());
+  }
+
+  /// Verifica o código de recuperação. Sucesso cria uma sessão temporária que
+  /// permite [updatePassword] em seguida.
+  static Future<bool> verifyRecoveryCode(String email, String code) async {
+    final res = await _db.auth.verifyOTP(
+      type: OtpType.recovery,
+      email: email.trim(),
+      token: code.trim(),
+    );
+    return res.session != null;
+  }
+
+  /// Define a nova senha do usuário logado (após verifyRecoveryCode, ou a
+  /// qualquer momento com sessão válida).
+  static Future<void> updatePassword(String newPassword) async {
+    await _db.auth.updateUser(UserAttributes(password: newPassword));
   }
 
   // ── Google Sign-In ─────────────────────────────────────────

@@ -4,6 +4,8 @@ import '../features/auth/screens/splash_screen.dart';
 import '../features/auth/screens/onboarding_screen.dart';
 import '../features/auth/screens/login_screen.dart';
 import '../features/auth/screens/register_screen.dart';
+import '../features/auth/screens/verify_email_screen.dart';
+import '../features/auth/screens/forgot_password_screen.dart';
 import '../features/home/screens/home_screen.dart';
 import '../features/profile/screens/profile_screen.dart';
 import '../features/profile/screens/edit_profile_screen.dart';
@@ -43,6 +45,16 @@ final router = GoRouter(
     GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
     GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
     GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
+    GoRoute(
+      path: '/verify-email',
+      builder: (_, state) =>
+          VerifyEmailScreen(email: state.extra as String? ?? ''),
+    ),
+    GoRoute(
+      path: '/forgot-password',
+      builder: (_, state) =>
+          ForgotPasswordScreen(initialEmail: state.extra as String?),
+    ),
 
     ShellRoute(
       builder: (context, state, child) => ShellScreen(child: child),

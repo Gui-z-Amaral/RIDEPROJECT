@@ -4,6 +4,7 @@ import '../models/user_model.dart';
 import '../models/friend_request_model.dart';
 import '../models/message_model.dart';
 import '../utils/image_utils.dart';
+import 'chat_key_service.dart';
 
 class FriendTripStory {
   final UserModel friend;
@@ -317,24 +318,32 @@ class SupabaseSocialService {
         .order('sent_at', ascending: false)
         .limit(limit);
 
-    return (rows as List)
-        .map((r) => _rowToMessage(r, chatId))
-        .toList()
-        .reversed
-        .toList();
+    // Decifra cada mensagem no aparelho (E2EE) usando a chave da conversa.
+    final list = await Future.wait((rows as List).map((r) async {
+      final clear = await ChatKeyService.decryptFrom(
+          otherUserId, r['content'] as String? ?? '');
+      return _rowToMessage(r as Map<String, dynamic>, chatId,
+          contentOverride: clear);
+    }));
+    return list.reversed.toList();
   }
 
   static Future<MessageModel> sendMessage(String otherUserId, String content,
       {String? imageUrl}) async {
     final chatId = canonicalChatId(otherUserId);
+    // E2EE: cifra o texto antes de gravar (só texto; imagem vai pelo storage).
+    final storedContent =
+        content.isEmpty ? '' : await ChatKeyService.encryptFor(otherUserId, content);
+
     final row = await _db.from('messages').insert({
       'chat_id': chatId,
       'sender_id': _uid,
-      'content': content,
+      'content': storedContent,
       if (imageUrl != null) 'image_url': imageUrl,
     }).select('*, sender:profiles!messages_sender_id_fkey(name, avatar_url)').single();
 
-    // Notifica o destinatário (best-effort)
+    // Notifica o destinatário (best-effort). Sem o texto — o servidor não pode
+    // ler o conteúdo (E2EE), então a notificação é genérica.
     try {
       final sender = await _db
           .from('profiles')
@@ -346,12 +355,13 @@ class SupabaseSocialService {
         'user_id': otherUserId,
         'type': 'message',
         'title': senderName,
-        'body': content.isNotEmpty ? content : '📷 Imagem',
+        'body': imageUrl != null ? '📷 Imagem' : '📩 Nova mensagem',
         'data': {'fromUserId': _uid, 'fromName': senderName},
       });
     } catch (_) {}
 
-    return _rowToMessage(row, chatId);
+    // Devolve o modelo com o TEXTO em claro (o que o usuário digitou), pra UI.
+    return _rowToMessage(row, chatId, contentOverride: content);
   }
 
   static Future<String> uploadChatImage(
@@ -373,14 +383,15 @@ class SupabaseSocialService {
     return url;
   }
 
-  static MessageModel _rowToMessage(Map<String, dynamic> r, String chatId) {
+  static MessageModel _rowToMessage(Map<String, dynamic> r, String chatId,
+      {String? contentOverride}) {
     final sender = r['sender'] as Map<String, dynamic>? ?? {};
     return MessageModel(
       id: r['id'] as String,
       senderId: r['sender_id'] as String,
       senderName: sender['name'] as String? ?? '',
       senderAvatar: sender['avatar_url'] as String?,
-      content: r['content'] as String? ?? '',
+      content: contentOverride ?? (r['content'] as String? ?? ''),
       imageUrl: r['image_url'] as String?,
       sentAt: DateTime.parse(r['sent_at'] as String).toLocal(),
       isRead: r['is_read'] as bool? ?? false,
@@ -409,12 +420,15 @@ class SupabaseSocialService {
                 .select('name, avatar_url')
                 .eq('id', newRow['sender_id'])
                 .maybeSingle();
+            // Decifra no aparelho (E2EE).
+            final clear = await ChatKeyService.decryptFrom(
+                otherUserId, newRow['content'] as String? ?? '');
             onMessage(MessageModel(
               id: newRow['id'] as String,
               senderId: newRow['sender_id'] as String,
               senderName: profile?['name'] as String? ?? '',
               senderAvatar: profile?['avatar_url'] as String?,
-              content: newRow['content'] as String? ?? '',
+              content: clear,
               imageUrl: newRow['image_url'] as String?,
               sentAt: DateTime.parse(newRow['sent_at'] as String).toLocal(),
               chatId: chatId,

@@ -34,15 +34,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
     final vm = context.read<AuthViewModel>();
-    final ok = await vm.register(
+    final email = _emailCtrl.text.trim();
+    final outcome = await vm.register(
       _nameCtrl.text.trim(),
-      _emailCtrl.text.trim(),
+      email,
       _passCtrl.text,
     );
-    if (ok && mounted) {
-      context.go('/home');
-    } else if (mounted && vm.error != null) {
-      context.showSnack(vm.error!, isError: true);
+    if (!mounted) return;
+    switch (outcome) {
+      case RegisterOutcome.success:
+        context.go('/home');
+      case RegisterOutcome.needsConfirmation:
+        // Código de 6 dígitos enviado por email — segue pra verificação.
+        context.push('/verify-email', extra: email);
+      case RegisterOutcome.failed:
+        if (vm.error != null) context.showSnack(vm.error!, isError: true);
     }
   }
 

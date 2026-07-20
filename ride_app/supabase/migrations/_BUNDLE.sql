@@ -874,3 +874,48 @@ DROP POLICY IF EXISTS "device_tokens_update" ON device_tokens;
 CREATE POLICY "device_tokens_update" ON device_tokens FOR UPDATE USING (auth.uid() = user_id);
 DROP POLICY IF EXISTS "device_tokens_delete" ON device_tokens;
 CREATE POLICY "device_tokens_delete" ON device_tokens FOR DELETE USING (auth.uid() = user_id);
+
+-- ═════════════════════════════════════════════════════════════════════════════
+-- 018_user_photos_bucket.sql
+-- ═════════════════════════════════════════════════════════════════════════════
+-- Bucket de fotos do perfil ("Suas Fotos"). Ficou de fora na migração da VPS
+-- (era criado à mão no painel antigo) → upload falhava com "Bucket not found".
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('user-photos', 'user-photos', true)
+ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "user_photos_storage_insert" ON storage.objects;
+CREATE POLICY "user_photos_storage_insert"
+    ON storage.objects FOR INSERT
+    WITH CHECK (
+        bucket_id = 'user-photos'
+        AND auth.role() = 'authenticated'
+    );
+
+DROP POLICY IF EXISTS "user_photos_storage_delete" ON storage.objects;
+CREATE POLICY "user_photos_storage_delete"
+    ON storage.objects FOR DELETE
+    USING (
+        bucket_id = 'user-photos'
+        AND auth.uid() = owner
+    );
+
+-- ═════════════════════════════════════════════════════════════════════════════
+-- 019_e2ee_chat.sql
+-- ═════════════════════════════════════════════════════════════════════════════
+-- Criptografia ponta a ponta do chat: guarda só a chave pública de cada
+-- usuário. Mensagens cifradas no cliente; servidor não lê. Apaga histórico
+-- antigo em texto puro.
+CREATE TABLE IF NOT EXISTS user_keys (
+    user_id    UUID PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
+    public_key TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE user_keys ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "user_keys_select" ON user_keys;
+CREATE POLICY "user_keys_select" ON user_keys FOR SELECT USING (auth.uid() IS NOT NULL);
+DROP POLICY IF EXISTS "user_keys_insert" ON user_keys;
+CREATE POLICY "user_keys_insert" ON user_keys FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "user_keys_update" ON user_keys;
+CREATE POLICY "user_keys_update" ON user_keys FOR UPDATE USING (auth.uid() = user_id);
+TRUNCATE TABLE messages;

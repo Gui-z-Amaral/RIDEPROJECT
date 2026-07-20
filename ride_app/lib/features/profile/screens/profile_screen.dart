@@ -19,6 +19,7 @@ import '../../../core/models/user_model.dart';
 import '../../../core/models/trip_model.dart';
 import '../../../core/models/event_model.dart';
 import '../../../core/utils/image_utils.dart';
+import '../../../shared/widgets/photo_viewer.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -361,7 +362,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 // ── Avatar + nome ───────────────────────────────
                 const SizedBox(height: 8),
-                CircleAvatar(
+                GestureDetector(
+                  // Toque abre a foto de perfil ampliada
+                  onTap: user?.avatarUrl != null
+                      ? () => showPhotoViewer(context, urls: [user!.avatarUrl!])
+                      : null,
+                  child: CircleAvatar(
                   radius: 52,
                   backgroundColor: AppColors.navy.withOpacity(0.1),
                   backgroundImage: user?.avatarUrl != null
@@ -378,6 +384,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               color: AppColors.navy),
                         )
                       : null,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -599,10 +606,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               crossAxisCount: 3,
                               crossAxisSpacing: 4,
                               mainAxisSpacing: 4),
-                      itemBuilder: (_, i) => ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: Image.network(user.photos[i],
-                            fit: BoxFit.cover),
+                      itemBuilder: (_, i) => GestureDetector(
+                        // Abre o visualizador na foto tocada (swipe entre todas)
+                        onTap: () => showPhotoViewer(context,
+                            urls: user.photos, initialIndex: i),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: Image.network(user.photos[i],
+                              fit: BoxFit.cover),
+                        ),
                       ),
                     ),
                   ),

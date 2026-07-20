@@ -8,6 +8,7 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../shared/widgets/app_avatar.dart';
+import '../../../shared/widgets/photo_viewer.dart';
 import '../../../core/models/message_model.dart';
 import '../../../core/services/push_notification_service.dart';
 import '../viewmodels/social_viewmodel.dart';
@@ -76,13 +77,18 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       await context.read<SocialViewModel>().sendMessage(widget.userId, text);
       _scrollToBottom();
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       // Restaura o texto para o usuário não perder o que digitou
       _msgCtrl.text = text;
+      // StateError do E2EE traz mensagem amigável (ex: contato sem chave
+      // publicada porque ainda não abriu o app novo) — mostra ela.
+      final msg = e is StateError
+          ? '${e.message} A mensagem será possível assim que ele abrir o app.'
+          : 'Erro ao enviar mensagem';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Erro ao enviar mensagem'),
+        SnackBar(
+          content: Text(msg),
           backgroundColor: AppColors.error,
         ),
       );
@@ -317,30 +323,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _showFullImage(BuildContext context, String imageUrl) {
-    showDialog(
-      context: context,
-      barrierColor: Colors.black87,
-      builder: (_) => GestureDetector(
-        onTap: () => Navigator.pop(context),
-        child: Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.all(12),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-            child: InteractiveViewer(
-              child: CachedNetworkImage(
-                imageUrl: imageUrl,
-                fit: BoxFit.contain,
-                placeholder: (_, __) => const Center(
-                    child: CircularProgressIndicator(color: AppColors.navy)),
-                errorWidget: (_, __, ___) =>
-                    const Icon(Icons.broken_image, color: AppColors.textMuted),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+    // Visualizador compartilhado (mesmo do perfil).
+    showPhotoViewer(context, urls: [imageUrl]);
   }
 }
 
