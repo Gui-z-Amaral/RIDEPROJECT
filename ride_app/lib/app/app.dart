@@ -6,6 +6,7 @@ import '../core/services/push_notification_service.dart';
 import '../features/auth/viewmodels/auth_viewmodel.dart';
 import '../features/home/viewmodels/home_viewmodel.dart';
 import '../features/profile/viewmodels/profile_viewmodel.dart';
+import '../features/profile/viewmodels/profile_customization_viewmodel.dart';
 import '../features/social/viewmodels/social_viewmodel.dart';
 import '../features/trips/viewmodels/trip_viewmodel.dart';
 import '../features/rides/viewmodels/ride_viewmodel.dart';
@@ -54,6 +55,7 @@ class _RideAppState extends State<RideApp> with WidgetsBindingObserver {
         ChangeNotifierProvider(create: (_) => AuthViewModel()),
         ChangeNotifierProvider(create: (_) => HomeViewModel()),
         ChangeNotifierProvider(create: (_) => ProfileViewModel()),
+        ChangeNotifierProvider(create: (_) => ProfileCustomizationViewModel()),
         ChangeNotifierProvider(create: (_) => SocialViewModel()),
         ChangeNotifierProvider(create: (_) => TripViewModel()),
         ChangeNotifierProvider(create: (_) => RideViewModel()),

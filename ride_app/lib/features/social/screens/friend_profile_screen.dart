@@ -4,8 +4,13 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../core/models/user_model.dart';
+import '../../../core/models/profile_customization.dart';
 import '../../../core/services/supabase_social_service.dart';
+import '../../../core/services/supabase_profile_customization_service.dart';
+import '../../../core/constants/profile_appearance.dart';
 import '../../../shared/widgets/app_avatar.dart';
+import '../../../shared/widgets/framed_avatar.dart';
+import '../../../shared/widgets/profile_banner.dart';
 import '../../../shared/widgets/photo_viewer.dart';
 
 class FriendProfileScreen extends StatefulWidget {
@@ -19,11 +24,20 @@ class FriendProfileScreen extends StatefulWidget {
 class _FriendProfileScreenState extends State<FriendProfileScreen> {
   List<UserModel> _mutualFriends = [];
   bool _loadingMutual = true;
+  ProfileCustomization? _customization;
 
   @override
   void initState() {
     super.initState();
     _loadMutual();
+    _loadCustomization();
+  }
+
+  Future<void> _loadCustomization() async {
+    try {
+      final c = await SupabaseProfileCustomizationService.get(widget.user.id);
+      if (mounted) setState(() => _customization = c);
+    } catch (_) {}
   }
 
   Future<void> _loadMutual() async {
@@ -56,6 +70,14 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
   Widget build(BuildContext context) {
     final user = widget.user;
     final bottomPad = MediaQuery.of(context).padding.bottom;
+    final bgColor = resolveProfileColor(
+      _customization?.backgroundColor,
+      AppColors.background,
+    );
+    final textColor = resolveProfileColor(
+      _customization?.textColor,
+      AppColors.textPrimary,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -72,248 +94,287 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
             ),
             title: Text(
               user.name.toUpperCase(),
-              style: AppTextStyles.headlineMedium
-                  .copyWith(fontWeight: FontWeight.w800),
+              style: AppTextStyles.headlineMedium.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
 
           SliverToBoxAdapter(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const SizedBox(height: 16),
+            child: Container(
+              color: bgColor,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // ── Banner personalizado ─────────────────────────
+                  if (_customization?.bannerUrl != null)
+                    ProfileBannerView(value: _customization!.bannerUrl),
+                  SizedBox(height: _customization?.bannerUrl != null ? 0 : 16),
 
-                // ── Avatar com indicador online ──────────────────────
-                Stack(
-                  alignment: Alignment.bottomRight,
-                  children: [
-                    GestureDetector(
-                      // Toque abre a foto de perfil ampliada
-                      onTap: user.avatarUrl != null
-                          ? () => showPhotoViewer(context,
-                              urls: [user.avatarUrl!])
-                          : null,
-                      child: CircleAvatar(
-                        radius: 52,
-                        backgroundColor: AppColors.navy.withOpacity(0.1),
-                        backgroundImage: user.avatarUrl != null
-                            ? NetworkImage(user.avatarUrl!)
-                            : null,
-                        child: user.avatarUrl == null
-                            ? Text(
-                                user.name.isNotEmpty
-                                    ? user.name[0].toUpperCase()
-                                    : '?',
-                                style: const TextStyle(
-                                    fontSize: 36,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.navy),
-                              )
-                            : null,
-                      ),
+                  // ── Avatar com moldura + indicador online ────────────
+                  Transform.translate(
+                    offset: Offset(
+                      0,
+                      _customization?.bannerUrl != null ? -36 : 0,
                     ),
-                    if (user.isOnline)
-                      Container(
-                        width: 18,
-                        height: 18,
-                        decoration: BoxDecoration(
-                          color: AppColors.success,
-                          shape: BoxShape.circle,
-                          border:
-                              Border.all(color: AppColors.background, width: 2),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                Text(
-                  user.name.toUpperCase(),
-                  style: AppTextStyles.headlineLarge
-                      .copyWith(fontWeight: FontWeight.w800, fontSize: 20),
-                ),
-                if (user.username.isNotEmpty)
-                  Text(
-                    '@${user.username}',
-                    style: AppTextStyles.bodyMedium
-                        .copyWith(color: AppColors.textMuted),
-                  ),
-                if (user.city != null && user.city!.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.location_on_outlined,
-                          size: 14, color: AppColors.textMuted),
-                      const SizedBox(width: 4),
-                      Text(
-                        user.city!,
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: AppColors.textMuted),
-                      ),
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 20),
-
-                // ── Stats ─────────────────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Row(
-                    children: [
-                      _StatBox(
-                          value: '${user.tripsCount}', label: 'Viagens\ncriadas'),
-                      const SizedBox(width: 12),
-                      _StatBox(
-                          value: '${user.friendsCount}',
-                          label: 'Amigos\nadicionados'),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // ── Moto ──────────────────────────────────────────────
-                if (user.motoModel != null && user.motoModel!.isNotEmpty) ...[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: AppColors.navy,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.motorcycle,
-                              color: AppColors.teal, size: 24),
-                          const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                user.motoModel!,
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 14),
-                              ),
-                              if (user.motoYear != null &&
-                                  user.motoYear!.isNotEmpty)
-                                Text(
-                                  user.motoYear!,
-                                  style: TextStyle(
-                                      color: Colors.white.withOpacity(0.6),
-                                      fontSize: 12),
-                                ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-
-                // ── Estilo de viagem preferido ───────────────────────
-                if (user.tripStyle != null && user.tripStyle!.isNotEmpty) ...[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Estilo de viagem preferido',
-                              style: AppTextStyles.headlineMedium
-                                  .copyWith(fontWeight: FontWeight.w800)),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: AppColors.inputFill,
-                              borderRadius: BorderRadius.circular(
-                                  AppSpacing.radiusFull),
-                              border: Border.all(color: AppColors.divider),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(_iconForStyle(user.tripStyle!),
-                                    size: 16, color: AppColors.navy),
-                                const SizedBox(width: 8),
-                                Text(
-                                  user.tripStyle!,
-                                  style: AppTextStyles.labelMedium.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.textPrimary),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                ],
-
-                // ── Bio ───────────────────────────────────────────────
-                if (user.bio != null && user.bio!.isNotEmpty) ...[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Stack(
+                      alignment: Alignment.bottomRight,
                       children: [
-                        Text('Bio',
-                            style: AppTextStyles.headlineMedium
-                                .copyWith(fontWeight: FontWeight.w800)),
-                        const SizedBox(height: 8),
+                        FramedAvatar(
+                          imageUrl: user.avatarUrl,
+                          name: user.name,
+                          frameId: _customization?.avatarFrame ?? 'none',
+                          size: 104,
+                          onTap: user.avatarUrl != null
+                              ? () => showPhotoViewer(
+                                  context,
+                                  urls: [user.avatarUrl!],
+                                )
+                              : null,
+                        ),
+                        if (user.isOnline)
+                          Container(
+                            width: 18,
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: AppColors.success,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: bgColor, width: 2),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Transform.translate(
+                    offset: Offset(
+                      0,
+                      _customization?.bannerUrl != null ? -24 : 0,
+                    ),
+                    child: Text(
+                      user.name.toUpperCase(),
+                      style: AppTextStyles.headlineLarge.copyWith(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 20,
+                        color: textColor,
+                      ),
+                    ),
+                  ),
+                  if (user.username.isNotEmpty)
+                    Text(
+                      '@${user.username}',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: textColor.withOpacity(0.7),
+                      ),
+                    ),
+                  if (user.city != null && user.city!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.location_on_outlined,
+                          size: 14,
+                          color: AppColors.textMuted,
+                        ),
+                        const SizedBox(width: 4),
                         Text(
-                          user.bio!,
-                          style: AppTextStyles.bodyMedium.copyWith(
-                              color: AppColors.textSecondary, height: 1.5),
+                          user.city!,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+
+                  // ── Stats ─────────────────────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Row(
+                      children: [
+                        _StatBox(
+                          value: '${user.tripsCount}',
+                          label: 'Viagens\ncriadas',
+                          outlineColor: textColor,
+                          fillColor: bgColor,
+                        ),
+                        const SizedBox(width: 10),
+                        _StatBox(
+                          value: '${user.friendsCount}',
+                          label: 'Amigos\nadicionados',
+                          outlineColor: textColor,
+                          fillColor: bgColor,
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 20),
-                ],
 
-                // ── Amigos em comum ──────────────────────────────────
-                _MutualFriendsSection(
-                  loading: _loadingMutual,
-                  friends: _mutualFriends,
-                ),
+                  // ── Moto ──────────────────────────────────────────────
+                  if (user.motoModel != null && user.motoModel!.isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.navy,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.motorcycle,
+                              color: AppColors.teal,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  user.motoModel!,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                if (user.motoYear != null &&
+                                    user.motoYear!.isNotEmpty)
+                                  Text(
+                                    user.motoYear!,
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.6),
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
 
-                const Divider(height: 1),
-                const SizedBox(height: AppSpacing.xl),
+                  // ── Estilo de viagem preferido ───────────────────────
+                  if (user.tripStyle != null && user.tripStyle!.isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Estilo de viagem preferido',
+                              style: AppTextStyles.headlineMedium.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.inputFill,
+                                borderRadius: BorderRadius.circular(
+                                  AppSpacing.radiusFull,
+                                ),
+                                border: Border.all(color: AppColors.divider),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    _iconForStyle(user.tripStyle!),
+                                    size: 16,
+                                    color: AppColors.navy,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    user.tripStyle!,
+                                    style: AppTextStyles.labelMedium.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
 
-                // ── Botão Mensagem ────────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () =>
-                          context.push('/friends/chat/${user.id}'),
-                      icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                      label: const Text('ENVIAR MENSAGEM'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.navy,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                        elevation: 0,
+                  // ── Bio ───────────────────────────────────────────────
+                  if (user.bio != null && user.bio!.isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Bio',
+                            style: AppTextStyles.headlineMedium.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            user.bio!,
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: AppColors.textSecondary,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // ── Amigos em comum ──────────────────────────────────
+                  _MutualFriendsSection(
+                    loading: _loadingMutual,
+                    friends: _mutualFriends,
+                  ),
+
+                  const Divider(height: 1),
+                  const SizedBox(height: AppSpacing.xl),
+
+                  // ── Botão Mensagem ────────────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () =>
+                            context.push('/friends/chat/${user.id}'),
+                        icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                        label: const Text('ENVIAR MENSAGEM'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.navy,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          elevation: 0,
+                        ),
                       ),
                     ),
                   ),
-                ),
 
-                SizedBox(height: bottomPad + 40),
-              ],
+                  SizedBox(height: bottomPad + 40),
+                ],
+              ),
             ),
           ),
         ],
@@ -325,17 +386,27 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
 class _StatBox extends StatelessWidget {
   final String value;
   final String label;
-  const _StatBox({required this.value, required this.label});
+  // Cores de personalização: contorno na cor de texto, fundo na cor de
+  // background que o dono do perfil escolheu (null = usa o padrão do app).
+  final Color? outlineColor;
+  final Color? fillColor;
+  const _StatBox({
+    required this.value,
+    required this.label,
+    this.outlineColor,
+    this.fillColor,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final outline = outlineColor ?? AppColors.navy;
     return Expanded(
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
         decoration: BoxDecoration(
-          color: AppColors.inputFill,
-          borderRadius: BorderRadius.circular(10),
+          color: fillColor ?? AppColors.inputFill,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: outline.withOpacity(0.4)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -343,15 +414,19 @@ class _StatBox extends StatelessWidget {
             Text(
               value,
               style: AppTextStyles.headlineLarge.copyWith(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 22,
-                  color: AppColors.navy),
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+                color: outline,
+              ),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 1),
             Text(
               label,
-              style: AppTextStyles.bodySmall
-                  .copyWith(color: AppColors.textSecondary, height: 1.3),
+              style: AppTextStyles.labelSmall.copyWith(
+                color: outline.withOpacity(0.8),
+                height: 1.2,
+                fontSize: 10,
+              ),
             ),
           ],
         ),
@@ -363,10 +438,7 @@ class _StatBox extends StatelessWidget {
 class _MutualFriendsSection extends StatefulWidget {
   final bool loading;
   final List<UserModel> friends;
-  const _MutualFriendsSection({
-    required this.loading,
-    required this.friends,
-  });
+  const _MutualFriendsSection({required this.loading, required this.friends});
 
   @override
   State<_MutualFriendsSection> createState() => _MutualFriendsSectionState();
@@ -381,20 +453,25 @@ class _MutualFriendsSectionState extends State<_MutualFriendsSection> {
     if (widget.loading) {
       return Padding(
         padding: const EdgeInsets.symmetric(
-            horizontal: 24, vertical: AppSpacing.md),
+          horizontal: 24,
+          vertical: AppSpacing.md,
+        ),
         child: Row(
           children: [
             Text(
               'Amigos em comum',
-              style: AppTextStyles.headlineMedium
-                  .copyWith(fontWeight: FontWeight.w800),
+              style: AppTextStyles.headlineMedium.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
             ),
             const SizedBox(width: 12),
             const SizedBox(
               width: 16,
               height: 16,
               child: CircularProgressIndicator(
-                  strokeWidth: 2, color: AppColors.navy),
+                strokeWidth: 2,
+                color: AppColors.navy,
+              ),
             ),
           ],
         ),
@@ -418,13 +495,13 @@ class _MutualFriendsSectionState extends State<_MutualFriendsSection> {
             children: [
               Text(
                 'Amigos em comum',
-                style: AppTextStyles.headlineMedium
-                    .copyWith(fontWeight: FontWeight.w800),
+                style: AppTextStyles.headlineMedium.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: AppColors.teal.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
@@ -433,7 +510,9 @@ class _MutualFriendsSectionState extends State<_MutualFriendsSection> {
                 child: Text(
                   '$total',
                   style: AppTextStyles.labelSmall.copyWith(
-                      color: AppColors.teal, fontWeight: FontWeight.w800),
+                    color: AppColors.teal,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ],
@@ -441,48 +520,53 @@ class _MutualFriendsSectionState extends State<_MutualFriendsSection> {
           const SizedBox(height: 12),
           Column(
             children: visible
-                .map((f) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: InkWell(
-                        onTap: () =>
-                            context.push('/profile/${f.id}', extra: f),
-                        borderRadius:
-                            BorderRadius.circular(AppSpacing.radiusMd),
-                        child: Row(
-                          children: [
-                            AppAvatar(
-                              name: f.name,
-                              imageUrl: f.avatarUrl,
-                              size: 40,
-                              showOnline: true,
-                              isOnline: f.isOnline,
+                .map(
+                  (f) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: InkWell(
+                      onTap: () => context.push('/profile/${f.id}', extra: f),
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                      child: Row(
+                        children: [
+                          AppAvatar(
+                            name: f.name,
+                            imageUrl: f.avatarUrl,
+                            size: 40,
+                            showOnline: true,
+                            isOnline: f.isOnline,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  f.name,
+                                  style: AppTextStyles.titleMedium,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                if (f.username.isNotEmpty)
+                                  Text(
+                                    '@${f.username}',
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: AppColors.textMuted,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                              ],
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
-                                children: [
-                                  Text(f.name,
-                                      style: AppTextStyles.titleMedium,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis),
-                                  if (f.username.isNotEmpty)
-                                    Text('@${f.username}',
-                                        style: AppTextStyles.bodySmall
-                                            .copyWith(
-                                                color: AppColors.textMuted),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis),
-                                ],
-                              ),
-                            ),
-                            const Icon(Icons.chevron_right,
-                                color: AppColors.textMuted),
-                          ],
-                        ),
+                          ),
+                          const Icon(
+                            Icons.chevron_right,
+                            color: AppColors.textMuted,
+                          ),
+                        ],
                       ),
-                    ))
+                    ),
+                  ),
+                )
                 .toList(),
           ),
           if (hasMore)
@@ -497,7 +581,9 @@ class _MutualFriendsSectionState extends State<_MutualFriendsSection> {
                 child: Text(
                   'Ver todos ($total)',
                   style: AppTextStyles.labelMedium.copyWith(
-                      color: AppColors.navy, fontWeight: FontWeight.w800),
+                    color: AppColors.navy,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ),

@@ -20,6 +20,10 @@ import '../../../core/models/trip_model.dart';
 import '../../../core/models/event_model.dart';
 import '../../../core/utils/image_utils.dart';
 import '../../../shared/widgets/photo_viewer.dart';
+import '../../../shared/widgets/framed_avatar.dart';
+import '../../../shared/widgets/profile_banner.dart';
+import '../../../core/constants/profile_appearance.dart';
+import '../viewmodels/profile_customization_viewmodel.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -38,6 +42,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final auth = context.read<AuthViewModel>();
     // Captura refs antes do logout (context pode ficar indisponível depois)
     context.read<ProfileViewModel>().reset();
+    context.read<ProfileCustomizationViewModel>().reset();
     context.read<HomeViewModel>().reset();
     context.read<SocialViewModel>().reset();
     context.read<TripViewModel>().reset();
@@ -57,26 +62,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       backgroundColor: AppColors.background,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (_) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 8),
             Container(
-              width: 40, height: 4,
+              width: 40,
+              height: 4,
               decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2)),
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
             const SizedBox(height: 16),
             ListTile(
-              leading: const Icon(Icons.camera_alt_outlined, color: AppColors.navy),
+              leading: const Icon(
+                Icons.camera_alt_outlined,
+                color: AppColors.navy,
+              ),
               title: const Text('Câmera'),
               onTap: () => Navigator.pop(context, ImageSource.camera),
             ),
             ListTile(
-              leading: const Icon(Icons.photo_library_outlined, color: AppColors.navy),
+              leading: const Icon(
+                Icons.photo_library_outlined,
+                color: AppColors.navy,
+              ),
               title: const Text('Galeria'),
               onTap: () => Navigator.pop(context, ImageSource.gallery),
             ),
@@ -98,8 +112,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final jpeg = await ImageUtils.compressToJpeg(bytes);
       await Supabase.instance.client.storage
           .from('user-photos')
-          .uploadBinary(fileName, jpeg,
-              fileOptions: const FileOptions(contentType: 'image/jpeg'));
+          .uploadBinary(
+            fileName,
+            jpeg,
+            fileOptions: const FileOptions(contentType: 'image/jpeg'),
+          );
       final url = Supabase.instance.client.storage
           .from('user-photos')
           .getPublicUrl(fileName);
@@ -126,10 +143,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       backgroundColor: AppColors.background,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (sheetCtx) => Padding(
         padding: EdgeInsets.only(
-          left: 24, right: 24, top: 16,
+          left: 24,
+          right: 24,
+          top: 16,
           bottom: MediaQuery.of(sheetCtx).padding.bottom + 24,
         ),
         child: Column(
@@ -138,75 +158,106 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             Center(
               child: Container(
-                width: 40, height: 4,
+                width: 40,
+                height: 4,
                 decoration: BoxDecoration(
-                    color: AppColors.divider,
-                    borderRadius: BorderRadius.circular(2)),
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
             const SizedBox(height: 16),
-            Text(t.title,
-                style: AppTextStyles.headlineMedium
-                    .copyWith(fontWeight: FontWeight.w800)),
+            Text(
+              t.title,
+              style: AppTextStyles.headlineMedium.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             const SizedBox(height: 4),
-            Text(city,
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.textSecondary)),
+            Text(
+              city,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
             const SizedBox(height: 16),
-            _SheetInfoRow(icon: Icons.radio_button_on,
-                color: AppColors.teal,
-                label: t.origin.address ?? t.origin.label ?? 'Origem'),
+            _SheetInfoRow(
+              icon: Icons.radio_button_on,
+              color: AppColors.teal,
+              label: t.origin.address ?? t.origin.label ?? 'Origem',
+            ),
             if (t.waypoints.isNotEmpty)
-              ...t.waypoints.map((w) => _SheetInfoRow(
-                  icon: Icons.place, color: AppColors.warning,
-                  label: w.address ?? w.label ?? 'Parada')),
-            _SheetInfoRow(icon: Icons.location_on,
-                color: AppColors.error,
-                label: t.destination.address ?? t.destination.label ?? 'Destino'),
+              ...t.waypoints.map(
+                (w) => _SheetInfoRow(
+                  icon: Icons.place,
+                  color: AppColors.warning,
+                  label: w.address ?? w.label ?? 'Parada',
+                ),
+              ),
+            _SheetInfoRow(
+              icon: Icons.location_on,
+              color: AppColors.error,
+              label: t.destination.address ?? t.destination.label ?? 'Destino',
+            ),
             if (t.scheduledAt != null) ...[
               const SizedBox(height: 8),
-              Row(children: [
-                const Icon(Icons.calendar_today, size: 14, color: AppColors.textMuted),
-                const SizedBox(width: 6),
-                Text(
-                  '${t.scheduledAt!.day.toString().padLeft(2, '0')}/${t.scheduledAt!.month.toString().padLeft(2, '0')}/${t.scheduledAt!.year}',
-                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
-                ),
-              ]),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.calendar_today,
+                    size: 14,
+                    color: AppColors.textMuted,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${t.scheduledAt!.day.toString().padLeft(2, '0')}/${t.scheduledAt!.month.toString().padLeft(2, '0')}/${t.scheduledAt!.year}',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
             ],
             const SizedBox(height: 20),
-            Row(children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => Navigator.pop(sheetCtx, 'view'),
-                  icon: const Icon(Icons.open_in_new, size: 16),
-                  label: const Text('Ver detalhes'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.navy,
-                    side: const BorderSide(color: AppColors.navy),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.pop(sheetCtx, 'view'),
+                    icon: const Icon(Icons.open_in_new, size: 16),
+                    label: const Text('Ver detalhes'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.navy,
+                      side: const BorderSide(color: AppColors.navy),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => Navigator.pop(sheetCtx, 'delete'),
-                  icon: Icon(isOwner ? Icons.delete_outline : Icons.exit_to_app, size: 16),
-                  label: Text(isOwner ? 'Excluir' : 'Sair'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red.shade600,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => Navigator.pop(sheetCtx, 'delete'),
+                    icon: Icon(
+                      isOwner ? Icons.delete_outline : Icons.exit_to_app,
+                      size: 16,
+                    ),
+                    label: Text(isOwner ? 'Excluir' : 'Sair'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.shade600,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ]),
+              ],
+            ),
           ],
         ),
       ),
@@ -228,9 +279,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (dialogCtx) => AlertDialog(
         title: Text(isOwner ? 'Excluir viagem' : 'Sair da viagem'),
-        content: Text(isOwner
-            ? 'Deseja excluir "${t.title}"?'
-            : 'Deseja sair de "${t.title}"?'),
+        content: Text(
+          isOwner
+              ? 'Deseja excluir "${t.title}"?'
+              : 'Deseja sair de "${t.title}"?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx, false),
@@ -238,8 +291,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx, true),
-            child: Text(isOwner ? 'Excluir' : 'Sair',
-                style: const TextStyle(color: Colors.red)),
+            child: Text(
+              isOwner ? 'Excluir' : 'Sair',
+              style: const TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
@@ -257,10 +312,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() {
-      context.read<ProfileViewModel>().load();
+    Future.microtask(() async {
+      final profileVm = context.read<ProfileViewModel>();
+      await profileVm.load();
       context.read<SocialViewModel>().loadAll();
       context.read<TripViewModel>().loadTrips();
+      final uid = profileVm.user?.id;
+      if (uid != null && mounted) {
+        context.read<ProfileCustomizationViewModel>().load(uid);
+      }
     });
   }
 
@@ -270,8 +330,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final socialVm = context.watch<SocialViewModel>();
     final tripVm = context.watch<TripViewModel>();
     final eventVm = context.watch<EventViewModel>();
+    final customization = context
+        .watch<ProfileCustomizationViewModel>()
+        .customization;
     final user = vm.user;
     final bottomPad = MediaQuery.of(context).padding.bottom;
+    final isBusiness = user?.isBusiness ?? false;
+    final profileBgColor = (!isBusiness)
+        ? resolveProfileColor(
+            customization?.backgroundColor,
+            AppColors.background,
+          )
+        : AppColors.background;
+    final profileTextColor = (!isBusiness)
+        ? resolveProfileColor(customization?.textColor, AppColors.textPrimary)
+        : AppColors.textPrimary;
 
     // Carrega os eventos da empresa uma vez por usuário (perfil empresa).
     if ((user?.isBusiness ?? false) && user!.id != _eventsLoadedForUid) {
@@ -283,9 +356,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     // Separa viagens ativas/planejadas vs concluídas
     final ongoingTrips = tripVm.trips
-        .where((t) =>
-            t.status != TripStatus.completed &&
-            t.status != TripStatus.cancelled)
+        .where(
+          (t) =>
+              t.status != TripStatus.completed &&
+              t.status != TripStatus.cancelled,
+        )
         .toList();
     final completedTrips = tripVm.trips
         .where((t) => t.status == TripStatus.completed)
@@ -306,8 +381,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Stack(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.people_outline,
-                          color: AppColors.navy),
+                      icon: const Icon(
+                        Icons.people_outline,
+                        color: AppColors.navy,
+                      ),
                       onPressed: () => context.push('/friends'),
                     ),
                     if (socialVm.pendingCount > 0)
@@ -318,15 +395,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           width: 16,
                           height: 16,
                           decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle),
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
                           child: Center(
                             child: Text(
                               '${socialVm.pendingCount}',
                               style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold),
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),
@@ -336,14 +415,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const Spacer(),
                 // Buscar / adicionar amigos
                 IconButton(
-                  icon: const Icon(Icons.person_add_outlined,
-                      color: AppColors.navy),
+                  icon: const Icon(
+                    Icons.person_add_outlined,
+                    color: AppColors.navy,
+                  ),
                   onPressed: () => context.push('/friends/search'),
                 ),
                 // Configurações
                 IconButton(
-                  icon: const Icon(Icons.settings_outlined,
-                      color: AppColors.navy),
+                  icon: const Icon(
+                    Icons.settings_outlined,
+                    color: AppColors.navy,
+                  ),
                   onPressed: () => context.push('/profile/settings'),
                 ),
                 // Logout
@@ -358,480 +441,614 @@ class _ProfileScreenState extends State<ProfileScreen> {
           SliverToBoxAdapter(
             child: (user?.isBusiness ?? false)
                 ? _buildBusinessBody(user, vm, eventVm, bottomPad)
-                : Column(
-              children: [
-                // ── Avatar + nome ───────────────────────────────
-                const SizedBox(height: 8),
-                GestureDetector(
-                  // Toque abre a foto de perfil ampliada
-                  onTap: user?.avatarUrl != null
-                      ? () => showPhotoViewer(context, urls: [user!.avatarUrl!])
-                      : null,
-                  child: CircleAvatar(
-                  radius: 52,
-                  backgroundColor: AppColors.navy.withOpacity(0.1),
-                  backgroundImage: user?.avatarUrl != null
-                      ? NetworkImage(user!.avatarUrl!)
-                      : null,
-                  child: user?.avatarUrl == null
-                      ? Text(
-                          (user?.name.isNotEmpty == true)
-                              ? user!.name[0].toUpperCase()
-                              : 'U',
-                          style: const TextStyle(
-                              fontSize: 36,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.navy),
-                        )
-                      : null,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  (user?.name ?? '').toUpperCase(),
-                  style: AppTextStyles.headlineLarge
-                      .copyWith(fontWeight: FontWeight.w800, fontSize: 20),
-                ),
-                if (user?.username.isNotEmpty == true)
-                  Text('@${user!.username}',
-                      style: AppTextStyles.bodyMedium
-                          .copyWith(color: AppColors.textMuted)),
-                const SizedBox(height: 20),
-
-                // ── Stats 2x2 ──────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Row(
-                    children: [
-                      _StatBox(
-                          value: '${user?.tripsCount ?? 0}',
-                          label: 'Viagens\ncriadas'),
-                      const SizedBox(width: 12),
-                      _StatBox(value: '0', label: 'Rolês'),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Row(
-                    children: [
-                      _StatBox(
-                          value: '${socialVm.friends.isNotEmpty ? socialVm.friends.length : (user?.friendsCount ?? 0)}',
-                          label: 'Amigos\nadicionados'),
-                      const SizedBox(width: 12),
-                      _StatBox(
-                          value: '${completedTrips.length}',
-                          label: 'Viagens\nconcluídas'),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // ── Editar perfil button ────────────────────────
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      onPressed: () => context.push('/profile/edit'),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(
-                            color: AppColors.navy, width: 1.5),
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                      ),
-                      child: Text('EDITAR PERFIL',
-                          style: AppTextStyles.labelMedium
-                              .copyWith(color: AppColors.navy,
-                                  fontWeight: FontWeight.w800)),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                const Divider(height: 1),
-
-                // ── Bio ────────────────────────────────────────
-                if (user?.bio != null && user!.bio!.isNotEmpty) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+                : Container(
+                    color: profileBgColor,
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Bio',
-                            style: AppTextStyles.headlineMedium
-                                .copyWith(fontWeight: FontWeight.w800)),
-                        const SizedBox(height: 8),
-                        Text(user.bio!,
-                            style: AppTextStyles.bodyMedium
-                                .copyWith(color: AppColors.textSecondary,
-                                    height: 1.5)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Divider(height: 1),
-                ],
-
-                // ── Seus contatos ─────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Seus Contatos',
-                          style: AppTextStyles.headlineMedium
-                              .copyWith(fontWeight: FontWeight.w800)),
-                      GestureDetector(
-                        onTap: () => context.push('/friends'),
-                        child: Text('Ver todos',
-                            style: AppTextStyles.bodySmall
-                                .copyWith(color: AppColors.navy)),
-                      ),
-                    ],
-                  ),
-                ),
-                if (socialVm.friends.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: GestureDetector(
-                      onTap: () => context.push('/friends/search'),
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.divider),
-                          borderRadius: BorderRadius.circular(12),
+                        // ── Banner personalizado ─────────────────────────
+                        if (customization?.bannerUrl != null)
+                          ProfileBannerView(value: customization!.bannerUrl),
+                        // ── Avatar + nome ───────────────────────────────
+                        SizedBox(
+                          height: customization?.bannerUrl != null ? 0 : 8,
                         ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.person_add_outlined,
-                                color: AppColors.navy.withOpacity(0.5),
-                                size: 28),
-                            const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Nenhum amigo ainda',
-                                    style: AppTextStyles.bodyMedium),
-                                Text('Toque para buscar riders',
-                                    style: AppTextStyles.bodySmall
-                                        .copyWith(color: AppColors.navy)),
-                              ],
-                            ),
-                          ],
+                        Transform.translate(
+                          offset: Offset(
+                            0,
+                            customization?.bannerUrl != null ? -36 : 0,
+                          ),
+                          child: FramedAvatar(
+                            imageUrl: user?.avatarUrl,
+                            name: user?.name ?? '',
+                            frameId: customization?.avatarFrame ?? 'none',
+                            size: 104,
+                            onTap: user?.avatarUrl != null
+                                ? () => showPhotoViewer(
+                                    context,
+                                    urls: [user!.avatarUrl!],
+                                  )
+                                : null,
+                          ),
                         ),
-                      ),
-                    ),
-                  )
-                else
-                  SizedBox(
-                    height: 130,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      itemCount: socialVm.friends.length,
-                      separatorBuilder: (_, __) =>
-                          const SizedBox(width: 12),
-                      itemBuilder: (_, i) =>
-                          _ContactCard(user: socialVm.friends[i]),
-                    ),
-                  ),
-                const SizedBox(height: 20),
-                const Divider(height: 1),
-
-                // ── Suas fotos ────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Suas Fotos',
-                          style: AppTextStyles.headlineMedium
-                              .copyWith(fontWeight: FontWeight.w800)),
-                      GestureDetector(
-                        onTap: () => _pickAndUploadPhoto(context),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.add_a_photo_outlined,
-                                color: AppColors.navy, size: 18),
-                            const SizedBox(width: 4),
-                            Text('Adicionar',
-                                style: AppTextStyles.bodySmall
-                                    .copyWith(color: AppColors.navy)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (user?.photos.isEmpty != false)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: GestureDetector(
-                      onTap: () => _pickAndUploadPhoto(context),
-                      child: Container(
-                        height: 80,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.divider),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Center(
+                        Transform.translate(
+                          offset: Offset(
+                            0,
+                            customization?.bannerUrl != null ? -28 : 0,
+                          ),
                           child: Column(
-                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.add_a_photo_outlined,
-                                  color: AppColors.navy.withOpacity(0.4),
-                                  size: 28),
                               const SizedBox(height: 4),
-                              Text('Adicionar fotos',
-                                  style: AppTextStyles.bodySmall
-                                      .copyWith(color: AppColors.textMuted)),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  )
-                else
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: user!.photos.take(6).length,
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 3,
-                              crossAxisSpacing: 4,
-                              mainAxisSpacing: 4),
-                      itemBuilder: (_, i) => GestureDetector(
-                        // Abre o visualizador na foto tocada (swipe entre todas)
-                        onTap: () => showPhotoViewer(context,
-                            urls: user.photos, initialIndex: i),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: Image.network(user.photos[i],
-                              fit: BoxFit.cover),
-                        ),
-                      ),
-                    ),
-                  ),
-                const SizedBox(height: 20),
-                const Divider(height: 1),
-
-                // ── Viagens ────────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Viagens',
-                          style: AppTextStyles.headlineMedium
-                              .copyWith(fontWeight: FontWeight.w800)),
-                      GestureDetector(
-                        onTap: () => context.go('/trips'),
-                        child: Text('Ver todas',
-                            style: AppTextStyles.bodySmall
-                                .copyWith(color: AppColors.navy)),
-                      ),
-                    ],
-                  ),
-                ),
-                if (ongoingTrips.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: AppColors.divider),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text('Nenhuma viagem ainda',
-                          style: AppTextStyles.bodySmall
-                              .copyWith(color: AppColors.textMuted)),
-                    ),
-                  )
-                else
-                  ...ongoingTrips.take(3).map((t) {
-                    final parts =
-                        t.destination.address?.split(',') ?? [];
-                    final city = parts.isNotEmpty
-                        ? parts.first.trim()
-                        : t.title;
-                    final myId = Supabase.instance.client.auth.currentUser?.id ?? '';
-                    final isOwner = t.creator.id == myId;
-                    return Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-                      child: GestureDetector(
-                        onTap: () => _showTripSheet(t),
-                        child: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: AppColors.navy,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.landscape,
-                                  color: Colors.white54, size: 28),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Text(city.toUpperCase(),
-                                        style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 13)),
-                                    if (t.scheduledAt != null)
-                                      Text(
-                                        '${t.scheduledAt!.day.toString().padLeft(2, '0')}/${t.scheduledAt!.month.toString().padLeft(2, '0')}/${t.scheduledAt!.year}',
-                                        style: TextStyle(
-                                            color: Colors.white.withOpacity(0.6),
-                                            fontSize: 11),
-                                      ),
-                                  ],
+                              Text(
+                                (user?.name ?? '').toUpperCase(),
+                                style: AppTextStyles.headlineLarge.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 20,
+                                  color: profileTextColor,
                                 ),
                               ),
-                              Icon(
-                                isOwner ? Icons.delete_outline : Icons.exit_to_app,
-                                color: Colors.white54,
-                                size: 18,
-                              ),
-                              const SizedBox(width: 4),
-                              const Icon(Icons.chevron_right,
-                                  color: Colors.white54, size: 20),
+                              if (user?.username.isNotEmpty == true)
+                                Text(
+                                  '@${user!.username}',
+                                  style: AppTextStyles.bodyMedium.copyWith(
+                                    color: profileTextColor.withOpacity(0.7),
+                                  ),
+                                ),
                             ],
                           ),
                         ),
-                      ),
-                    );
-                  }),
+                        const SizedBox(height: 16),
 
-                // ── Viagens Concluídas ─────────────────────────
-                if (completedTrips.isNotEmpty) ...[
-                  const SizedBox(height: 20),
-                  const Divider(height: 1),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Viagens Concluídas',
-                            style: AppTextStyles.headlineMedium
-                                .copyWith(fontWeight: FontWeight.w800)),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.teal.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '${completedTrips.length}',
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: AppColors.teal,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  ...completedTrips.map((t) {
-                    final parts =
-                        t.destination.address?.split(',') ?? [];
-                    final city = parts.isNotEmpty
-                        ? parts.first.trim()
-                        : t.title;
-                    return Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-                      child: GestureDetector(
-                        onTap: () => context.push('/trips/${t.id}'),
-                        child: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: AppColors.card,
-                            border: Border.all(color: AppColors.divider),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                        // ── Stats 2x2 ──────────────────────────────────
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
                           child: Row(
                             children: [
-                              Container(
-                                width: 36,
-                                height: 36,
-                                decoration: BoxDecoration(
-                                  color: AppColors.teal.withOpacity(0.15),
+                              _StatBox(
+                                value: '${user?.tripsCount ?? 0}',
+                                label: 'Viagens\ncriadas',
+                                outlineColor: profileTextColor,
+                                fillColor: profileBgColor,
+                              ),
+                              const SizedBox(width: 10),
+                              _StatBox(
+                                value: '0',
+                                label: 'Rolês',
+                                outlineColor: profileTextColor,
+                                fillColor: profileBgColor,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Row(
+                            children: [
+                              _StatBox(
+                                value:
+                                    '${socialVm.friends.isNotEmpty ? socialVm.friends.length : (user?.friendsCount ?? 0)}',
+                                label: 'Amigos\nadicionados',
+                                outlineColor: profileTextColor,
+                                fillColor: profileBgColor,
+                              ),
+                              const SizedBox(width: 10),
+                              _StatBox(
+                                value: '${completedTrips.length}',
+                                label: 'Viagens\nconcluídas',
+                                outlineColor: profileTextColor,
+                                fillColor: profileBgColor,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // ── Editar perfil button ────────────────────────
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton(
+                              onPressed: () => context.push('/profile/edit'),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(
+                                  color: AppColors.navy,
+                                  width: 1.5,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Icon(Icons.flag,
-                                    color: AppColors.teal, size: 20),
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                              child: Text(
+                                'EDITAR PERFIL',
+                                style: AppTextStyles.labelMedium.copyWith(
+                                  color: AppColors.navy,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        const Divider(height: 1),
+
+                        // ── Bio ────────────────────────────────────────
+                        if (user?.bio != null && user!.bio!.isNotEmpty) ...[
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Bio',
+                                  style: AppTextStyles.headlineMedium.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  user.bio!,
+                                  style: AppTextStyles.bodyMedium.copyWith(
+                                    color: AppColors.textSecondary,
+                                    height: 1.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          const Divider(height: 1),
+                        ],
+
+                        // ── Seus contatos ─────────────────────────────
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Seus Contatos',
+                                style: AppTextStyles.headlineMedium.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () => context.push('/friends'),
+                                child: Text(
+                                  'Ver todos',
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: AppColors.navy,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (socialVm.friends.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: GestureDetector(
+                              onTap: () => context.push('/friends/search'),
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: AppColors.divider),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
                                   children: [
-                                    Text(city.toUpperCase(),
-                                        style: AppTextStyles.titleSmall
-                                            .copyWith(
-                                                fontWeight: FontWeight.w700)),
-                                    const SizedBox(height: 2),
-                                    Row(
+                                    Icon(
+                                      Icons.person_add_outlined,
+                                      color: AppColors.navy.withOpacity(0.5),
+                                      size: 28,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 6, vertical: 1),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.teal
-                                                .withOpacity(0.15),
-                                            borderRadius:
-                                                BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            'ENCERRADA',
-                                            style: AppTextStyles.labelSmall
-                                                .copyWith(
-                                              color: AppColors.teal,
-                                              fontWeight: FontWeight.w800,
-                                              fontSize: 9,
-                                            ),
-                                          ),
+                                        Text(
+                                          'Nenhum amigo ainda',
+                                          style: AppTextStyles.bodyMedium,
                                         ),
-                                        if (t.scheduledAt != null) ...[
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            '${t.scheduledAt!.day.toString().padLeft(2, '0')}/${t.scheduledAt!.month.toString().padLeft(2, '0')}/${t.scheduledAt!.year}',
-                                            style: AppTextStyles.bodySmall
-                                                .copyWith(
-                                                    color:
-                                                        AppColors.textMuted,
-                                                    fontSize: 11),
-                                          ),
-                                        ],
+                                        Text(
+                                          'Toque para buscar riders',
+                                          style: AppTextStyles.bodySmall
+                                              .copyWith(color: AppColors.navy),
+                                        ),
                                       ],
                                     ),
                                   ],
                                 ),
                               ),
-                              const Icon(Icons.chevron_right,
-                                  color: AppColors.textMuted, size: 20),
+                            ),
+                          )
+                        else
+                          SizedBox(
+                            height: 130,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                              ),
+                              itemCount: socialVm.friends.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(width: 12),
+                              itemBuilder: (_, i) =>
+                                  _ContactCard(user: socialVm.friends[i]),
+                            ),
+                          ),
+                        const SizedBox(height: 20),
+                        const Divider(height: 1),
+
+                        // ── Suas fotos ────────────────────────────────
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Suas Fotos',
+                                style: AppTextStyles.headlineMedium.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () => _pickAndUploadPhoto(context),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.add_a_photo_outlined,
+                                      color: AppColors.navy,
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Adicionar',
+                                      style: AppTextStyles.bodySmall.copyWith(
+                                        color: AppColors.navy,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
                         ),
-                      ),
-                    );
-                  }),
-                ],
+                        if (user?.photos.isEmpty != false)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: GestureDetector(
+                              onTap: () => _pickAndUploadPhoto(context),
+                              child: Container(
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: AppColors.divider),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.add_a_photo_outlined,
+                                        color: AppColors.navy.withOpacity(0.4),
+                                        size: 28,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Adicionar fotos',
+                                        style: AppTextStyles.bodySmall.copyWith(
+                                          color: AppColors.textMuted,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: GridView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: user!.photos.take(6).length,
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 3,
+                                    crossAxisSpacing: 4,
+                                    mainAxisSpacing: 4,
+                                  ),
+                              itemBuilder: (_, i) => GestureDetector(
+                                // Abre o visualizador na foto tocada (swipe entre todas)
+                                onTap: () => showPhotoViewer(
+                                  context,
+                                  urls: user.photos,
+                                  initialIndex: i,
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Image.network(
+                                    user.photos[i],
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 20),
+                        const Divider(height: 1),
 
-                SizedBox(height: bottomPad + 100),
-              ],
-            ),
+                        // ── Viagens ────────────────────────────────────
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Viagens',
+                                style: AppTextStyles.headlineMedium.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () => context.go('/trips'),
+                                child: Text(
+                                  'Ver todas',
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: AppColors.navy,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (ongoingTrips.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: AppColors.divider),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                'Nenhuma viagem ainda',
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.textMuted,
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          ...ongoingTrips.take(3).map((t) {
+                            final parts =
+                                t.destination.address?.split(',') ?? [];
+                            final city = parts.isNotEmpty
+                                ? parts.first.trim()
+                                : t.title;
+                            final myId =
+                                Supabase.instance.client.auth.currentUser?.id ??
+                                '';
+                            final isOwner = t.creator.id == myId;
+                            return Padding(
+                              padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                              child: GestureDetector(
+                                onTap: () => _showTripSheet(t),
+                                child: Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.navy,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.landscape,
+                                        color: Colors.white54,
+                                        size: 28,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              city.toUpperCase(),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                            if (t.scheduledAt != null)
+                                              Text(
+                                                '${t.scheduledAt!.day.toString().padLeft(2, '0')}/${t.scheduledAt!.month.toString().padLeft(2, '0')}/${t.scheduledAt!.year}',
+                                                style: TextStyle(
+                                                  color: Colors.white
+                                                      .withOpacity(0.6),
+                                                  fontSize: 11,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                      Icon(
+                                        isOwner
+                                            ? Icons.delete_outline
+                                            : Icons.exit_to_app,
+                                        color: Colors.white54,
+                                        size: 18,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      const Icon(
+                                        Icons.chevron_right,
+                                        color: Colors.white54,
+                                        size: 20,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+
+                        // ── Viagens Concluídas ─────────────────────────
+                        if (completedTrips.isNotEmpty) ...[
+                          const SizedBox(height: 20),
+                          const Divider(height: 1),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Viagens Concluídas',
+                                  style: AppTextStyles.headlineMedium.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.teal.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    '${completedTrips.length}',
+                                    style: AppTextStyles.labelSmall.copyWith(
+                                      color: AppColors.teal,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          ...completedTrips.map((t) {
+                            final parts =
+                                t.destination.address?.split(',') ?? [];
+                            final city = parts.isNotEmpty
+                                ? parts.first.trim()
+                                : t.title;
+                            return Padding(
+                              padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                              child: GestureDetector(
+                                onTap: () => context.push('/trips/${t.id}'),
+                                child: Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.card,
+                                    border: Border.all(
+                                      color: AppColors.divider,
+                                    ),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 36,
+                                        height: 36,
+                                        decoration: BoxDecoration(
+                                          color: AppColors.teal.withOpacity(
+                                            0.15,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.flag,
+                                          color: AppColors.teal,
+                                          size: 20,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              city.toUpperCase(),
+                                              style: AppTextStyles.titleSmall
+                                                  .copyWith(
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Row(
+                                              children: [
+                                                Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 1,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.teal
+                                                        .withOpacity(0.15),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          4,
+                                                        ),
+                                                  ),
+                                                  child: Text(
+                                                    'ENCERRADA',
+                                                    style: AppTextStyles
+                                                        .labelSmall
+                                                        .copyWith(
+                                                          color: AppColors.teal,
+                                                          fontWeight:
+                                                              FontWeight.w800,
+                                                          fontSize: 9,
+                                                        ),
+                                                  ),
+                                                ),
+                                                if (t.scheduledAt != null) ...[
+                                                  const SizedBox(width: 6),
+                                                  Text(
+                                                    '${t.scheduledAt!.day.toString().padLeft(2, '0')}/${t.scheduledAt!.month.toString().padLeft(2, '0')}/${t.scheduledAt!.year}',
+                                                    style: AppTextStyles
+                                                        .bodySmall
+                                                        .copyWith(
+                                                          color: AppColors
+                                                              .textMuted,
+                                                          fontSize: 11,
+                                                        ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const Icon(
+                                        Icons.chevron_right,
+                                        color: AppColors.textMuted,
+                                        size: 20,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                        ],
+
+                        SizedBox(height: bottomPad + 100),
+                      ],
+                    ),
+                  ),
           ),
         ],
       ),
@@ -844,15 +1061,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // sair); só o body muda.
   // ───────────────────────────────────────────────────────────────────────────
   Widget _buildBusinessBody(
-      UserModel? user, ProfileViewModel vm, EventViewModel eventVm,
-      double bottomPad) {
-    final categoriesLabels =
-        resolveBusinessCategoryLabels(user?.businessCategories ?? const []);
+    UserModel? user,
+    ProfileViewModel vm,
+    EventViewModel eventVm,
+    double bottomPad,
+  ) {
+    final categoriesLabels = resolveBusinessCategoryLabels(
+      user?.businessCategories ?? const [],
+    );
     final typeLabel = categoriesLabels.isEmpty
         ? 'Tipo de estabelecimento'
         : (categoriesLabels.length > 2
-            ? '${categoriesLabels.take(2).join(' · ')} · +${categoriesLabels.length - 2}'
-            : categoriesLabels.join(' · '));
+              ? '${categoriesLabels.take(2).join(' · ')} · +${categoriesLabels.length - 2}'
+              : categoriesLabels.join(' · '));
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -872,7 +1093,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               image: (user?.businessBannerUrl != null)
                   ? DecorationImage(
                       image: NetworkImage(user!.businessBannerUrl!),
-                      fit: BoxFit.cover)
+                      fit: BoxFit.cover,
+                    )
                   : null,
             ),
             child: (user?.businessBannerUrl == null)
@@ -880,12 +1102,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.image_outlined,
-                            color: AppColors.navy.withOpacity(0.4), size: 36),
+                        Icon(
+                          Icons.image_outlined,
+                          color: AppColors.navy.withOpacity(0.4),
+                          size: 36,
+                        ),
                         const SizedBox(height: 6),
-                        Text('Foto de banner da empresa',
-                            style: AppTextStyles.bodySmall
-                                .copyWith(color: AppColors.textMuted)),
+                        Text(
+                          'Foto de banner da empresa',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textMuted,
+                          ),
+                        ),
                       ],
                     ),
                   )
@@ -901,7 +1129,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Text(
                   (user?.displayName ?? '').toUpperCase(),
                   style: AppTextStyles.headlineLarge.copyWith(
-                      fontWeight: FontWeight.w800, fontSize: 18),
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                  ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -910,36 +1140,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Flexible(
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 4),
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: categoriesLabels.isEmpty
                         ? Colors.transparent
                         : AppColors.teal.withOpacity(0.15),
                     border: Border.all(
-                        color: categoriesLabels.isEmpty
-                            ? AppColors.divider
-                            : Colors.transparent),
+                      color: categoriesLabels.isEmpty
+                          ? AppColors.divider
+                          : Colors.transparent,
+                    ),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.storefront_outlined,
-                          size: 12,
-                          color: categoriesLabels.isEmpty
-                              ? AppColors.textMuted
-                              : AppColors.teal),
+                      Icon(
+                        Icons.storefront_outlined,
+                        size: 12,
+                        color: categoriesLabels.isEmpty
+                            ? AppColors.textMuted
+                            : AppColors.teal,
+                      ),
                       const SizedBox(width: 4),
                       Flexible(
-                        child: Text(typeLabel,
-                            style: AppTextStyles.labelSmall.copyWith(
-                                color: categoriesLabels.isEmpty
-                                    ? AppColors.textMuted
-                                    : AppColors.teal,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 10),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          typeLabel,
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: categoriesLabels.isEmpty
+                                ? AppColors.textMuted
+                                : AppColors.teal,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 10,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ],
                   ),
@@ -959,14 +1197,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 backgroundColor: AppColors.navy,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 elevation: 0,
               ),
-              child: Text('EDITAR O PERFIL DA SUA EMPRESA',
-                  style: AppTextStyles.labelMedium.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5)),
+              child: Text(
+                'EDITAR O PERFIL DA SUA EMPRESA',
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                ),
+              ),
             ),
           ),
 
@@ -977,9 +1219,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 12),
             const Divider(height: 1),
             const SizedBox(height: 16),
-            Text(user!.businessDescription!,
-                style: AppTextStyles.bodyMedium
-                    .copyWith(color: AppColors.textSecondary, height: 1.5)),
+            Text(
+              user!.businessDescription!,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+                height: 1.5,
+              ),
+            ),
             const SizedBox(height: 8),
           ],
 
@@ -991,18 +1237,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Seus eventos',
-                  style: AppTextStyles.headlineMedium
-                      .copyWith(fontWeight: FontWeight.w800)),
+              Text(
+                'Seus eventos',
+                style: AppTextStyles.headlineMedium.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
               GestureDetector(
                 onTap: () => context.push('/events/create'),
                 child: Row(
                   children: [
                     const Icon(Icons.add, color: AppColors.navy, size: 18),
                     const SizedBox(width: 4),
-                    Text('Criar',
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: AppColors.navy)),
+                    Text(
+                      'Criar',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.navy,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1013,7 +1265,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Center(
-                  child: CircularProgressIndicator(color: AppColors.navy)),
+                child: CircularProgressIndicator(color: AppColors.navy),
+              ),
             )
           else if (eventVm.myEvents.isEmpty)
             _BusinessEmptyCard(
@@ -1023,20 +1276,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: () => context.push('/events/create'),
             )
           else
-            ...eventVm.myEvents.take(5).map((e) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _BusinessEventTile(
-                    event: e,
-                    onTap: () => context.push('/events/${e.id}'),
+            ...eventVm.myEvents
+                .take(5)
+                .map(
+                  (e) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _BusinessEventTile(
+                      event: e,
+                      onTap: () => context.push('/events/${e.id}'),
+                    ),
                   ),
-                )),
+                ),
 
           const SizedBox(height: 24),
 
           // ── Seus anúncios ────────────────────────────────────
-          Text('Seus anúncios',
-              style: AppTextStyles.headlineMedium
-                  .copyWith(fontWeight: FontWeight.w800)),
+          Text(
+            'Seus anúncios',
+            style: AppTextStyles.headlineMedium.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
           const SizedBox(height: 12),
           _BusinessEmptyCard(
             icon: Icons.campaign_outlined,
@@ -1044,8 +1304,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             subtitle: 'Toque para publicar',
             onTap: () => ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                  content:
-                      Text('Publicação de anúncios chega em breve.')),
+                content: Text('Publicação de anúncios chega em breve.'),
+              ),
             ),
           ),
 
@@ -1065,21 +1325,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                            content: Text(ok
+                          content: Text(
+                            ok
                                 ? 'Voltou para o perfil pessoal.'
-                                : 'Não foi possível alterar agora.')),
+                                : 'Não foi possível alterar agora.',
+                          ),
+                        ),
                       );
                     },
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: AppColors.navy, width: 1.5),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
-              child: Text('VOLTAR PARA O PERFIL PESSOAL',
-                  style: AppTextStyles.labelMedium.copyWith(
-                      color: AppColors.navy,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5)),
+              child: Text(
+                'VOLTAR PARA O PERFIL PESSOAL',
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: AppColors.navy,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                ),
+              ),
             ),
           ),
 
@@ -1118,15 +1385,26 @@ class _BusinessEventTile extends StatelessWidget {
                 width: 44,
                 height: 44,
                 child: event.bannerUrl != null
-                    ? Image.network(event.bannerUrl!, fit: BoxFit.cover,
+                    ? Image.network(
+                        event.bannerUrl!,
+                        fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => Container(
-                            color: Colors.white24,
-                            child: const Icon(Icons.event,
-                                color: Colors.white70, size: 22)))
+                          color: Colors.white24,
+                          child: const Icon(
+                            Icons.event,
+                            color: Colors.white70,
+                            size: 22,
+                          ),
+                        ),
+                      )
                     : Container(
                         color: Colors.white24,
-                        child: const Icon(Icons.event,
-                            color: Colors.white70, size: 22)),
+                        child: const Icon(
+                          Icons.event,
+                          color: Colors.white70,
+                          size: 22,
+                        ),
+                      ),
               ),
             ),
             const SizedBox(width: 12),
@@ -1134,28 +1412,36 @@ class _BusinessEventTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(event.title,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
+                  Text(
+                    event.title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   const SizedBox(height: 2),
                   Row(
                     children: [
-                      Text(dateLabel,
-                          style: TextStyle(
-                              color: Colors.white.withOpacity(0.7),
-                              fontSize: 11)),
+                      Text(
+                        dateLabel,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          fontSize: 11,
+                        ),
+                      ),
                       const SizedBox(width: 10),
-                      const Icon(Icons.people,
-                          color: Colors.white54, size: 12),
+                      const Icon(Icons.people, color: Colors.white54, size: 12),
                       const SizedBox(width: 3),
-                      Text('${event.interestsCount}',
-                          style: TextStyle(
-                              color: Colors.white.withOpacity(0.7),
-                              fontSize: 11)),
+                      Text(
+                        '${event.interestsCount}',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          fontSize: 11,
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -1196,16 +1482,19 @@ class _BusinessEmptyCard extends StatelessWidget {
         child: Center(
           child: Column(
             children: [
-              Icon(icon,
-                  color: AppColors.navy.withOpacity(0.4), size: 36),
+              Icon(icon, color: AppColors.navy.withOpacity(0.4), size: 36),
               const SizedBox(height: 10),
-              Text(title,
-                  style: AppTextStyles.bodyMedium
-                      .copyWith(color: AppColors.textSecondary)),
+              Text(
+                title,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
               const SizedBox(height: 2),
-              Text(subtitle,
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: AppColors.navy)),
+              Text(
+                subtitle,
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.navy),
+              ),
             ],
           ),
         ),
@@ -1220,7 +1509,11 @@ class _SheetInfoRow extends StatelessWidget {
   final IconData icon;
   final Color color;
   final String label;
-  const _SheetInfoRow({required this.icon, required this.color, required this.label});
+  const _SheetInfoRow({
+    required this.icon,
+    required this.color,
+    required this.label,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1231,11 +1524,14 @@ class _SheetInfoRow extends StatelessWidget {
           Icon(icon, size: 14, color: color),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(label,
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.textSecondary),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
+            child: Text(
+              label,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
@@ -1248,29 +1544,48 @@ class _SheetInfoRow extends StatelessWidget {
 class _StatBox extends StatelessWidget {
   final String value;
   final String label;
-  const _StatBox({required this.value, required this.label});
+  // Cores de personalização: contorno na cor de texto, fundo na cor de
+  // background que o usuário escolheu (null = usa o padrão do app).
+  final Color? outlineColor;
+  final Color? fillColor;
+  const _StatBox({
+    required this.value,
+    required this.label,
+    this.outlineColor,
+    this.fillColor,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final outline = outlineColor ?? AppColors.navy;
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
         decoration: BoxDecoration(
-          color: AppColors.inputFill,
-          borderRadius: BorderRadius.circular(10),
+          color: fillColor ?? AppColors.inputFill,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: outline.withOpacity(0.4)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(value,
-                style: AppTextStyles.headlineLarge.copyWith(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 22,
-                    color: AppColors.navy)),
-            const SizedBox(height: 2),
-            Text(label,
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.textSecondary, height: 1.3)),
+            Text(
+              value,
+              style: AppTextStyles.headlineLarge.copyWith(
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+                color: outline,
+              ),
+            ),
+            const SizedBox(height: 1),
+            Text(
+              label,
+              style: AppTextStyles.labelSmall.copyWith(
+                color: outline.withOpacity(0.8),
+                height: 1.2,
+                fontSize: 10,
+              ),
+            ),
           ],
         ),
       ),
@@ -1289,69 +1604,71 @@ class _ContactCard extends StatelessWidget {
     return GestureDetector(
       onTap: () => context.push('/profile/${user.id}', extra: user),
       child: Container(
-      width: 120,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.divider),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: AppColors.navy.withOpacity(0.1),
-            backgroundImage: user.avatarUrl != null
-                ? NetworkImage(user.avatarUrl!)
-                : null,
-            child: user.avatarUrl == null
-                ? Text(
-                    user.name.isNotEmpty
-                        ? user.name[0].toUpperCase()
-                        : '?',
-                    style: const TextStyle(
+        width: 120,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.divider),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: AppColors.navy.withOpacity(0.1),
+              backgroundImage: user.avatarUrl != null
+                  ? NetworkImage(user.avatarUrl!)
+                  : null,
+              child: user.avatarUrl == null
+                  ? Text(
+                      user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.navy),
-                  )
-                : null,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            user.name.split(' ').first,
-            style: AppTextStyles.labelSmall
-                .copyWith(fontWeight: FontWeight.w700),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () =>
-                      context.push('/friends/chat/${user.id}'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.navy,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Center(
-                      child: Text('MSG',
+                        color: AppColors.navy,
+                      ),
+                    )
+                  : null,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              user.name.split(' ').first,
+              style: AppTextStyles.labelSmall.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => context.push('/friends/chat/${user.id}'),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.navy,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'MSG',
                           style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold)),
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    ),  // Container
-    );  // GestureDetector
+              ],
+            ),
+          ],
+        ),
+      ), // Container
+    ); // GestureDetector
   }
 }

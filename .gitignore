@@ -2,6 +2,11 @@
 icons_extracted/
 *.zip
 
+# APKs gerados (arquivos grandes, não versionar) e imagens-fonte não
+# comprimidas (a versão usada pelo app fica em ride_app/assets/images/banners/)
+/releases/
+/banners/
+
 # Arquivos de sistema
 .DS_Store
 Thumbs.db

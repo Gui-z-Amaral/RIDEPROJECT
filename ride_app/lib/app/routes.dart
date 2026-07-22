@@ -11,6 +11,7 @@ import '../features/profile/screens/profile_screen.dart';
 import '../features/profile/screens/edit_profile_screen.dart';
 import '../features/profile/screens/edit_business_profile_screen.dart';
 import '../features/profile/screens/settings_screen.dart';
+import '../features/profile/screens/profile_appearance_screen.dart';
 import '../features/profile/screens/history_screen.dart';
 import '../features/social/screens/friends_screen.dart';
 import '../features/social/screens/friend_profile_screen.dart';
@@ -83,6 +84,7 @@ final router = GoRouter(
     GoRoute(path: '/profile/edit', builder: (_, __) => const EditProfileScreen()),
     GoRoute(path: '/profile/business/edit', builder: (_, __) => const EditBusinessProfileScreen()),
     GoRoute(path: '/profile/settings', builder: (_, __) => const SettingsScreen()),
+    GoRoute(path: '/profile/appearance', builder: (_, __) => const ProfileAppearanceScreen()),
     GoRoute(path: '/profile/history', builder: (_, __) => const HistoryScreen()),
     GoRoute(path: '/friends/search', builder: (_, __) => const SearchUsersScreen()),
     GoRoute(

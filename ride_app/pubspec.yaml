@@ -1,7 +1,7 @@
 name: ride_app
 description: Ride - Rolês e Viagens de Moto
 publish_to: 'none'
-version: 1.0.0+1
+version: 0.0.2+2
 
 environment:
   sdk: ^3.11.3
@@ -61,4 +61,5 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/images/banners/
     - assets/icons/

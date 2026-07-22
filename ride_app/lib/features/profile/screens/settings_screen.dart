@@ -100,6 +100,28 @@ class SettingsScreen extends StatelessWidget {
 
           const SizedBox(height: 32),
 
+          // ── Aparência ────────────────────────────────────────────
+          const _SectionLabel('Aparência'),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.inputFill,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.palette_outlined, color: AppColors.navy),
+              title: Text('Aparência do perfil', style: AppTextStyles.bodyMedium),
+              subtitle: Text('Banner, moldura do avatar e cores',
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: AppColors.textMuted)),
+              trailing: const Icon(Icons.chevron_right,
+                  color: AppColors.textMuted),
+              onTap: () => context.push('/profile/appearance'),
+            ),
+          ),
+
+          const SizedBox(height: 32),
+
           // ── Segurança ──────────────────────────────────────────
           const _SectionLabel('Segurança'),
           const SizedBox(height: 12),
