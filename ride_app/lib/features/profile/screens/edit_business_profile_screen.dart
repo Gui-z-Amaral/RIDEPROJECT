@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/business_categories.dart';
 import '../../../core/utils/extensions.dart';
-import '../../../core/utils/image_utils.dart';
+import '../../../core/utils/storage_utils.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../viewmodels/profile_viewmodel.dart';
@@ -66,23 +66,22 @@ class _EditBusinessProfileScreenState extends State<EditBusinessProfileScreen> {
 
     try {
       final uid = Supabase.instance.client.auth.currentUser!.id;
-      final path = '$uid/avatar.jpg';
+      final vm = context.read<ProfileViewModel>();
       final bytes = await file.readAsBytes();
-      final jpeg = await ImageUtils.compressToJpeg(bytes);
-      await Supabase.instance.client.storage.from('avatars').uploadBinary(
-            path,
-            jpeg,
-            fileOptions: const FileOptions(
-                contentType: 'image/jpeg', upsert: true),
-          );
-      final url =
-          '${Supabase.instance.client.storage.from('avatars').getPublicUrl(path)}'
-          '?t=${DateTime.now().millisecondsSinceEpoch}';
+      final url = await StorageUtils.uploadImageUnique(
+        bucket: 'avatars',
+        uid: uid,
+        prefix: 'avatar',
+        bytes: bytes,
+        previousUrl: vm.user?.avatarUrl,
+      );
       if (!mounted) return;
-      await context.read<ProfileViewModel>().updateProfile(avatarUrl: url);
+      await vm.updateProfile(avatarUrl: url);
       if (mounted) context.showSnack('Foto de perfil atualizada!');
-    } catch (_) {
-      if (mounted) context.showSnack('Erro ao atualizar foto.', isError: true);
+    } catch (e) {
+      if (mounted) {
+        context.showSnack('Erro ao atualizar foto: $e', isError: true);
+      }
     }
   }
 
@@ -95,25 +94,22 @@ class _EditBusinessProfileScreenState extends State<EditBusinessProfileScreen> {
     setState(() => _uploadingBanner = true);
     try {
       final uid = Supabase.instance.client.auth.currentUser!.id;
-      final path = '$uid/banner.jpg';
+      final vm = context.read<ProfileViewModel>();
       final bytes = await file.readAsBytes();
-      final jpeg = await ImageUtils.compressToJpeg(bytes);
-      await Supabase.instance.client.storage.from('avatars').uploadBinary(
-            path,
-            jpeg,
-            fileOptions: const FileOptions(
-                contentType: 'image/jpeg', upsert: true),
-          );
-      final url =
-          '${Supabase.instance.client.storage.from('avatars').getPublicUrl(path)}'
-          '?t=${DateTime.now().millisecondsSinceEpoch}';
+      final url = await StorageUtils.uploadImageUnique(
+        bucket: 'avatars',
+        uid: uid,
+        prefix: 'banner',
+        bytes: bytes,
+        previousUrl: vm.user?.businessBannerUrl,
+      );
       if (!mounted) return;
-      await context
-          .read<ProfileViewModel>()
-          .updateProfile(businessBannerUrl: url);
+      await vm.updateProfile(businessBannerUrl: url);
       if (mounted) context.showSnack('Banner atualizado!');
-    } catch (_) {
-      if (mounted) context.showSnack('Erro ao enviar banner.', isError: true);
+    } catch (e) {
+      if (mounted) {
+        context.showSnack('Erro ao enviar banner: $e', isError: true);
+      }
     } finally {
       if (mounted) setState(() => _uploadingBanner = false);
     }
@@ -159,7 +155,7 @@ class _EditBusinessProfileScreenState extends State<EditBusinessProfileScreen> {
               children: [
                 GestureDetector(
                   onTap: () => context.pop(),
-                  child: const Icon(Icons.arrow_back,
+                  child: Icon(Icons.arrow_back,
                       color: AppColors.navy, size: 24),
                 ),
                 const Spacer(),
@@ -211,7 +207,7 @@ class _EditBusinessProfileScreenState extends State<EditBusinessProfileScreen> {
                                     ? NetworkImage(user!.avatarUrl!)
                                     : null,
                                 child: user?.avatarUrl == null
-                                    ? const Icon(Icons.storefront_outlined,
+                                    ? Icon(Icons.storefront_outlined,
                                         color: AppColors.navy, size: 36)
                                     : null,
                               ),
@@ -368,7 +364,7 @@ class _EditBusinessProfileScreenState extends State<EditBusinessProfileScreen> {
                               child: CircularProgressIndicator(
                                   strokeWidth: 2, color: Colors.white),
                             )
-                          : const Text('SALVAR',
+                          : Text('SALVAR',
                               style: AppTextStyles.labelLarge),
                     ),
                   ),

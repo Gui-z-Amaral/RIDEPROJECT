@@ -331,7 +331,7 @@ class _MapSelectScreenState extends State<MapSelectScreen> {
                                 color: AppColors.surfaceVariant,
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.place,
+                              child: Icon(Icons.place,
                                   color: AppColors.textMuted, size: 20),
                             ),
                             title: Text(
@@ -356,7 +356,7 @@ class _MapSelectScreenState extends State<MapSelectScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.search,
+                        Icon(Icons.search,
                             size: 40, color: AppColors.textMuted),
                         const SizedBox(height: 12),
                         Text(
@@ -468,7 +468,7 @@ class _SelectedPlaceCard extends StatelessWidget {
           ),
           IconButton(
             icon:
-                const Icon(Icons.close, size: 18, color: AppColors.textMuted),
+                Icon(Icons.close, size: 18, color: AppColors.textMuted),
             onPressed: onClear,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 32, minHeight: 32),

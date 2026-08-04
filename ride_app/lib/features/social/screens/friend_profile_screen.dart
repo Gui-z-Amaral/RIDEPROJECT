@@ -89,7 +89,7 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
             scrolledUnderElevation: 0,
             pinned: true,
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios, color: AppColors.navy),
+              icon: Icon(Icons.arrow_back_ios, color: AppColors.navy),
               onPressed: () => context.pop(),
             ),
             title: Text(
@@ -171,7 +171,7 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.location_on_outlined,
                           size: 14,
                           color: AppColors.textMuted,
@@ -465,7 +465,7 @@ class _MutualFriendsSectionState extends State<_MutualFriendsSection> {
               ),
             ),
             const SizedBox(width: 12),
-            const SizedBox(
+            SizedBox(
               width: 16,
               height: 16,
               child: CircularProgressIndicator(
@@ -558,7 +558,7 @@ class _MutualFriendsSectionState extends State<_MutualFriendsSection> {
                               ],
                             ),
                           ),
-                          const Icon(
+                          Icon(
                             Icons.chevron_right,
                             color: AppColors.textMuted,
                           ),

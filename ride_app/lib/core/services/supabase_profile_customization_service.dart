@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/profile_customization.dart';
-import '../utils/image_utils.dart';
+import '../utils/storage_utils.dart';
 
 class SupabaseProfileCustomizationService {
   static SupabaseClient get _db => Supabase.instance.client;
@@ -34,17 +34,14 @@ class SupabaseProfileCustomizationService {
   }
 
   /// Upload do banner pessoal (bucket 'avatars', comprimido ≤360KB).
-  /// Nome fixo por usuário com cache-buster, mesmo padrão do avatar.
+  /// Nome único por upload (INSERT) — o upsert de nome fixo falha no RLS do
+  /// Storage self-hosted.
   static Future<String> uploadBanner(Uint8List bytes) async {
-    final jpeg = await ImageUtils.compressToJpeg(bytes);
-    final path = '$_uid/profile_banner.jpg';
-    await _db.storage.from('avatars').uploadBinary(
-          path,
-          jpeg,
-          fileOptions:
-              const FileOptions(contentType: 'image/jpeg', upsert: true),
-        );
-    final url = _db.storage.from('avatars').getPublicUrl(path);
-    return '$url?t=${DateTime.now().millisecondsSinceEpoch}';
+    return StorageUtils.uploadImageUnique(
+      bucket: 'avatars',
+      uid: _uid,
+      prefix: 'profile_banner',
+      bytes: bytes,
+    );
   }
 }

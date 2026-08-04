@@ -5,13 +5,17 @@ import 'app_text_styles.dart';
 import 'app_spacing.dart';
 
 class AppTheme {
-  static ThemeData get dark => light; // keep alias, now uses light
-
-  static ThemeData get light {
+  /// ThemeData sempre coerente com o modo atual (AppColors.isDark). Não usa
+  /// o mecanismo light/dark nativo do MaterialApp — o app inteiro recolore
+  /// via AppColors (ver app.dart), então basta UM ThemeData que já reflete
+  /// o estado corrente sempre que for reconstruído.
+  static ThemeData get current {
+    final brightness = AppColors.isDark ? Brightness.dark : Brightness.light;
     return ThemeData(
       useMaterial3: true,
-      brightness: Brightness.light,
-      colorScheme: const ColorScheme.light(
+      brightness: brightness,
+      colorScheme: ColorScheme(
+        brightness: brightness,
         primary: AppColors.navy,
         primaryContainer: AppColors.navyLight,
         secondary: AppColors.teal,
@@ -26,7 +30,7 @@ class AppTheme {
       ),
       scaffoldBackgroundColor: AppColors.background,
       fontFamily: 'Inter',
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         backgroundColor: AppColors.background,
         foregroundColor: AppColors.textPrimary,
         surfaceTintColor: Colors.transparent,
@@ -35,7 +39,9 @@ class AppTheme {
         centerTitle: true,
         systemOverlayStyle: SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
-          statusBarIconBrightness: Brightness.dark,
+          // Ícones escuros no fundo claro; brancos no fundo escuro.
+          statusBarIconBrightness:
+              AppColors.isDark ? Brightness.light : Brightness.dark,
         ),
         titleTextStyle: AppTextStyles.headlineMedium,
         iconTheme: IconThemeData(color: AppColors.textPrimary),
@@ -55,7 +61,7 @@ class AppTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.navy,
-          side: const BorderSide(color: AppColors.navy, width: 1.5),
+          side: BorderSide(color: AppColors.navy, width: 1.5),
           minimumSize: const Size(double.infinity, AppSpacing.buttonHeight),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
@@ -86,7 +92,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-          borderSide: const BorderSide(color: AppColors.navy, width: 1.5),
+          borderSide: BorderSide(color: AppColors.navy, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
@@ -102,7 +108,7 @@ class AppTheme {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-          side: const BorderSide(color: AppColors.divider),
+          side: BorderSide(color: AppColors.divider),
         ),
         margin: EdgeInsets.zero,
       ),
@@ -119,7 +125,7 @@ class AppTheme {
           vertical: AppSpacing.xs,
         ),
       ),
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: AppColors.background,
         selectedItemColor: AppColors.navy,
         unselectedItemColor: AppColors.textMuted,
@@ -130,12 +136,12 @@ class AppTheme {
         selectedLabelStyle: AppTextStyles.labelSmall,
         unselectedLabelStyle: AppTextStyles.labelSmall,
       ),
-      dividerTheme: const DividerThemeData(
+      dividerTheme: DividerThemeData(
         color: AppColors.divider,
         thickness: 1,
         space: 0,
       ),
-      iconTheme: const IconThemeData(color: AppColors.textPrimary, size: 24),
+      iconTheme: IconThemeData(color: AppColors.textPrimary, size: 24),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.navy,
         contentTextStyle:
@@ -145,14 +151,14 @@ class AppTheme {
         ),
         behavior: SnackBarBehavior.floating,
       ),
-      progressIndicatorTheme: const ProgressIndicatorThemeData(
+      progressIndicatorTheme: ProgressIndicatorThemeData(
         color: AppColors.navy,
       ),
       checkboxTheme: CheckboxThemeData(
         fillColor: WidgetStateProperty.resolveWith((s) =>
             s.contains(WidgetState.selected) ? AppColors.navy : Colors.transparent),
         checkColor: WidgetStateProperty.all(Colors.white),
-        side: const BorderSide(color: AppColors.textMuted, width: 1.5),
+        side: BorderSide(color: AppColors.textMuted, width: 1.5),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
       ),
       switchTheme: SwitchThemeData(

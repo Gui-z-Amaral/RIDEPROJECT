@@ -117,8 +117,12 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     super.dispose();
   }
 
+  // Local é obrigatório: sem ele o evento não tem UF e não apareceria na home
+  // de nenhum usuário (a home filtra eventos pela UF da localização atual).
   bool get _canSave =>
-      _titleCtrl.text.trim().isNotEmpty && _startsAt != null;
+      _titleCtrl.text.trim().isNotEmpty &&
+      _startsAt != null &&
+      _location != null;
 
   // ── Banner ───────────────────────────────────────────────────
   Future<void> _pickBanner() async {
@@ -196,7 +200,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       lastDate: DateTime.now().add(const Duration(days: 730)),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(
+          colorScheme: ColorScheme.light(
             primary: AppColors.navy,
             onPrimary: Colors.white,
             surface: Colors.white,
@@ -212,7 +216,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       initialTime: TimeOfDay.fromDateTime(initial),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(
+          colorScheme: ColorScheme.light(
             primary: AppColors.navy,
             onPrimary: Colors.white,
             surface: Colors.white,
@@ -297,6 +301,16 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   // ── Salvar ───────────────────────────────────────────────────
   Future<void> _save() async {
     final vm = context.read<EventViewModel>();
+
+    // Garante a UF resolvida: se o geocode falhou ao escolher o local, tenta
+    // de novo — sem UF o evento não apareceria na home de ninguém.
+    if (_stateUf == null && _location != null) {
+      final uf =
+          await GeocodingService.getStateUf(_location!.lat, _location!.lng);
+      if (!mounted) return;
+      if (uf != null) _stateUf = uf;
+    }
+
     final schedule = _schedule
         .where((s) => s.titleCtrl.text.trim().isNotEmpty)
         .map((s) => EventScheduleItem(
@@ -371,7 +385,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
     if (_isEditing && !_prefilled) {
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: AppColors.background,
         body: Center(child: CircularProgressIndicator(color: AppColors.navy)),
       );
@@ -383,7 +397,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         backgroundColor: AppColors.background,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.navy),
+          icon: Icon(Icons.arrow_back_ios, color: AppColors.navy),
           onPressed: () => context.pop(),
         ),
         title: Text(_isEditing ? 'Editar evento' : 'Novo evento',
@@ -408,7 +422,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     : null,
               ),
               child: _uploadingBanner
-                  ? const Center(
+                  ? Center(
                       child: CircularProgressIndicator(color: AppColors.navy))
                   : _bannerUrl == null
                       ? Center(
@@ -500,7 +514,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                             ],
                           ),
                   ),
-                  const Icon(Icons.chevron_right, color: AppColors.textMuted),
+                  Icon(Icons.chevron_right, color: AppColors.textMuted),
                 ],
               ),
             ),
@@ -578,7 +592,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             onChanged: _onParticipantSearch,
           ),
           if (_searching)
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(vertical: 12),
               child: Center(
                   child: SizedBox(
@@ -771,7 +785,7 @@ class _SponsorEditor extends StatelessWidget {
                     : null,
               ),
               child: draft.uploading
-                  ? const Center(
+                  ? Center(
                       child: SizedBox(
                           width: 18,
                           height: 18,
@@ -822,7 +836,7 @@ class _ParticipantChip extends StatelessWidget {
           const SizedBox(width: 4),
           GestureDetector(
             onTap: onRemove,
-            child: const Icon(Icons.close, size: 16, color: AppColors.navy),
+            child: Icon(Icons.close, size: 16, color: AppColors.navy),
           ),
         ],
       ),
@@ -847,7 +861,7 @@ class _SectionRow extends StatelessWidget {
           onTap: onAdd,
           child: Row(
             children: [
-              const Icon(Icons.add, color: AppColors.navy, size: 18),
+              Icon(Icons.add, color: AppColors.navy, size: 18),
               const SizedBox(width: 4),
               Text('Adicionar',
                   style:

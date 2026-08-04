@@ -7,7 +7,7 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../viewmodels/profile_viewmodel.dart';
 import '../../../core/utils/extensions.dart';
-import '../../../core/utils/image_utils.dart';
+import '../../../core/utils/storage_utils.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -91,22 +91,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     try {
       final uid = Supabase.instance.client.auth.currentUser!.id;
-      // Sobrescreve sempre o mesmo arquivo para não acumular versões
-      final path = '$uid/avatar.jpg';
+      final vm = context.read<ProfileViewModel>();
       final bytes = await file.readAsBytes();
-      final jpeg = await ImageUtils.compressToJpeg(bytes);
-      await Supabase.instance.client.storage
-          .from('avatars')
-          .uploadBinary(path, jpeg,
-              fileOptions: const FileOptions(
-                  contentType: 'image/jpeg', upsert: true));
-      // Adiciona cache-buster para forçar reload da imagem
-      final url = Supabase.instance.client.storage
-              .from('avatars')
-              .getPublicUrl(path) +
-          '?t=${DateTime.now().millisecondsSinceEpoch}';
+      final url = await StorageUtils.uploadImageUnique(
+        bucket: 'avatars',
+        uid: uid,
+        prefix: 'avatar',
+        bytes: bytes,
+        previousUrl: vm.user?.avatarUrl,
+      );
       if (!mounted) return;
-      await context.read<ProfileViewModel>().updateProfile(avatarUrl: url);
+      await vm.updateProfile(avatarUrl: url);
       if (mounted) context.showSnack('Foto de perfil atualizada!');
     } catch (_) {
       if (mounted) {
@@ -167,7 +162,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               children: [
                 GestureDetector(
                   onTap: () => context.pop(),
-                  child: const Icon(Icons.arrow_back,
+                  child: Icon(Icons.arrow_back,
                       color: AppColors.navy, size: 24),
                 ),
                 const Spacer(),
@@ -215,7 +210,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                         (user?.name.isNotEmpty == true)
                                             ? user!.name[0].toUpperCase()
                                             : 'U',
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                             fontSize: 36,
                                             fontWeight: FontWeight.bold,
                                             color: AppColors.navy),
@@ -362,7 +357,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               child: CircularProgressIndicator(
                                   strokeWidth: 2, color: Colors.white),
                             )
-                          : const Text('SALVAR',
+                          : Text('SALVAR',
                               style: AppTextStyles.labelLarge),
                     ),
                   ),

@@ -133,7 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Stack(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.people_outline,
+                      icon: Icon(Icons.people_outline,
                           color: AppColors.navy),
                       onPressed: () => context.push('/friends/invites'),
                     ),
@@ -163,7 +163,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Stack(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.notifications_outlined,
+                      icon: Icon(Icons.notifications_outlined,
                           color: AppColors.navy),
                       onPressed: () => context.push('/notifications'),
                     ),
@@ -228,7 +228,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.search,
+                          Icon(Icons.search,
                               color: AppColors.textMuted, size: 20),
                           const SizedBox(width: 8),
                           Text(
@@ -288,7 +288,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     : 'EVENTOS PERTO DE VOCÊ'),
                             const Spacer(),
                             if (eventVm.isLoadingNearby)
-                              const SizedBox(
+                              SizedBox(
                                 width: 14,
                                 height: 14,
                                 child: CircularProgressIndicator(
@@ -395,7 +395,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       _SectionLabel(label: 'SUGESTÕES PARA VOCÊ'),
                       const Spacer(),
                       if (vm.isLoadingRecs)
-                        const SizedBox(
+                        SizedBox(
                           width: 14,
                           height: 14,
                           child: CircularProgressIndicator(
@@ -1260,7 +1260,7 @@ class _StoryItem extends StatelessWidget {
                           story.friend.name.isNotEmpty
                               ? story.friend.name[0].toUpperCase()
                               : '?',
-                          style: const TextStyle(
+                          style: TextStyle(
                               color: AppColors.navy,
                               fontWeight: FontWeight.bold,
                               fontSize: 20),
@@ -1309,7 +1309,7 @@ class _AdStoryItem extends StatelessWidget {
             height: 62,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: const LinearGradient(
+              gradient: LinearGradient(
                 colors: [AppColors.navy, AppColors.teal],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -1380,14 +1380,14 @@ class _HighlightsStrip extends StatelessWidget {
                       fit: BoxFit.cover,
                       placeholder: (_, __) => Container(
                         color: AppColors.inputFill,
-                        child: const Center(
+                        child: Center(
                           child: CircularProgressIndicator(
                               strokeWidth: 2, color: AppColors.navy),
                         ),
                       ),
                       errorWidget: (_, __, ___) => Container(
                         color: AppColors.inputFill,
-                        child: const Icon(Icons.broken_image,
+                        child: Icon(Icons.broken_image,
                             color: AppColors.textMuted),
                       ),
                     ),
@@ -1417,7 +1417,7 @@ class _HighlightsStrip extends StatelessWidget {
                           color: AppColors.teal,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.star,
+                        child: Icon(Icons.star,
                             color: AppColors.deepNavy, size: 14),
                       ),
                     ),
@@ -1500,7 +1500,7 @@ class _EventCard extends StatelessWidget {
                   imageUrl: event.bannerUrl!,
                   fit: BoxFit.cover,
                   errorWidget: (_, __, ___) => Container(
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [AppColors.navy, AppColors.mediumBlue],
                         begin: Alignment.topLeft,
@@ -1511,7 +1511,7 @@ class _EventCard extends StatelessWidget {
                 )
               else
                 Container(
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [AppColors.navy, AppColors.mediumBlue],
                       begin: Alignment.topLeft,
@@ -1650,7 +1650,7 @@ class _StoryItemSkeleton extends StatelessWidget {
           Container(
             width: 62,
             height: 62,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: AppColors.shimmerBase,
             ),

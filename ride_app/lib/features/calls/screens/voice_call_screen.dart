@@ -48,7 +48,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> with SingleTickerProv
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(colors: [AppColors.deepNavy, AppColors.darkNavy, AppColors.mediumBlue], begin: Alignment.topCenter, end: Alignment.bottomCenter),
         ),
         child: SafeArea(

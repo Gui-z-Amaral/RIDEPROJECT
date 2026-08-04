@@ -123,7 +123,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           )
                         else
                           Container(
-                            decoration: const BoxDecoration(
+                            decoration: BoxDecoration(
                               gradient: LinearGradient(
                                 colors: [AppColors.navy, AppColors.mediumBlue],
                                 begin: Alignment.topLeft,
@@ -322,7 +322,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   Widget _loadingOrMissing(EventViewModel vm) {
     if (vm.isLoadingDetail) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.navy));
+      return Center(child: CircularProgressIndicator(color: AppColors.navy));
     }
     return SafeArea(
       child: Column(
@@ -330,7 +330,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           Align(
             alignment: Alignment.centerLeft,
             child: IconButton(
-              icon: const Icon(Icons.arrow_back, color: AppColors.navy),
+              icon: Icon(Icons.arrow_back, color: AppColors.navy),
               onPressed: () => context.pop(),
             ),
           ),
@@ -356,7 +356,7 @@ class _InterestBar extends StatelessWidget {
     final bottomPad = MediaQuery.of(context).padding.bottom;
     return Container(
       padding: EdgeInsets.fromLTRB(24, 12, 24, bottomPad + 12),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.background,
         border: Border(top: BorderSide(color: AppColors.divider)),
       ),
@@ -459,12 +459,12 @@ class _SponsorBadge extends StatelessWidget {
               borderRadius: BorderRadius.circular(6),
               child: Image.network(sponsor.logoUrl!,
                   width: 28, height: 28, fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const Icon(
+                  errorBuilder: (_, __, ___) => Icon(
                       Icons.business, size: 20, color: AppColors.textMuted)),
             ),
             const SizedBox(width: 8),
           ] else
-            const Icon(Icons.business, size: 20, color: AppColors.navy),
+            Icon(Icons.business, size: 20, color: AppColors.navy),
           if (sponsor.logoUrl == null) const SizedBox(width: 8),
           Text(sponsor.name,
               style: AppTextStyles.titleSmall

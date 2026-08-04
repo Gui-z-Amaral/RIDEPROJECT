@@ -96,7 +96,7 @@ class _RidesListScreenState extends State<RidesListScreen> {
                           .copyWith(fontWeight: FontWeight.w800)),
                   const Spacer(),
                   IconButton(
-                    icon: const Icon(Icons.notifications_outlined,
+                    icon: Icon(Icons.notifications_outlined,
                         color: AppColors.navy),
                     onPressed: () => context.push('/notifications'),
                   ),
@@ -110,7 +110,7 @@ class _RidesListScreenState extends State<RidesListScreen> {
                     horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
                 child: GestureDetector(
                   onTap: () => context.go('/home'),
-                  child: const Icon(Icons.arrow_back,
+                  child: Icon(Icons.arrow_back,
                       color: AppColors.navy, size: 26),
                 ),
               ),

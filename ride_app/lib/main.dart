@@ -6,6 +6,8 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/constants/supabase_config.dart';
 import 'core/services/push_notification_service.dart';
+import 'core/services/theme_preference_service.dart';
+import 'theme/app_colors.dart';
 import 'app/app.dart';
 
 /// Handler de push em segundo plano/fechado. Quando a mensagem traz bloco
@@ -32,6 +34,12 @@ void main() async {
 
   // Inicializa locale pt_BR para DateFormat (relativeLabel/formattedShort)
   await initializeDateFormatting('pt_BR', null);
+
+  // Carrega o modo escuro ANTES do primeiro frame — evita flash do tema errado.
+  try {
+    final isDark = await ThemePreferenceService.load();
+    AppColors.setDark(isDark);
+  } catch (_) {}
 
   await Supabase.initialize(
     url: SupabaseConfig.url,

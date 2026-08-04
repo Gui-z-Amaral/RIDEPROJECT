@@ -115,7 +115,7 @@ class AppSearchInput extends StatelessWidget {
       style: AppTextStyles.bodyLarge,
       decoration: InputDecoration(
         hintText: hint,
-        prefixIcon: const Icon(Icons.search, size: AppSpacing.iconMd,
+        prefixIcon: Icon(Icons.search, size: AppSpacing.iconMd,
             color: AppColors.textMuted),
         suffixIcon: controller != null && (controller!.text.isNotEmpty)
             ? GestureDetector(
@@ -123,7 +123,7 @@ class AppSearchInput extends StatelessWidget {
                   controller!.clear();
                   onClear?.call();
                 },
-                child: const Icon(Icons.close, size: 18,
+                child: Icon(Icons.close, size: 18,
                     color: AppColors.textMuted),
               )
             : null,

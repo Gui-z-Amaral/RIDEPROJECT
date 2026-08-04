@@ -171,7 +171,7 @@ class _FinishTripScreenState extends State<FinishTripScreen> {
         backgroundColor: AppColors.background,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close, color: AppColors.navy),
+          icon: Icon(Icons.close, color: AppColors.navy),
           onPressed: () => context.pop(),
         ),
         title: Text(
@@ -245,7 +245,7 @@ class _FinishTripScreenState extends State<FinishTripScreen> {
             child: ElevatedButton.icon(
               onPressed: _finishing ? null : _finalize,
               icon: _finishing
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
@@ -514,9 +514,9 @@ class _PhotoGrid extends StatelessWidget {
             ),
             child: Center(
               child: uploading
-                  ? const CircularProgressIndicator(
+                  ? CircularProgressIndicator(
                       color: AppColors.navy, strokeWidth: 2)
-                  : const Column(
+                  : Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.add_a_photo,
@@ -545,14 +545,14 @@ class _PhotoGrid extends StatelessWidget {
                   fit: BoxFit.cover,
                   placeholder: (_, __) => Container(
                     color: AppColors.inputFill,
-                    child: const Center(
+                    child: Center(
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: AppColors.navy),
                     ),
                   ),
                   errorWidget: (_, __, ___) => Container(
                     color: AppColors.inputFill,
-                    child: const Icon(Icons.broken_image,
+                    child: Icon(Icons.broken_image,
                         color: AppColors.textMuted),
                   ),
                 ),

@@ -113,7 +113,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           surfaceTintColor: Colors.transparent,
           scrolledUnderElevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios, color: AppColors.navy),
+            icon: Icon(Icons.arrow_back_ios, color: AppColors.navy),
             onPressed: () {
               if (context.canPop()) {
                 context.pop();
@@ -135,7 +135,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           surfaceTintColor: Colors.transparent,
           scrolledUnderElevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios, color: AppColors.navy),
+            icon: Icon(Icons.arrow_back_ios, color: AppColors.navy),
             onPressed: () {
               if (context.canPop()) {
                 context.pop();
@@ -158,7 +158,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () => context.read<TripViewModel>().loadTripById(widget.tripId),
-                child: const Text('Tentar novamente', style: TextStyle(color: AppColors.navy)),
+                child: Text('Tentar novamente', style: TextStyle(color: AppColors.navy)),
               ),
             ],
           ),
@@ -204,7 +204,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             flexibleSpace: FlexibleSpaceBar(
               title: Text(trip.title, style: AppTextStyles.headlineSmall),
               background: Container(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(colors: [AppColors.mediumBlue, AppColors.darkNavy], begin: Alignment.topLeft, end: Alignment.bottomRight),
                 ),
                 child: const Center(child: Icon(Icons.map, size: 80, color: AppColors.teal)),
@@ -327,14 +327,14 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                           fit: BoxFit.cover,
                           placeholder: (_, __) => Container(
                             color: AppColors.inputFill,
-                            child: const Center(
+                            child: Center(
                               child: CircularProgressIndicator(
                                   strokeWidth: 2, color: AppColors.navy),
                             ),
                           ),
                           errorWidget: (_, __, ___) => Container(
                             color: AppColors.inputFill,
-                            child: const Icon(Icons.broken_image,
+                            child: Icon(Icons.broken_image,
                                 color: AppColors.textMuted),
                           ),
                         ),

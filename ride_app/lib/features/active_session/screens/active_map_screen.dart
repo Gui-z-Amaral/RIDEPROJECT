@@ -161,7 +161,7 @@ class _ActiveMapScreenState extends State<ActiveMapScreen> {
               child: Container(
                 decoration: BoxDecoration(
                   color: AppColors.surface.withOpacity(0.97),
-                  border: const Border(top: BorderSide(color: AppColors.divider)),
+                  border: Border(top: BorderSide(color: AppColors.divider)),
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusXl)),
                 ),
                 padding: EdgeInsets.only(
@@ -596,7 +596,7 @@ class _MapViewState extends State<_MapView> {
   Widget build(BuildContext context) {
     if (!_locationReady) {
       return Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [AppColors.darkNavy, AppColors.mediumBlue],
             begin: Alignment.topLeft,
@@ -637,7 +637,7 @@ class _VoiceChannelPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusXl)),
       ),
@@ -788,7 +788,7 @@ class _InviteSheetState extends State<_InviteSheet> {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.people_outline,
+                                Icon(Icons.people_outline,
                                     color: AppColors.textMuted, size: 48),
                                 const SizedBox(height: AppSpacing.md),
                                 Text(
@@ -861,7 +861,7 @@ class _InviteSheetState extends State<_InviteSheet> {
                                             width: 2),
                                       ),
                                       child: isSelected
-                                          ? const Icon(Icons.check,
+                                          ? Icon(Icons.check,
                                               size: 16,
                                               color: AppColors.deepNavy)
                                           : null,
@@ -900,7 +900,7 @@ class _InviteSheetState extends State<_InviteSheet> {
                   elevation: 0,
                 ),
                 child: _sending
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 22, height: 22,
                         child: CircularProgressIndicator(
                             strokeWidth: 2.5, color: AppColors.deepNavy),

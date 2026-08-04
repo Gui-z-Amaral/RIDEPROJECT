@@ -108,7 +108,7 @@ class _InvitesScreenState extends State<InvitesScreen> {
               children: [
                 GestureDetector(
                   onTap: () => context.pop(),
-                  child: const Icon(Icons.arrow_back,
+                  child: Icon(Icons.arrow_back,
                       color: AppColors.navy, size: 24),
                 ),
                 const Spacer(),
@@ -299,7 +299,7 @@ class _InviteCard extends StatelessWidget {
             child: avatarUrl == null
                 ? Text(
                     name.isNotEmpty ? name[0].toUpperCase() : '?',
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                         color: AppColors.navy),
@@ -354,7 +354,7 @@ class _InviteCard extends StatelessWidget {
                       child: OutlinedButton(
                         onPressed: onReject,
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(
+                          side: BorderSide(
                               color: AppColors.navy, width: 1.5),
                           padding:
                               const EdgeInsets.symmetric(vertical: 8),
@@ -484,7 +484,7 @@ class _SessionInviteCard extends StatelessWidget {
                 child: OutlinedButton(
                   onPressed: onReject,
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppColors.navy, width: 1.5),
+                    side: BorderSide(color: AppColors.navy, width: 1.5),
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(6)),
@@ -531,7 +531,7 @@ class _SentRequestCard extends StatelessWidget {
             child: avatarUrl == null
                 ? Text(
                     name.isNotEmpty ? name[0].toUpperCase() : '?',
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: AppColors.navy),
                   )

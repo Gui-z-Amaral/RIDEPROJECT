@@ -52,7 +52,7 @@ class _SearchUsersScreenState extends State<SearchUsersScreen> {
         backgroundColor: AppColors.background,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.navy),
+          icon: Icon(Icons.arrow_back, color: AppColors.navy),
           onPressed: () => context.pop(),
         ),
         title: Text('Buscar Riders',
@@ -61,7 +61,7 @@ class _SearchUsersScreenState extends State<SearchUsersScreen> {
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: vm.isSearching
-              ? const LinearProgressIndicator(
+              ? LinearProgressIndicator(
                   color: AppColors.navy,
                   backgroundColor: AppColors.divider,
                   minHeight: 2,
@@ -89,12 +89,12 @@ class _SearchUsersScreenState extends State<SearchUsersScreen> {
                   hintText: 'Buscar por nome ou @username',
                   hintStyle: AppTextStyles.bodySmall
                       .copyWith(color: AppColors.textMuted),
-                  prefixIcon: const Icon(Icons.search,
+                  prefixIcon: Icon(Icons.search,
                       color: AppColors.textMuted, size: 22),
                   suffixIcon: hasQuery
                       ? GestureDetector(
                           onTap: _clear,
-                          child: const Icon(Icons.close,
+                          child: Icon(Icons.close,
                               color: AppColors.textMuted, size: 20),
                         )
                       : null,

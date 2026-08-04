@@ -113,7 +113,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         backgroundColor: AppColors.background,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.navy),
+          icon: Icon(Icons.arrow_back_ios, color: AppColors.navy),
           onPressed: () => context.pop(),
         ),
         title: Text('Histórico',
@@ -124,7 +124,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         color: AppColors.navy,
         onRefresh: _loadAll,
         child: loading && rides.isEmpty && trips.isEmpty
-            ? const Center(
+            ? Center(
                 child: CircularProgressIndicator(color: AppColors.navy))
             : isEmpty
                 ? ListView(
@@ -365,7 +365,7 @@ class _HistoryCard extends StatelessWidget {
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.delete_outline,
+                icon: Icon(Icons.delete_outline,
                     color: AppColors.textMuted, size: 20),
                 tooltip: 'Remover do perfil',
                 onPressed: onRemove,

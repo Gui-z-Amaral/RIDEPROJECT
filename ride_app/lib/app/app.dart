@@ -13,6 +13,7 @@ import '../features/rides/viewmodels/ride_viewmodel.dart';
 import '../features/active_session/viewmodels/active_session_viewmodel.dart';
 import '../features/notifications/viewmodels/notifications_viewmodel.dart';
 import '../features/events/viewmodels/event_viewmodel.dart';
+import '../features/profile/viewmodels/theme_viewmodel.dart';
 import 'routes.dart';
 
 class RideApp extends StatefulWidget {
@@ -62,12 +63,22 @@ class _RideAppState extends State<RideApp> with WidgetsBindingObserver {
         ChangeNotifierProvider(create: (_) => ActiveSessionViewModel()),
         ChangeNotifierProvider(create: (_) => NotificationsViewModel()),
         ChangeNotifierProvider(create: (_) => EventViewModel()),
+        ChangeNotifierProvider(create: (_) => ThemeViewModel()),
       ],
-      child: MaterialApp.router(
-        title: 'Ride - Rolês e Viagens',
-        theme: AppTheme.light,
-        routerConfig: router,
-        debugShowCheckedModeBanner: false,
+      // Consumer + Key: quando o modo escuro alterna, força um rebuild
+      // completo da árvore (todo widget lê AppColors.xxx de novo durante o
+      // build). O GoRouter é um singleton externo (routes.dart), então a
+      // navegação/rota atual não se perde ao remontar o MaterialApp.
+      child: Consumer<ThemeViewModel>(
+        builder: (context, themeVm, _) => KeyedSubtree(
+          key: ValueKey(themeVm.isDarkMode),
+          child: MaterialApp.router(
+            title: 'Ride - Rolês e Viagens',
+            theme: AppTheme.current,
+            routerConfig: router,
+            debugShowCheckedModeBanner: false,
+          ),
+        ),
       ),
     );
   }

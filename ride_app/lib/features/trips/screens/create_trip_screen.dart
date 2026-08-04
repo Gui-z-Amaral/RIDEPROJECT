@@ -245,7 +245,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     if (_isEditing && !_prefilled) {
       return Scaffold(
         backgroundColor: AppColors.background,
-        body: const SafeArea(
+        body: SafeArea(
           child: Center(
               child: CircularProgressIndicator(color: AppColors.navy)),
         ),
@@ -326,7 +326,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                     placeholder: (_, __) => Container(
                       height: 180,
                       color: AppColors.inputFill,
-                      child: const Center(
+                      child: Center(
                         child: CircularProgressIndicator(
                             strokeWidth: 2, color: AppColors.navy),
                       ),
@@ -455,7 +455,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                   if (v.length >= 8) _lookupCep(v);
                 },
                 suffix: _lookingUpCep
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 16,
                         height: 16,
                         child: CircularProgressIndicator(
@@ -525,7 +525,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.trip_origin,
+                Icon(Icons.trip_origin,
                     color: AppColors.navy, size: 22),
                 const SizedBox(width: 12),
                 Expanded(
@@ -555,7 +555,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 GestureDetector(
                   onTap: () =>
                       setState(() => _departurePoint = null),
-                  child: const Icon(Icons.close,
+                  child: Icon(Icons.close,
                       color: AppColors.textMuted, size: 20),
                 ),
               ],
@@ -584,7 +584,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.my_location,
+                Icon(Icons.my_location,
                     color: AppColors.textMuted, size: 22),
                 const SizedBox(width: 12),
                 Expanded(
@@ -612,7 +612,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
               ),
               style: OutlinedButton.styleFrom(
                 side:
-                    const BorderSide(color: AppColors.navy),
+                    BorderSide(color: AppColors.navy),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
               ),
@@ -703,7 +703,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                   DateTime.now().add(const Duration(days: 730)),
               builder: (ctx, child) => Theme(
                 data: Theme.of(ctx).copyWith(
-                  colorScheme: const ColorScheme.light(
+                  colorScheme: ColorScheme.light(
                     primary: AppColors.navy,
                     onPrimary: Colors.white,
                     surface: Colors.white,
@@ -807,7 +807,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.place,
+                          Icon(Icons.place,
                               color: AppColors.navy, size: 16),
                           const SizedBox(width: 8),
                           Expanded(
@@ -839,7 +839,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 .copyWith(color: AppColors.textPrimary),
             decoration: InputDecoration(
               hintText: 'Pesquise por paradas',
-              prefixIcon: const Icon(Icons.search,
+              prefixIcon: Icon(Icons.search,
                   color: AppColors.textMuted, size: 18),
               filled: false,
               border: InputBorder.none,
@@ -987,7 +987,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Row(
                   children: [
-                    const Icon(Icons.place,
+                    Icon(Icons.place,
                         color: AppColors.navy, size: 16),
                     const SizedBox(width: 6),
                     Text(s, style: AppTextStyles.titleMedium),
@@ -1040,7 +1040,7 @@ class _TopBar extends StatelessWidget {
             children: [
               GestureDetector(
                 onTap: () => context.go('/profile'),
-                child: const CircleAvatar(
+                child: CircleAvatar(
                   radius: 18,
                   backgroundColor: AppColors.inputFill,
                   child: Icon(Icons.person,
@@ -1053,7 +1053,7 @@ class _TopBar extends StatelessWidget {
                       .copyWith(fontWeight: FontWeight.w800)),
               const Spacer(),
               IconButton(
-                icon: const Icon(Icons.notifications_outlined,
+                icon: Icon(Icons.notifications_outlined,
                     color: AppColors.navy),
                 onPressed: () => context.push('/notifications'),
               ),
@@ -1063,7 +1063,7 @@ class _TopBar extends StatelessWidget {
           GestureDetector(
             onTap: onBack,
             child:
-                const Align(alignment: Alignment.centerLeft, child: Icon(Icons.arrow_back, color: AppColors.navy, size: 24)),
+                Align(alignment: Alignment.centerLeft, child: Icon(Icons.arrow_back, color: AppColors.navy, size: 24)),
           ),
         ],
       ),
@@ -1091,7 +1091,7 @@ class _BottomButtons extends StatelessWidget {
     final bottomPad = MediaQuery.of(context).padding.bottom;
     return Container(
       padding: EdgeInsets.fromLTRB(24, 12, 24, bottomPad + 12),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.background,
         border: Border(top: BorderSide(color: AppColors.divider)),
       ),
@@ -1357,14 +1357,14 @@ class _ParticipantSearchBar extends StatelessWidget {
           hintStyle:
               AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
           prefixIcon:
-              const Icon(Icons.search, color: AppColors.textMuted, size: 20),
+              Icon(Icons.search, color: AppColors.textMuted, size: 20),
           suffixIcon: controller.text.isNotEmpty
               ? GestureDetector(
                   onTap: () {
                     controller.clear();
                     onChanged('');
                   },
-                  child: const Icon(Icons.close,
+                  child: Icon(Icons.close,
                       color: AppColors.textMuted, size: 18),
                 )
               : null,
@@ -1398,7 +1398,7 @@ class _ParticipantList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isSearching || (isLoadingFriends && query.isEmpty)) {
-      return const Padding(
+      return Padding(
         padding: EdgeInsets.symmetric(vertical: 16),
         child: Center(
             child: CircularProgressIndicator(color: AppColors.navy)),

@@ -66,7 +66,7 @@ class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
                       child: CircularProgressIndicator(
                           color: Colors.white, strokeWidth: 2),
                     ),
-                    errorWidget: (_, __, ___) => const Icon(
+                    errorWidget: (_, __, ___) => Icon(
                         Icons.broken_image,
                         color: AppColors.textMuted,
                         size: 48),

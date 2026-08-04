@@ -12,6 +12,7 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../viewmodels/profile_customization_viewmodel.dart';
 import '../viewmodels/profile_viewmodel.dart';
+import '../viewmodels/theme_viewmodel.dart';
 
 /// Configurações > Aparência: banner do perfil, moldura do avatar, cor de
 /// fundo e de texto — com prévia ao vivo. As alterações só são salvas ao
@@ -104,7 +105,7 @@ class _ProfileAppearanceScreenState extends State<ProfileAppearanceScreen> {
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
     if (!_loaded || _draft == null) {
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: AppColors.background,
         body: Center(child: CircularProgressIndicator(color: AppColors.navy)),
       );
@@ -124,7 +125,7 @@ class _ProfileAppearanceScreenState extends State<ProfileAppearanceScreen> {
         backgroundColor: AppColors.background,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.navy),
+          icon: Icon(Icons.arrow_back_ios, color: AppColors.navy),
           onPressed: () => context.pop(),
         ),
         title: Text(
@@ -137,6 +138,15 @@ class _ProfileAppearanceScreenState extends State<ProfileAppearanceScreen> {
       body: ListView(
         padding: EdgeInsets.fromLTRB(24, 8, 24, bottomPad + 24),
         children: [
+          // ── Modo escuro (aplica no app inteiro) ───────────────
+          const _Label('TEMA DO APLICATIVO'),
+          const SizedBox(height: 8),
+          _DarkModeSwitch(
+            value: context.watch<ThemeViewModel>().isDarkMode,
+            onChanged: (v) => context.read<ThemeViewModel>().setDarkMode(v),
+          ),
+          const SizedBox(height: 28),
+
           // ── Prévia ao vivo ───────────────────────────────────
           const _Label('PRÉVIA'),
           const SizedBox(height: 8),
@@ -170,7 +180,7 @@ class _ProfileAppearanceScreenState extends State<ProfileAppearanceScreen> {
                 label: const Text('Editar perfil da empresa'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.navy,
-                  side: const BorderSide(color: AppColors.navy),
+                  side: BorderSide(color: AppColors.navy),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -263,6 +273,7 @@ class _ProfileAppearanceScreenState extends State<ProfileAppearanceScreen> {
           const SizedBox(height: 10),
           _ColorPaletteRow(
             selectedId: draft.backgroundColor,
+            disabledId: draft.textColor,
             onSelect: (id) => setState(
               () => _draft = draft.copyWith(
                 backgroundColor: id == draft.backgroundColor ? null : id,
@@ -281,6 +292,7 @@ class _ProfileAppearanceScreenState extends State<ProfileAppearanceScreen> {
           const SizedBox(height: 10),
           _ColorPaletteRow(
             selectedId: draft.textColor,
+            disabledId: draft.backgroundColor,
             onSelect: (id) => setState(
               () => _draft = draft.copyWith(
                 textColor: id == draft.textColor ? null : id,
@@ -310,7 +322,7 @@ class _ProfileAppearanceScreenState extends State<ProfileAppearanceScreen> {
                         color: Colors.white,
                       ),
                     )
-                  : const Text('SALVAR', style: AppTextStyles.labelLarge),
+                  : Text('SALVAR', style: AppTextStyles.labelLarge),
             ),
           ),
           const SizedBox(height: 12),
@@ -368,7 +380,7 @@ class _LivePreviewCard extends StatelessWidget {
                 : Container(
                     height: 70,
                     width: double.infinity,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [AppColors.navy, AppColors.mediumBlue],
                         begin: Alignment.topLeft,
@@ -487,7 +499,7 @@ class _BannerPresetGrid extends StatelessWidget {
                   top: 6,
                   child: Container(
                     padding: const EdgeInsets.all(3),
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: AppColors.navy,
                       shape: BoxShape.circle,
                     ),
@@ -511,7 +523,16 @@ class _BannerPresetGrid extends StatelessWidget {
 class _ColorPaletteRow extends StatelessWidget {
   final String? selectedId;
   final ValueChanged<String> onSelect;
-  const _ColorPaletteRow({required this.selectedId, required this.onSelect});
+  // Cor já usada na OUTRA paleta (fundo↔texto): fica indisponível aqui pra
+  // evitar fundo e texto da mesma cor, o que deixa o conteúdo ilegível.
+  // Não desabilita a própria cor já selecionada, senão o usuário não
+  // conseguiria desmarcá-la.
+  final String? disabledId;
+  const _ColorPaletteRow({
+    required this.selectedId,
+    required this.onSelect,
+    this.disabledId,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -520,51 +541,92 @@ class _ColorPaletteRow extends StatelessWidget {
       runSpacing: 10,
       children: profileColorPalette.map((c) {
         final selected = selectedId == c.id;
+        final disabled = !selected && disabledId == c.id;
         return GestureDetector(
-          onTap: () => onSelect(c.id),
-          child: Column(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: c.color,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: selected ? AppColors.navy : AppColors.divider,
-                    width: selected ? 3 : 1,
+          onTap: disabled ? null : () => onSelect(c.id),
+          child: Opacity(
+            opacity: disabled ? 0.35 : 1.0,
+            child: Column(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: c.color,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: selected ? AppColors.navy : AppColors.divider,
+                      width: selected ? 3 : 1,
+                    ),
+                    boxShadow: selected
+                        ? [
+                            BoxShadow(
+                              color: AppColors.navy.withOpacity(0.25),
+                              blurRadius: 6,
+                            ),
+                          ]
+                        : null,
                   ),
-                  boxShadow: selected
-                      ? [
-                          BoxShadow(
-                            color: AppColors.navy.withOpacity(0.25),
-                            blurRadius: 6,
-                          ),
-                        ]
-                      : null,
+                  child: selected
+                      ? Icon(
+                          Icons.check,
+                          color: isLightColor(c.color)
+                              ? AppColors.navy
+                              : Colors.white,
+                          size: 18,
+                        )
+                      : disabled
+                          ? const Icon(Icons.block,
+                              color: Colors.black45, size: 16)
+                          : null,
                 ),
-                child: selected
-                    ? Icon(
-                        Icons.check,
-                        color: isLightColor(c.color)
-                            ? AppColors.navy
-                            : Colors.white,
-                        size: 18,
-                      )
-                    : null,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                c.label,
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: AppColors.textMuted,
-                  fontSize: 10,
+                const SizedBox(height: 4),
+                Text(
+                  c.label,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.textMuted,
+                    fontSize: 10,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+// ─── Toggle de modo escuro ──────────────────────────────────────────────────
+
+class _DarkModeSwitch extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _DarkModeSwitch({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.inputFill,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        value: value,
+        onChanged: onChanged,
+        activeColor: AppColors.navy,
+        secondary: Icon(
+          value ? Icons.dark_mode : Icons.dark_mode_outlined,
+          color: AppColors.navy,
+        ),
+        title: Text('Modo escuro', style: AppTextStyles.bodyMedium),
+        subtitle: Text(
+          'Preto com texto branco em todo o app',
+          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+        ),
+      ),
     );
   }
 }

@@ -26,6 +26,7 @@ class UserModel {
   final List<String> photos;
   final int friendsCount;
   final int tripsCount;
+  final int ridesCount;
   final bool isOnline;
   final DateTime? createdAt;
 
@@ -52,6 +53,7 @@ class UserModel {
     this.photos = const [],
     this.friendsCount = 0,
     this.tripsCount = 0,
+    this.ridesCount = 0,
     this.isOnline = false,
     this.createdAt,
   });
@@ -88,6 +90,7 @@ class UserModel {
     List<String>? photos,
     int? friendsCount,
     int? tripsCount,
+    int? ridesCount,
     bool? isOnline,
   }) {
     return UserModel(
@@ -114,6 +117,7 @@ class UserModel {
       photos: photos ?? this.photos,
       friendsCount: friendsCount ?? this.friendsCount,
       tripsCount: tripsCount ?? this.tripsCount,
+      ridesCount: ridesCount ?? this.ridesCount,
       isOnline: isOnline ?? this.isOnline,
       createdAt: createdAt,
     );
@@ -142,6 +146,7 @@ class UserModel {
         'photos': photos,
         'friends_count': friendsCount,
         'trips_count': tripsCount,
+        'rides_count': ridesCount,
         'is_online': isOnline,
       };
 
@@ -172,6 +177,7 @@ class UserModel {
       photos: List<String>.from(map['photos'] as List? ?? []),
       friendsCount: (map['friends_count'] as num?)?.toInt() ?? 0,
       tripsCount: (map['trips_count'] as num?)?.toInt() ?? 0,
+      ridesCount: (map['rides_count'] as num?)?.toInt() ?? 0,
       isOnline: map['is_online'] as bool? ?? false,
       createdAt: rawCreatedAt is String
           ? DateTime.tryParse(rawCreatedAt)

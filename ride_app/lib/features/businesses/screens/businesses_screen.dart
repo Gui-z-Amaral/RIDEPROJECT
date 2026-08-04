@@ -126,7 +126,7 @@ class _BusinessesScreenState extends State<BusinessesScreen> {
         backgroundColor: AppColors.background,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.navy),
+          icon: Icon(Icons.arrow_back_ios, color: AppColors.navy),
           onPressed: () => context.pop(),
         ),
         title: Text('Empresas confiáveis',
@@ -178,7 +178,7 @@ class _BusinessesScreenState extends State<BusinessesScreen> {
 
   Widget _buildBody() {
     if (_loadingLocation) {
-      return const Center(
+      return Center(
           child: CircularProgressIndicator(color: AppColors.navy));
     }
     if (_locationError != null) {
@@ -188,7 +188,7 @@ class _BusinessesScreenState extends State<BusinessesScreen> {
       );
     }
     if (_loadingResults && _results.isEmpty) {
-      return const Center(
+      return Center(
           child: CircularProgressIndicator(color: AppColors.navy));
     }
     if (_results.isEmpty) {
@@ -314,20 +314,20 @@ class _BusinessCard extends StatelessWidget {
                       fit: BoxFit.cover,
                       placeholder: (_, __) => Container(
                         color: AppColors.inputFill,
-                        child: const Center(
+                        child: Center(
                             child: CircularProgressIndicator(
                                 strokeWidth: 2,
                                 color: AppColors.navy)),
                       ),
                       errorWidget: (_, __, ___) => Container(
                         color: AppColors.inputFill,
-                        child: const Icon(Icons.store,
+                        child: Icon(Icons.store,
                             color: AppColors.textMuted, size: 42),
                       ),
                     )
                   : Container(
                       color: AppColors.inputFill,
-                      child: const Icon(Icons.store,
+                      child: Icon(Icons.store,
                           color: AppColors.textMuted, size: 42),
                     ),
             ),
@@ -361,7 +361,7 @@ class _BusinessCard extends StatelessWidget {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        const Icon(Icons.location_on_outlined,
+                        Icon(Icons.location_on_outlined,
                             size: 14, color: AppColors.textMuted),
                         const SizedBox(width: 4),
                         Expanded(
@@ -394,7 +394,7 @@ class _BusinessCard extends StatelessWidget {
                                   .copyWith(fontWeight: FontWeight.w700)),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.navy,
-                            side: const BorderSide(color: AppColors.navy),
+                            side: BorderSide(color: AppColors.navy),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(
                                   AppSpacing.radiusMd),

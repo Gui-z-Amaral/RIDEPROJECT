@@ -6,6 +6,8 @@ import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
 import '../viewmodels/notifications_viewmodel.dart';
 import '../../../core/models/notification_model.dart';
+import '../../../core/models/ride_model.dart';
+import '../../../core/models/trip_model.dart';
 import '../../../core/services/supabase_trip_service.dart';
 import '../../../core/services/supabase_ride_service.dart';
 import '../../social/viewmodels/social_viewmodel.dart';
@@ -42,6 +44,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 style: AppTextStyles.labelSmall.copyWith(color: AppColors.teal),
               ),
             ),
+          if (vm.notifications.isNotEmpty)
+            IconButton(
+              tooltip: 'Limpar notificações',
+              icon: const Icon(Icons.delete_sweep_outlined),
+              color: AppColors.textMuted,
+              onPressed: () => _confirmClearAll(context, vm),
+            ),
         ],
       ),
       body: vm.isLoading
@@ -52,7 +61,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.notifications_none,
+                      Icon(Icons.notifications_none,
                           color: AppColors.textMuted, size: 56),
                       const SizedBox(height: AppSpacing.md),
                       Text('Nenhuma notificação',
@@ -68,7 +77,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           MediaQuery.of(context).padding.bottom),
                   itemCount: vm.notifications.length,
                   separatorBuilder: (_, __) =>
-                      const Divider(height: 1, color: AppColors.divider),
+                      Divider(height: 1, color: AppColors.divider),
                   itemBuilder: (_, i) {
                     final notif = vm.notifications[i];
                     return _NotifTile(
@@ -77,6 +86,39 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     );
                   },
                 ),
+    );
+  }
+
+  Future<void> _confirmClearAll(
+      BuildContext context, NotificationsViewModel vm) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Limpar notificações'),
+        content: const Text(
+            'Isso vai apagar todo o histórico de notificações. Deseja continuar?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: Text('Limpar',
+                style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await vm.clearAll();
+  }
+
+  void _showEndedInfo(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
@@ -90,11 +132,41 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
 
     if (notif.type == 'trip_invite') {
+      final tripId = notif.data['tripId'] as String?;
+      TripModel? trip;
+      if (tripId != null) {
+        try {
+          trip = await SupabaseTripService.getTripById(tripId);
+        } catch (_) {}
+      }
+      if (!context.mounted) return;
+      if (trip == null ||
+          trip.status == TripStatus.completed ||
+          trip.status == TripStatus.cancelled) {
+        await vm.remove(notif.id);
+        if (context.mounted) _showEndedInfo(context, 'Essa viagem já foi encerrada.');
+        return;
+      }
       _showTripInviteSheet(context, vm, notif);
       return;
     }
 
     if (notif.type == 'ride_invite') {
+      final rideId = notif.data['rideId'] as String?;
+      RideModel? ride;
+      if (rideId != null) {
+        try {
+          ride = await SupabaseRideService.getRideById(rideId);
+        } catch (_) {}
+      }
+      if (!context.mounted) return;
+      if (ride == null ||
+          ride.status == RideStatus.completed ||
+          ride.status == RideStatus.cancelled) {
+        await vm.remove(notif.id);
+        if (context.mounted) _showEndedInfo(context, 'Esse rolê já foi encerrado.');
+        return;
+      }
       _showRideInviteSheet(context, vm, notif);
       return;
     }
@@ -581,7 +653,7 @@ class _FriendRequestSheet extends StatelessWidget {
               color: AppColors.navy.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.person_add_outlined,
+            child: Icon(Icons.person_add_outlined,
                 color: AppColors.navy, size: 32),
           ),
           const SizedBox(height: AppSpacing.md),

@@ -71,7 +71,7 @@ class SupabaseRideService {
           )
         ''')
         .eq('user_id', _uid)
-        .order('created_at', ascending: false);
+        .order('joined_at', ascending: false);
 
     return (rows as List).map((r) {
       final ride = r['ride'] as Map<String, dynamic>;
@@ -130,6 +130,11 @@ class SupabaseRideService {
         {'ride_id': rideId, 'user_id': _uid},
       );
     }
+
+    // Atualiza rides_count do criador (best-effort — RPC pode não existir)
+    try {
+      await _db.rpc('update_rides_count', params: {'p_user_id': _uid});
+    } catch (_) {}
 
     return (await getRideById(rideId))!;
   }

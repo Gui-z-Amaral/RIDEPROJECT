@@ -2,7 +2,7 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/event_model.dart';
 import '../models/user_model.dart';
-import '../utils/image_utils.dart';
+import '../utils/storage_utils.dart';
 
 class SupabaseEventService {
   static SupabaseClient get _db => Supabase.instance.client;
@@ -284,26 +284,22 @@ class SupabaseEventService {
 
   // ── Upload de banner (reusa bucket 'avatars') ──────────────
   static Future<String> uploadBanner(Uint8List bytes) async {
-    final jpeg = await ImageUtils.compressToJpeg(bytes);
-    final path = '$_uid/event_${DateTime.now().millisecondsSinceEpoch}.jpg';
-    await _db.storage.from('avatars').uploadBinary(
-          path,
-          jpeg,
-          fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true),
-        );
-    return _db.storage.from('avatars').getPublicUrl(path);
+    return StorageUtils.uploadImageUnique(
+      bucket: 'avatars',
+      uid: _uid,
+      prefix: 'event',
+      bytes: bytes,
+    );
   }
 
   // ── Upload de logo de patrocinador (reusa bucket 'avatars') ─
   static Future<String> uploadSponsorLogo(Uint8List bytes) async {
-    final jpeg = await ImageUtils.compressToJpeg(bytes);
-    final path = '$_uid/sponsor_${DateTime.now().millisecondsSinceEpoch}.jpg';
-    await _db.storage.from('avatars').uploadBinary(
-          path,
-          jpeg,
-          fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true),
-        );
-    return _db.storage.from('avatars').getPublicUrl(path);
+    return StorageUtils.uploadImageUnique(
+      bucket: 'avatars',
+      uid: _uid,
+      prefix: 'sponsor',
+      bytes: bytes,
+    );
   }
 
   /// Usuários cadastrados pra buscar como participantes extras.

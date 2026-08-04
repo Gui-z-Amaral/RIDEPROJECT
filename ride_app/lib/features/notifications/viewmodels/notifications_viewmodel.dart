@@ -57,6 +57,34 @@ class NotificationsViewModel extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Remove uma notificação (otimista, com rollback se falhar).
+  Future<void> remove(String id) async {
+    final index = _notifications.indexWhere((n) => n.id == id);
+    if (index < 0) return;
+    final removed = _notifications[index];
+    _notifications = List.of(_notifications)..removeAt(index);
+    notifyListeners();
+    try {
+      await SupabaseNotificationService.delete(id);
+    } catch (_) {
+      _notifications = List.of(_notifications)..insert(index, removed);
+      notifyListeners();
+    }
+  }
+
+  Future<void> clearAll() async {
+    if (_notifications.isEmpty) return;
+    final previous = _notifications;
+    _notifications = [];
+    notifyListeners();
+    try {
+      await SupabaseNotificationService.clearAll();
+    } catch (_) {
+      _notifications = previous;
+      notifyListeners();
+    }
+  }
+
   /// Limpa estado e cancela canal — chamado no logout.
   void reset() {
     _channel?.unsubscribe();

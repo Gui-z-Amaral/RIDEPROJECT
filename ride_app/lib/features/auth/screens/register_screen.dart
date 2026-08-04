@@ -71,7 +71,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: IconButton(
-                    icon: const Icon(Icons.arrow_back_ios,
+                    icon: Icon(Icons.arrow_back_ios,
                         color: AppColors.navy, size: 22),
                     onPressed: () => context.go('/login'),
                     padding: EdgeInsets.zero,
@@ -169,7 +169,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             child: CircularProgressIndicator(
                                 strokeWidth: 2.5, color: Colors.white),
                           )
-                        : const Text('CADASTRAR',
+                        : Text('CADASTRAR',
                             style: AppTextStyles.labelLarge),
                   ),
                 ),

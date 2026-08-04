@@ -112,7 +112,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: IconButton(
-                  icon: const Icon(Icons.arrow_back_ios,
+                  icon: Icon(Icons.arrow_back_ios,
                       color: AppColors.navy, size: 22),
                   onPressed: () => context.pop(),
                   padding: EdgeInsets.zero,
@@ -126,7 +126,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   color: AppColors.navy.withOpacity(0.08),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.lock_reset,
+                child: Icon(Icons.lock_reset,
                     color: AppColors.navy, size: 34),
               ),
               const SizedBox(height: 20),
@@ -166,7 +166,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             child: CircularProgressIndicator(
                                 strokeWidth: 2.5, color: Colors.white),
                           )
-                        : const Text('ENVIAR CÓDIGO',
+                        : Text('ENVIAR CÓDIGO',
                             style: AppTextStyles.labelLarge),
                   ),
                 ),
@@ -231,7 +231,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             child: CircularProgressIndicator(
                                 strokeWidth: 2.5, color: Colors.white),
                           )
-                        : const Text('ALTERAR SENHA',
+                        : Text('ALTERAR SENHA',
                             style: AppTextStyles.labelLarge),
                   ),
                 ),

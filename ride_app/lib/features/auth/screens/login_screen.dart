@@ -156,7 +156,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: CircularProgressIndicator(
                                 strokeWidth: 2.5, color: Colors.white),
                           )
-                        : const Text('LOGIN',
+                        : Text('LOGIN',
                             style: AppTextStyles.labelLarge),
                   ),
                 ),
@@ -166,14 +166,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 // Divider ou
                 Row(
                   children: [
-                    const Expanded(child: Divider(color: AppColors.divider)),
+                    Expanded(child: Divider(color: AppColors.divider)),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       child: Text('ou',
                           style: AppTextStyles.bodySmall
                               .copyWith(color: AppColors.textMuted)),
                     ),
-                    const Expanded(child: Divider(color: AppColors.divider)),
+                    Expanded(child: Divider(color: AppColors.divider)),
                   ],
                 ),
 
@@ -186,7 +186,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: OutlinedButton(
                     onPressed: loading ? null : _loginWithGoogle,
                     style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.divider),
+                      side: BorderSide(color: AppColors.divider),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -241,7 +241,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   height: 52,
                   child: ElevatedButton(
                     onPressed: () => context.go('/register'),
-                    child: const Text('CADASTRE-SE',
+                    child: Text('CADASTRE-SE',
                         style: AppTextStyles.labelLarge),
                   ),
                 ),

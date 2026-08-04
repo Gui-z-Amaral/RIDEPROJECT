@@ -34,6 +34,16 @@ class SupabaseNotificationService {
         .eq('is_read', false);
   }
 
+  // ── Limpar todo o histórico de notificações ────────────────
+  static Future<void> clearAll() async {
+    await _db.from('notifications').delete().eq('user_id', _uid);
+  }
+
+  // ── Apagar uma notificação específica ──────────────────────
+  static Future<void> delete(String id) async {
+    await _db.from('notifications').delete().eq('id', id).eq('user_id', _uid);
+  }
+
   // ── Enviar convite para uma lista de usuários ──────────────
   static Future<void> sendInviteNotifications({
     required List<String> userIds,

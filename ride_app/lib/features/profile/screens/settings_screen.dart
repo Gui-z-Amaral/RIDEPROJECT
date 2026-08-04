@@ -66,7 +66,7 @@ class SettingsScreen extends StatelessWidget {
         backgroundColor: AppColors.background,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.navy),
+          icon: Icon(Icons.arrow_back_ios, color: AppColors.navy),
           onPressed: () => context.pop(),
         ),
         title: Text('Configurações',
@@ -109,12 +109,12 @@ class SettingsScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: ListTile(
-              leading: const Icon(Icons.palette_outlined, color: AppColors.navy),
+              leading: Icon(Icons.palette_outlined, color: AppColors.navy),
               title: Text('Aparência do perfil', style: AppTextStyles.bodyMedium),
               subtitle: Text('Banner, moldura do avatar e cores',
                   style: AppTextStyles.bodySmall
                       .copyWith(color: AppColors.textMuted)),
-              trailing: const Icon(Icons.chevron_right,
+              trailing: Icon(Icons.chevron_right,
                   color: AppColors.textMuted),
               onTap: () => context.push('/profile/appearance'),
             ),
@@ -131,12 +131,12 @@ class SettingsScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: ListTile(
-              leading: const Icon(Icons.lock_reset, color: AppColors.navy),
+              leading: Icon(Icons.lock_reset, color: AppColors.navy),
               title: Text('Trocar senha', style: AppTextStyles.bodyMedium),
               subtitle: Text('Enviaremos um código para o seu email',
                   style: AppTextStyles.bodySmall
                       .copyWith(color: AppColors.textMuted)),
-              trailing: const Icon(Icons.chevron_right,
+              trailing: Icon(Icons.chevron_right,
                   color: AppColors.textMuted),
               onTap: () {
                 final email = Supabase
@@ -157,13 +157,13 @@ class SettingsScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: ListTile(
-              leading: const Icon(Icons.history, color: AppColors.navy),
+              leading: Icon(Icons.history, color: AppColors.navy),
               title: Text('Histórico de rolês e viagens',
                   style: AppTextStyles.bodyMedium),
               subtitle: Text('Veja tudo e remova do seu perfil',
                   style: AppTextStyles.bodySmall
                       .copyWith(color: AppColors.textMuted)),
-              trailing: const Icon(Icons.chevron_right,
+              trailing: Icon(Icons.chevron_right,
                   color: AppColors.textMuted),
               onTap: () => context.push('/profile/history'),
             ),
@@ -180,7 +180,7 @@ class SettingsScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: ListTile(
-              leading: const Icon(Icons.info_outline, color: AppColors.navy),
+              leading: Icon(Icons.info_outline, color: AppColors.navy),
               title: Text('Versão', style: AppTextStyles.bodyMedium),
               trailing: Text('1.0.0',
                   style: AppTextStyles.bodySmall

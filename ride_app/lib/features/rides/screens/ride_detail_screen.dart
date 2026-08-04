@@ -112,7 +112,7 @@ class _RideDetailScreenState extends State<RideDetailScreen> {
                     const Divider(height: AppSpacing.lg),
                     Row(
                       children: [
-                        const Icon(Icons.schedule, color: AppColors.textMuted, size: 18),
+                        Icon(Icons.schedule, color: AppColors.textMuted, size: 18),
                         const SizedBox(width: AppSpacing.sm),
                         Text('${ride.scheduledAt!.relativeLabel} às ${ride.scheduledAt!.formattedTime}', style: AppTextStyles.bodyMedium),
                       ],

@@ -947,3 +947,68 @@ CREATE POLICY "profile_customizations_update" ON profile_customizations
 DROP POLICY IF EXISTS "profile_customizations_delete" ON profile_customizations;
 CREATE POLICY "profile_customizations_delete" ON profile_customizations
     FOR DELETE USING (auth.uid() = user_id);
+
+-- ═════════════════════════════════════════════════════════════════════════════
+-- 021_rides_count.sql
+-- ═════════════════════════════════════════════════════════════════════════════
+-- Contagem de rolês criados/participados (mesmo padrão de trips_count).
+ALTER TABLE profiles
+    ADD COLUMN IF NOT EXISTS rides_count INT DEFAULT 0;
+
+CREATE OR REPLACE FUNCTION public.update_rides_count(p_user_id UUID)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  UPDATE profiles
+  SET rides_count = (
+    SELECT COUNT(*) FROM ride_participants WHERE user_id = p_user_id
+  )
+  WHERE id = p_user_id;
+END;
+$$;
+
+SELECT public.update_rides_count(id) FROM profiles;
+
+-- ═════════════════════════════════════════════════════════════════════════════
+-- 022_fix_storage_rls_authrole.sql
+-- ═════════════════════════════════════════════════════════════════════════════
+-- Corrige RLS de storage.objects que usava auth.role() = 'authenticated'.
+-- Troca para auth.uid() IS NOT NULL (mesmo padrão já usado em outras tabelas).
+DROP POLICY IF EXISTS "avatars_storage_insert" ON storage.objects;
+CREATE POLICY "avatars_storage_insert"
+    ON storage.objects FOR INSERT
+    WITH CHECK (
+        bucket_id = 'avatars'
+        AND auth.uid() IS NOT NULL
+    );
+
+DROP POLICY IF EXISTS "avatars_storage_update" ON storage.objects;
+CREATE POLICY "avatars_storage_update"
+    ON storage.objects FOR UPDATE
+    USING (
+        bucket_id = 'avatars'
+        AND auth.uid() IS NOT NULL
+    );
+
+DROP POLICY IF EXISTS "trip_photos_storage_insert" ON storage.objects;
+CREATE POLICY "trip_photos_storage_insert"
+    ON storage.objects FOR INSERT
+    WITH CHECK (
+        bucket_id = 'trip-photos'
+        AND auth.uid() IS NOT NULL
+    );
+
+DROP POLICY IF EXISTS "chat_images_storage_insert" ON storage.objects;
+CREATE POLICY "chat_images_storage_insert"
+    ON storage.objects FOR INSERT
+    WITH CHECK (
+        bucket_id = 'chat-images'
+        AND auth.uid() IS NOT NULL
+    );
+
+DROP POLICY IF EXISTS "user_photos_storage_insert" ON storage.objects;
+CREATE POLICY "user_photos_storage_insert"
+    ON storage.objects FOR INSERT
+    WITH CHECK (
+        bucket_id = 'user-photos'
+        AND auth.uid() IS NOT NULL
+    );

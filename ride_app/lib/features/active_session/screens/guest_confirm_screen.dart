@@ -58,7 +58,7 @@ class _GuestConfirmScreenState extends State<GuestConfirmScreen> {
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [AppColors.deepNavy, AppColors.darkNavy],
             begin: Alignment.topCenter,

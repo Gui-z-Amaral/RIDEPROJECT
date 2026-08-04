@@ -86,7 +86,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: IconButton(
-                  icon: const Icon(Icons.arrow_back_ios,
+                  icon: Icon(Icons.arrow_back_ios,
                       color: AppColors.navy, size: 22),
                   onPressed: () => context.go('/login'),
                   padding: EdgeInsets.zero,
@@ -100,7 +100,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                   color: AppColors.navy.withOpacity(0.08),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.mark_email_read_outlined,
+                child: Icon(Icons.mark_email_read_outlined,
                     color: AppColors.navy, size: 34),
               ),
               const SizedBox(height: 20),
@@ -147,7 +147,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                           child: CircularProgressIndicator(
                               strokeWidth: 2.5, color: Colors.white),
                         )
-                      : const Text('CONFIRMAR', style: AppTextStyles.labelLarge),
+                      : Text('CONFIRMAR', style: AppTextStyles.labelLarge),
                 ),
               ),
               const SizedBox(height: 16),

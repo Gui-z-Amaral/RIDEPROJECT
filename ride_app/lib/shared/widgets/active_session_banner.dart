@@ -46,7 +46,7 @@ class ActiveSessionBanner extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.deepNavy, size: 20),
+            Icon(Icons.chevron_right, color: AppColors.deepNavy, size: 20),
           ],
         ),
       ),
@@ -85,7 +85,7 @@ class _PulsingDotState extends State<_PulsingDot> with SingleTickerProviderState
       child: Container(
         width: 10,
         height: 10,
-        decoration: const BoxDecoration(color: AppColors.deepNavy, shape: BoxShape.circle),
+        decoration: BoxDecoration(color: AppColors.deepNavy, shape: BoxShape.circle),
       ),
     );
   }

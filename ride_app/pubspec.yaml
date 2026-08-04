@@ -1,7 +1,7 @@
 name: ride_app
 description: Ride - Rolês e Viagens de Moto
 publish_to: 'none'
-version: 0.0.2+2
+version: 0.0.8+8
 
 environment:
   sdk: ^3.11.3
@@ -41,6 +41,9 @@ dependencies:
   # Criptografia ponta a ponta do chat (E2EE)
   cryptography: ^2.7.0
   flutter_secure_storage: ^9.2.2
+
+  # Preferências locais (ex: modo escuro)
+  shared_preferences: ^2.3.2
 
   # Utils
   intl: ^0.19.0

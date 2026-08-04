@@ -108,7 +108,7 @@ class _WaitingScreenState extends State<WaitingScreen> {
                   ),
                   TextSpan(
                     text: '/${vm.participants.length}',
-                    style: const TextStyle(color: AppColors.textMuted),
+                    style: TextStyle(color: AppColors.textMuted),
                   ),
                   TextSpan(
                     text: ' confirmados',

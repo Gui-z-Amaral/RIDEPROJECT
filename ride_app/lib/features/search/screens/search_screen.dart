@@ -212,7 +212,7 @@ class _SearchScreenState extends State<SearchScreen> {
         backgroundColor: AppColors.background,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.navy),
+          icon: Icon(Icons.arrow_back_ios, color: AppColors.navy),
           onPressed: () => context.pop(),
         ),
         titleSpacing: 0,
@@ -232,7 +232,7 @@ class _SearchScreenState extends State<SearchScreen> {
         actions: [
           if (_query.isNotEmpty)
             IconButton(
-              icon: const Icon(Icons.close, color: AppColors.textMuted),
+              icon: Icon(Icons.close, color: AppColors.textMuted),
               onPressed: () {
                 _ctrl.clear();
                 _onChanged('');
@@ -339,7 +339,7 @@ class _LoadingRow extends StatelessWidget {
   const _LoadingRow();
   @override
   Widget build(BuildContext context) {
-    return const Padding(
+    return Padding(
       padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
       child: Center(
         child: SizedBox(
@@ -382,13 +382,13 @@ class _PlaceTile extends StatelessWidget {
                         ),
                         errorWidget: (_, __, ___) => Container(
                           color: AppColors.inputFill,
-                          child: const Icon(Icons.place,
+                          child: Icon(Icons.place,
                               color: AppColors.textMuted, size: 24),
                         ),
                       )
                     : Container(
                         color: AppColors.inputFill,
-                        child: const Icon(Icons.place,
+                        child: Icon(Icons.place,
                             color: AppColors.textMuted, size: 24),
                       ),
               ),
@@ -439,7 +439,7 @@ class _PlaceTile extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.textMuted),
+            Icon(Icons.chevron_right, color: AppColors.textMuted),
           ],
         ),
       ),
@@ -480,7 +480,7 @@ class _UserTile extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.textMuted),
+            Icon(Icons.chevron_right, color: AppColors.textMuted),
           ],
         ),
       ),
@@ -530,7 +530,7 @@ class _TripTile extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.textMuted),
+            Icon(Icons.chevron_right, color: AppColors.textMuted),
           ],
         ),
       ),
@@ -571,12 +571,12 @@ class _EventTile extends StatelessWidget {
                         fit: BoxFit.cover,
                         errorWidget: (_, __, ___) => Container(
                           color: AppColors.navy.withOpacity(0.1),
-                          child: const Icon(Icons.event, color: AppColors.navy),
+                          child: Icon(Icons.event, color: AppColors.navy),
                         ),
                       )
                     : Container(
                         color: AppColors.navy.withOpacity(0.1),
-                        child: const Icon(Icons.event, color: AppColors.navy),
+                        child: Icon(Icons.event, color: AppColors.navy),
                       ),
               ),
             ),
@@ -597,7 +597,7 @@ class _EventTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis),
                   Row(
                     children: [
-                      const Icon(Icons.people_outline,
+                      Icon(Icons.people_outline,
                           size: 12, color: AppColors.textMuted),
                       const SizedBox(width: 3),
                       Text('${event.interestsCount}',
@@ -608,7 +608,7 @@ class _EventTile extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.textMuted),
+            Icon(Icons.chevron_right, color: AppColors.textMuted),
           ],
         ),
       ),
@@ -658,7 +658,7 @@ class _RideTile extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.textMuted),
+            Icon(Icons.chevron_right, color: AppColors.textMuted),
           ],
         ),
       ),

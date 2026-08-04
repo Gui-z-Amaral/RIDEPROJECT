@@ -79,7 +79,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 16),
             ListTile(
-              leading: const Icon(
+              leading: Icon(
                 Icons.camera_alt_outlined,
                 color: AppColors.navy,
               ),
@@ -87,7 +87,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: () => Navigator.pop(context, ImageSource.camera),
             ),
             ListTile(
-              leading: const Icon(
+              leading: Icon(
                 Icons.photo_library_outlined,
                 color: AppColors.navy,
               ),
@@ -203,7 +203,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.calendar_today,
                     size: 14,
                     color: AppColors.textMuted,
@@ -228,7 +228,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     label: const Text('Ver detalhes'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.navy,
-                      side: const BorderSide(color: AppColors.navy),
+                      side: BorderSide(color: AppColors.navy),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -381,7 +381,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Stack(
                   children: [
                     IconButton(
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.people_outline,
                         color: AppColors.navy,
                       ),
@@ -415,7 +415,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const Spacer(),
                 // Buscar / adicionar amigos
                 IconButton(
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.person_add_outlined,
                     color: AppColors.navy,
                   ),
@@ -423,7 +423,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 // Configurações
                 IconButton(
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.settings_outlined,
                     color: AppColors.navy,
                   ),
@@ -431,7 +431,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 // Logout
                 IconButton(
-                  icon: const Icon(Icons.logout, color: AppColors.navy),
+                  icon: Icon(Icons.logout, color: AppColors.navy),
                   onPressed: () => _handleLogout(context),
                 ),
               ],
@@ -441,7 +441,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
           SliverToBoxAdapter(
             child: (user?.isBusiness ?? false)
                 ? _buildBusinessBody(user, vm, eventVm, bottomPad)
-                : Container(
+                : Column(
+                    children: [
+                      // ── Bloco personalizado (banner/avatar/nome/stats) ──
+                      // Só esta parte usa profileBgColor/profileTextColor —
+                      // o resto do perfil (bio, contatos, fotos, histórico)
+                      // segue as cores padrão do app, que já se adaptam ao
+                      // modo claro/escuro. Isolar assim evita o problema de
+                      // contraste (texto padrão em cima de um fundo custom).
+                      Container(
                     color: profileBgColor,
                     child: Column(
                       children: [
@@ -511,8 +519,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                               const SizedBox(width: 10),
                               _StatBox(
-                                value: '0',
-                                label: 'Rolês',
+                                value: '${user?.ridesCount ?? 0}',
+                                label: 'Rolês\ncriados',
                                 outlineColor: profileTextColor,
                                 fillColor: profileBgColor,
                               ),
@@ -551,8 +559,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             child: OutlinedButton(
                               onPressed: () => context.push('/profile/edit'),
                               style: OutlinedButton.styleFrom(
-                                side: const BorderSide(
-                                  color: AppColors.navy,
+                                side: BorderSide(
+                                  color: profileTextColor,
                                   width: 1.5,
                                 ),
                                 padding: const EdgeInsets.symmetric(
@@ -565,7 +573,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               child: Text(
                                 'EDITAR PERFIL',
                                 style: AppTextStyles.labelMedium.copyWith(
-                                  color: AppColors.navy,
+                                  color: profileTextColor,
                                   fontWeight: FontWeight.w800,
                                 ),
                               ),
@@ -573,9 +581,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                         const SizedBox(height: 24),
-                        const Divider(height: 1),
+                      ],
+                    ),
+                      ),
+                      const Divider(height: 1),
 
-                        // ── Bio ────────────────────────────────────────
+                      // ── Bio ────────────────────────────────────────
                         if (user?.bio != null && user!.bio!.isNotEmpty) ...[
                           Padding(
                             padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
@@ -700,7 +711,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 onTap: () => _pickAndUploadPhoto(context),
                                 child: Row(
                                   children: [
-                                    const Icon(
+                                    Icon(
                                       Icons.add_a_photo_outlined,
                                       color: AppColors.navy,
                                       size: 18,
@@ -1032,7 +1043,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                           ],
                                         ),
                                       ),
-                                      const Icon(
+                                      Icon(
                                         Icons.chevron_right,
                                         color: AppColors.textMuted,
                                         size: 20,
@@ -1048,7 +1059,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         SizedBox(height: bottomPad + 100),
                       ],
                     ),
-                  ),
           ),
         ],
       ),
@@ -1247,7 +1257,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onTap: () => context.push('/events/create'),
                 child: Row(
                   children: [
-                    const Icon(Icons.add, color: AppColors.navy, size: 18),
+                    Icon(Icons.add, color: AppColors.navy, size: 18),
                     const SizedBox(width: 4),
                     Text(
                       'Criar',
@@ -1262,7 +1272,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 12),
           if (eventVm.isLoadingMine && eventVm.myEvents.isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Center(
                 child: CircularProgressIndicator(color: AppColors.navy),
@@ -1334,7 +1344,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       );
                     },
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: AppColors.navy, width: 1.5),
+                side: BorderSide(color: AppColors.navy, width: 1.5),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -1560,6 +1570,9 @@ class _StatBox extends StatelessWidget {
     final outline = outlineColor ?? AppColors.navy;
     return Expanded(
       child: Container(
+        // Altura fixa: garante que todos os 4 cards fiquem do mesmo tamanho
+        // mesmo quando o label tem 1 ou 2 linhas.
+        height: 62,
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
         decoration: BoxDecoration(
           color: fillColor ?? AppColors.inputFill,
@@ -1568,6 +1581,7 @@ class _StatBox extends StatelessWidget {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
               value,
@@ -1622,7 +1636,7 @@ class _ContactCard extends StatelessWidget {
               child: user.avatarUrl == null
                   ? Text(
                       user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                         color: AppColors.navy,

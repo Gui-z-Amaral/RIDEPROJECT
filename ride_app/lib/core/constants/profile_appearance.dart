@@ -18,7 +18,7 @@ class AvatarFrameStyle {
   });
 }
 
-const List<AvatarFrameStyle> avatarFrames = [
+List<AvatarFrameStyle> avatarFrames = [
   AvatarFrameStyle(id: 'none', label: 'Sem moldura', colors: []),
   AvatarFrameStyle(
       id: 'teal_glow', label: 'Ciano', colors: [AppColors.teal]),

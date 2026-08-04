@@ -149,13 +149,13 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               const SizedBox(height: AppSpacing.lg),
               ListTile(
-                leading: const Icon(Icons.camera_alt_outlined,
+                leading: Icon(Icons.camera_alt_outlined,
                     color: AppColors.navy),
                 title: Text('Câmera', style: AppTextStyles.titleMedium),
                 onTap: () => Navigator.pop(context, ImageSource.camera),
               ),
               ListTile(
-                leading: const Icon(Icons.photo_library_outlined,
+                leading: Icon(Icons.photo_library_outlined,
                     color: AppColors.navy),
                 title: Text('Galeria', style: AppTextStyles.titleMedium),
                 onTap: () => Navigator.pop(context, ImageSource.gallery),
@@ -181,7 +181,7 @@ class _ChatScreenState extends State<ChatScreen> {
         surfaceTintColor: Colors.transparent,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.navy),
+          icon: Icon(Icons.arrow_back_ios, color: AppColors.navy),
           onPressed: () => context.pop(),
         ),
         titleSpacing: 0,
@@ -247,7 +247,7 @@ class _ChatScreenState extends State<ChatScreen> {
           SafeArea(
             top: false,
             child: Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 border: Border(top: BorderSide(color: AppColors.divider)),
                 color: AppColors.surface,
               ),
@@ -257,7 +257,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [
                   // Botão de imagem
                   _sendingImage
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 40,
                           height: 40,
                           child: Padding(
@@ -271,11 +271,11 @@ class _ChatScreenState extends State<ChatScreen> {
                           child: Container(
                             width: 40,
                             height: 40,
-                            decoration: const BoxDecoration(
+                            decoration: BoxDecoration(
                               color: AppColors.inputFill,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.image_outlined,
+                            child: Icon(Icons.image_outlined,
                                 color: AppColors.navy, size: 20),
                           ),
                         ),
@@ -307,7 +307,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: Container(
                       width: 44,
                       height: 44,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                           color: AppColors.navy, shape: BoxShape.circle),
                       child: const Icon(Icons.send,
                           color: Colors.white, size: 20),
@@ -378,14 +378,14 @@ class _ChatBubble extends StatelessWidget {
                       placeholder: (_, __) => Container(
                         height: 180,
                         color: AppColors.inputFill,
-                        child: const Center(
+                        child: Center(
                             child: CircularProgressIndicator(
                                 color: AppColors.navy, strokeWidth: 2)),
                       ),
                       errorWidget: (_, __, ___) => Container(
                         height: 100,
                         color: AppColors.inputFill,
-                        child: const Center(
+                        child: Center(
                             child: Icon(Icons.broken_image,
                                 color: AppColors.textMuted)),
                       ),

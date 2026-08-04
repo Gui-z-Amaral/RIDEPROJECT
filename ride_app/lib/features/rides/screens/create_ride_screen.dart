@@ -160,7 +160,7 @@ class _CreateRideScreenState extends State<CreateRideScreen> {
             style: AppTextStyles.headlineMedium
                 .copyWith(fontWeight: FontWeight.w800)),
         leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios, color: AppColors.navy),
+            icon: Icon(Icons.arrow_back_ios, color: AppColors.navy),
             onPressed: _prevStep),
         elevation: 0,
       ),
@@ -254,7 +254,7 @@ class _CreateRideScreenState extends State<CreateRideScreen> {
               hintText: 'Buscar por nome ou @username',
               hintStyle: AppTextStyles.bodySmall
                   .copyWith(color: AppColors.textMuted),
-              prefixIcon: const Icon(Icons.search,
+              prefixIcon: Icon(Icons.search,
                   color: AppColors.textMuted, size: 20),
               suffixIcon: _searchCtrl.text.isNotEmpty
                   ? GestureDetector(
@@ -262,7 +262,7 @@ class _CreateRideScreenState extends State<CreateRideScreen> {
                         _searchCtrl.clear();
                         setState(() {});
                       },
-                      child: const Icon(Icons.close,
+                      child: Icon(Icons.close,
                           color: AppColors.textMuted, size: 18),
                     )
                   : null,
@@ -276,7 +276,7 @@ class _CreateRideScreenState extends State<CreateRideScreen> {
 
         // ── Lista de usuários ───────────────────────────────────
         if (loading)
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
             child: Center(
                 child: CircularProgressIndicator(color: AppColors.navy)),
@@ -430,7 +430,7 @@ class _CreateRideScreenState extends State<CreateRideScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.add_location_alt_outlined,
+                  Icon(Icons.add_location_alt_outlined,
                       color: AppColors.navy, size: 36),
                   const SizedBox(height: 8),
                   Text('Selecionar ponto de encontro',
@@ -720,7 +720,7 @@ class _MeetingPointCard extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close,
+                  icon: Icon(Icons.close,
                       size: 18, color: AppColors.textMuted),
                   onPressed: onClear,
                   padding: EdgeInsets.zero,
@@ -783,7 +783,7 @@ class _MeetingPointCard extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.edit_location_alt,
+                  Icon(Icons.edit_location_alt,
                       size: 14, color: AppColors.navy),
                   const SizedBox(width: 4),
                   Text('Trocar local',
@@ -827,7 +827,7 @@ class _SelectedChip extends StatelessWidget {
             child: user.avatarUrl == null
                 ? Text(
                     user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
                         color: AppColors.navy),
@@ -842,7 +842,7 @@ class _SelectedChip extends StatelessWidget {
           const SizedBox(width: 4),
           GestureDetector(
             onTap: onRemove,
-            child: const Icon(Icons.close, size: 14, color: AppColors.navy),
+            child: Icon(Icons.close, size: 14, color: AppColors.navy),
           ),
         ],
       ),
