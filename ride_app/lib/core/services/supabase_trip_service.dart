@@ -5,6 +5,7 @@ import '../models/location_model.dart';
 import '../models/user_model.dart';
 import '../models/trip_photo_model.dart';
 import '../models/session_invite.dart';
+import '../models/event_model.dart';
 import '../utils/image_utils.dart';
 import 'supabase_notification_service.dart';
 import 'supabase_social_service.dart';
@@ -17,10 +18,13 @@ class SupabaseTripService {
   // Só viagens que eu criei OU em que aceitei o convite (status confirmed).
   // Convite ainda não aceito fica só na aba de Convites; recusado/saído some.
   static Future<List<TripModel>> getTrips() async {
+    // club_id IS NULL: viagens de motoclube ficam só no mural do clube, não na
+    // lista pessoal de viagens.
     final created = await _db
         .from('trips')
         .select('id')
         .eq('creator_id', _uid)
+        .isFilter('club_id', null)
         .timeout(const Duration(seconds: 15));
     final confirmed = await _db
         .from('trip_participants')
@@ -39,6 +43,7 @@ class SupabaseTripService {
         .from('trips')
         .select()
         .inFilter('id', myTripIds.toList())
+        .isFilter('club_id', null)
         .order('created_at', ascending: false)
         .timeout(const Duration(seconds: 15));
 
@@ -100,6 +105,107 @@ class SupabaseTripService {
     return _rowToTrip(row, profilesMap, participantIds: participantIds.toList());
   }
 
+  // ── Viagens de um motoclube ────────────────────────────────
+  static Future<List<TripModel>> getTripsByClub(String clubId) async {
+    final rows = await _db
+        .from('trips')
+        .select()
+        .eq('club_id', clubId)
+        .order('created_at', ascending: false);
+    if ((rows as List).isEmpty) return [];
+    final tripIds = rows.map((r) => r['id'] as String).toList();
+    final partRows = await _db
+        .from('trip_participants')
+        .select('trip_id, user_id')
+        .inFilter('trip_id', tripIds);
+    final byTrip = <String, List<String>>{};
+    for (final p in partRows as List) {
+      byTrip
+          .putIfAbsent(p['trip_id'] as String, () => [])
+          .add(p['user_id'] as String);
+    }
+    final creatorIds = rows.map((r) => r['creator_id'] as String).toSet();
+    final partIds = byTrip.values.expand((e) => e).toSet();
+    final profilesMap = await _fetchProfilesMap({...creatorIds, ...partIds});
+    return rows
+        .map((row) => _rowToTrip(row, profilesMap,
+            participantIds: byTrip[row['id'] as String] ?? []))
+        .toList();
+  }
+
+  // ── Presença (RSVP + check-in) ─────────────────────────────
+  static Future<void> setMyRsvp(String tripId, String rsvp) async {
+    await _db.from('trip_participants').upsert({
+      'trip_id': tripId,
+      'user_id': _uid,
+      'rsvp': rsvp,
+    }, onConflict: 'trip_id,user_id');
+  }
+
+  static Future<Map<String, String>> getMyRsvps(List<String> tripIds) async {
+    if (tripIds.isEmpty) return {};
+    final rows = await _db
+        .from('trip_participants')
+        .select('trip_id, rsvp')
+        .eq('user_id', _uid)
+        .inFilter('trip_id', tripIds);
+    final map = <String, String>{};
+    for (final r in rows as List) {
+      final rsvp = r['rsvp'] as String?;
+      if (rsvp != null) map[r['trip_id'] as String] = rsvp;
+    }
+    return map;
+  }
+
+  static Future<List<Map<String, dynamic>>> getAttendance(String tripId) async {
+    final rows = await _db
+        .from('trip_participants')
+        .select('user_id, rsvp, checked_in, user:profiles(*)')
+        .eq('trip_id', tripId)
+        .not('rsvp', 'is', null);
+    return (rows as List).cast<Map<String, dynamic>>();
+  }
+
+  static Future<void> setCheckIn(
+      String tripId, String userId, bool value) async {
+    await _db
+        .from('trip_participants')
+        .update({'checked_in': value})
+        .eq('trip_id', tripId)
+        .eq('user_id', userId);
+  }
+
+  // ── Roteiro da viagem (trip_schedule_items) ────────────────
+  static Future<List<EventScheduleItem>> getSchedule(String tripId) async {
+    final rows = await _db
+        .from('trip_schedule_items')
+        .select()
+        .eq('trip_id', tripId)
+        .order('position', ascending: true);
+    return (rows as List)
+        .map((r) => EventScheduleItem.fromMap(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Substitui o roteiro inteiro (delete + insert), preservando a ordem.
+  static Future<void> replaceSchedule(
+      String tripId, List<EventScheduleItem> items) async {
+    await _db.from('trip_schedule_items').delete().eq('trip_id', tripId);
+    if (items.isEmpty) return;
+    final rows = <Map<String, dynamic>>[];
+    for (var i = 0; i < items.length; i++) {
+      final it = items[i];
+      rows.add({
+        'trip_id': tripId,
+        'position': i,
+        'time_label': it.timeLabel,
+        'title': it.title,
+        'description': it.description,
+      });
+    }
+    await _db.from('trip_schedule_items').insert(rows);
+  }
+
   // ── Busca perfis por IDs em uma só query ───────────────────
   static Future<Map<String, UserModel>> _fetchProfilesMap(Set<String> ids) async {
     if (ids.isEmpty) return {};
@@ -121,6 +227,8 @@ class SupabaseTripService {
     required LocationModel destination,
     List<String> participantIds = const [],
     DateTime? scheduledAt,
+    String? clubId,
+    List<EventScheduleItem> schedule = const [],
   }) async {
     // Insert trip
     final tripRow = await _db.from('trips').insert({
@@ -135,10 +243,15 @@ class SupabaseTripService {
       'destination_lng': destination.lng,
       'destination_address': destination.address,
       'destination_label': destination.label,
+      'club_id': clubId,
       'scheduled_at': scheduledAt?.toIso8601String(),
     }).select().single();
 
     final tripId = tripRow['id'] as String;
+
+    if (schedule.isNotEmpty) {
+      await replaceSchedule(tripId, schedule);
+    }
 
     // Add creator as participant; try to batch-add others.
     // If RLS prevents inserting rows for other users, fall back to

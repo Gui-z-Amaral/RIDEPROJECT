@@ -20,7 +20,10 @@ import '../viewmodels/event_viewmodel.dart';
 class CreateEventScreen extends StatefulWidget {
   /// Quando informado, a tela edita o evento com este ID.
   final String? eventId;
-  const CreateEventScreen({super.key, this.eventId});
+
+  /// Quando informado, cria um evento vinculado a este motoclube.
+  final String? clubId;
+  const CreateEventScreen({super.key, this.eventId, this.clubId});
 
   @override
   State<CreateEventScreen> createState() => _CreateEventScreenState();
@@ -363,6 +366,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         city: _city,
         startsAt: _startsAt!,
         endsAt: _endsAt,
+        clubId: widget.clubId,
         schedule: schedule,
         sponsors: sponsors,
         participantIds: participantIds,

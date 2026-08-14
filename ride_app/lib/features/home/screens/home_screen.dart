@@ -20,6 +20,7 @@ import '../../../core/services/geocoding_service.dart';
 import '../../../core/models/event_model.dart';
 import '../../events/viewmodels/event_viewmodel.dart';
 import '../../../shared/widgets/app_avatar.dart';
+import '../../../shared/widgets/create_menu.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -129,6 +130,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: AppTextStyles.headlineMedium
                         .copyWith(fontWeight: FontWeight.w800)),
                 const Spacer(),
+                // Criar (viagem / rolê / motoclube)
+                IconButton(
+                  icon: Icon(Icons.add_circle_outline, color: AppColors.navy),
+                  tooltip: 'Criar',
+                  onPressed: () => showCreateSheet(context),
+                ),
                 // Friends icon with pending-request badge
                 Stack(
                   children: [

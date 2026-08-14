@@ -37,6 +37,11 @@ import '../features/events/screens/create_event_screen.dart';
 import '../features/events/screens/event_detail_screen.dart';
 import '../features/calls/screens/voice_call_screen.dart';
 import '../features/calls/screens/group_voice_screen.dart';
+import '../features/clubs/screens/clubs_tab_screen.dart';
+import '../features/clubs/screens/create_club_screen.dart';
+import '../features/clubs/screens/club_profile_screen.dart';
+import '../features/clubs/screens/attendance_screen.dart';
+import '../features/clubs/screens/trip_schedule_screen.dart';
 import 'shell_screen.dart';
 
 final router = GoRouter(
@@ -63,6 +68,7 @@ final router = GoRouter(
         GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
         GoRoute(path: '/trips', builder: (_, __) => const TripsListScreen()),
         GoRoute(path: '/rides', builder: (_, __) => const RidesListScreen()),
+        GoRoute(path: '/clubs', builder: (_, __) => const ClubsTabScreen()),
         GoRoute(path: '/friends', builder: (_, __) => const FriendsScreen()),
         GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
       ],
@@ -71,7 +77,12 @@ final router = GoRouter(
     GoRoute(path: '/notifications', builder: (_, __) => const NotificationsScreen()),
     GoRoute(path: '/search', builder: (_, __) => const SearchScreen()),
     GoRoute(path: '/businesses', builder: (_, __) => const BusinessesScreen()),
-    GoRoute(path: '/events/create', builder: (_, __) => const CreateEventScreen()),
+    GoRoute(
+      path: '/events/create',
+      builder: (_, state) => CreateEventScreen(
+        clubId: (state.extra as Map?)?['clubId'] as String?,
+      ),
+    ),
     GoRoute(
       path: '/events/:id/edit',
       builder: (_, state) =>
@@ -100,7 +111,12 @@ final router = GoRouter(
       },
     ),
 
-    GoRoute(path: '/trips/create', builder: (_, __) => const CreateTripScreen()),
+    GoRoute(
+      path: '/trips/create',
+      builder: (_, state) => CreateTripScreen(
+        clubId: (state.extra as Map?)?['clubId'] as String?,
+      ),
+    ),
     GoRoute(
       path: '/trips/:id',
       builder: (_, state) => TripDetailScreen(tripId: state.pathParameters['id']!),
@@ -109,6 +125,36 @@ final router = GoRouter(
       path: '/trips/:id/edit',
       builder: (_, state) =>
           CreateTripScreen(tripId: state.pathParameters['id']!),
+    ),
+
+    GoRoute(path: '/clubs/create', builder: (_, __) => const CreateClubScreen()),
+    GoRoute(
+      path: '/clubs/:id',
+      builder: (_, state) =>
+          ClubProfileScreen(clubId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/attendance',
+      builder: (_, state) {
+        final e = state.extra as Map? ?? const {};
+        return AttendanceScreen(
+          isTrip: e['isTrip'] as bool? ?? false,
+          id: e['id'] as String? ?? '',
+          title: e['title'] as String? ?? '',
+          canCheckIn: e['canCheckIn'] as bool? ?? false,
+        );
+      },
+    ),
+    GoRoute(
+      path: '/trips/:id/schedule',
+      builder: (_, state) {
+        final e = state.extra as Map? ?? const {};
+        return TripScheduleScreen(
+          tripId: state.pathParameters['id']!,
+          title: e['title'] as String? ?? 'Viagem',
+          canEdit: e['canEdit'] as bool? ?? false,
+        );
+      },
     ),
 
     GoRoute(path: '/rides/create', builder: (_, __) => const CreateRideScreen()),

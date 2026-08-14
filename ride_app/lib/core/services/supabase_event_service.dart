@@ -31,6 +31,7 @@ class SupabaseEventService {
     String? city,
     required DateTime startsAt,
     DateTime? endsAt,
+    String? clubId,
     List<EventScheduleItem> schedule = const [],
     List<EventSponsor> sponsors = const [],
     List<String> participantIds = const [],
@@ -46,6 +47,7 @@ class SupabaseEventService {
       'location_label': locationLabel,
       'state_uf': stateUf,
       'city': city,
+      'club_id': clubId,
       'starts_at': startsAt.toIso8601String(),
       'ends_at': endsAt?.toIso8601String(),
     }).select('id').single();
@@ -206,6 +208,7 @@ class SupabaseEventService {
         .from('events')
         .select(_select)
         .eq('state_uf', uf)
+        .isFilter('club_id', null) // eventos de clube ficam só no mural do clube
         .gte('starts_at', DateTime.now().toIso8601String())
         .order('starts_at', ascending: true)
         .limit(limit);
@@ -227,10 +230,71 @@ class SupabaseEventService {
     return _attachInterest((rows as List).cast<Map<String, dynamic>>());
   }
 
+  // ── Eventos de um motoclube ────────────────────────────────
+  static Future<List<EventModel>> getEventsByClub(String clubId) async {
+    final rows = await _db
+        .from('events')
+        .select(_select)
+        .eq('club_id', clubId)
+        .order('starts_at', ascending: true);
+    return _attachInterest((rows as List).cast<Map<String, dynamic>>());
+  }
+
+  // ── Presença (RSVP + check-in) ─────────────────────────────
+  /// Define a presença do usuário logado ('going'|'maybe'|'declined').
+  static Future<void> setMyRsvp(String eventId, String rsvp) async {
+    await _db.from('event_participants').upsert({
+      'event_id': eventId,
+      'user_id': _uid,
+      'rsvp': rsvp,
+    }, onConflict: 'event_id,user_id');
+  }
+
+  /// RSVP do usuário logado para uma lista de eventos (eventId → rsvp).
+  static Future<Map<String, String>> getMyRsvps(List<String> eventIds) async {
+    if (eventIds.isEmpty) return {};
+    final rows = await _db
+        .from('event_participants')
+        .select('event_id, rsvp')
+        .eq('user_id', _uid)
+        .inFilter('event_id', eventIds);
+    final map = <String, String>{};
+    for (final r in rows as List) {
+      final rsvp = r['rsvp'] as String?;
+      if (rsvp != null) map[r['event_id'] as String] = rsvp;
+    }
+    return map;
+  }
+
+  /// Lista de presença de um evento (quem marcou rsvp), com perfil.
+  static Future<List<Map<String, dynamic>>> getAttendance(String eventId) async {
+    final rows = await _db
+        .from('event_participants')
+        .select('user_id, rsvp, checked_in, user:profiles(*)')
+        .eq('event_id', eventId)
+        .not('rsvp', 'is', null);
+    return (rows as List).cast<Map<String, dynamic>>();
+  }
+
+  static Future<void> setCheckIn(
+      String eventId, String userId, bool value) async {
+    await _db
+        .from('event_participants')
+        .update({'checked_in': value})
+        .eq('event_id', eventId)
+        .eq('user_id', userId);
+  }
+
   // ── Eventos criados por uma empresa ────────────────────────
   static Future<List<EventModel>> getEventsByCreator(String creatorId,
       {bool upcomingOnly = false}) async {
-    var query = _db.from('events').select(_select).eq('creator_id', creatorId);
+    // club_id IS NULL: eventos de motoclube não entram no perfil (empresa/pessoal);
+    // eles vivem só no mural do clube.
+    var query = _db
+        .from('events')
+        .select(_select)
+        .eq('creator_id', creatorId)
+        .isFilter('club_id', null);
     if (upcomingOnly) {
       query = query.gte('starts_at', DateTime.now().toIso8601String());
     }
@@ -275,6 +339,19 @@ class SupabaseEventService {
       });
       return true;
     }
+  }
+
+  /// Lista os usuários que marcaram interesse no evento (com perfil).
+  static Future<List<UserModel>> getInterestedUsers(String eventId) async {
+    final rows = await _db
+        .from('event_interests')
+        .select('user:profiles(*)')
+        .eq('event_id', eventId);
+    return (rows as List)
+        .map((r) => r['user'] as Map<String, dynamic>?)
+        .whereType<Map<String, dynamic>>()
+        .map((m) => UserModel.fromMap(m))
+        .toList();
   }
 
   // ── Deletar ────────────────────────────────────────────────

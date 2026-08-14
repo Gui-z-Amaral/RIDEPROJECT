@@ -14,6 +14,7 @@ import '../../rides/viewmodels/ride_viewmodel.dart';
 import '../../active_session/viewmodels/active_session_viewmodel.dart';
 import '../../notifications/viewmodels/notifications_viewmodel.dart';
 import '../../events/viewmodels/event_viewmodel.dart';
+import '../../clubs/viewmodels/club_viewmodel.dart';
 import '../../../core/constants/business_categories.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/models/trip_model.dart';
@@ -49,6 +50,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     context.read<RideViewModel>().reset();
     context.read<NotificationsViewModel>().reset();
     context.read<EventViewModel>().reset();
+    context.read<ClubViewModel>().reset();
     context.read<ActiveSessionViewModel>().endSession();
 
     await auth.logout();

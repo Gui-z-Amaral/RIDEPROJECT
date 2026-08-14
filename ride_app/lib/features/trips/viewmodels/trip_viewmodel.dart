@@ -26,6 +26,10 @@ class TripViewModel extends ChangeNotifier {
   List<LocationModel> _waypoints = [];
   List<UserModel> _participants = [];
   DateTime? _scheduledAt;
+  String? _clubId; // viagem de motoclube (quando criada por dentro do clube)
+
+  String? get clubId => _clubId;
+  void setClubId(String? id) => _clubId = id;
 
   List<TripModel> get trips => _trips;
   TripModel? get selectedTrip => _selectedTrip;
@@ -109,6 +113,7 @@ class TripViewModel extends ChangeNotifier {
     _waypoints = [];
     _participants = [];
     _scheduledAt = null;
+    _clubId = null;
     notifyListeners();
   }
 
@@ -150,6 +155,7 @@ class TripViewModel extends ChangeNotifier {
         destination: _destination!,
         participantIds: _participants.map((u) => u.id).toList(),
         scheduledAt: _scheduledAt,
+        clubId: _clubId,
       );
       _trips = [trip, ..._trips];
       resetForm();

@@ -14,6 +14,7 @@ import '../features/active_session/viewmodels/active_session_viewmodel.dart';
 import '../features/notifications/viewmodels/notifications_viewmodel.dart';
 import '../features/events/viewmodels/event_viewmodel.dart';
 import '../features/profile/viewmodels/theme_viewmodel.dart';
+import '../features/clubs/viewmodels/club_viewmodel.dart';
 import 'routes.dart';
 
 class RideApp extends StatefulWidget {
@@ -64,6 +65,7 @@ class _RideAppState extends State<RideApp> with WidgetsBindingObserver {
         ChangeNotifierProvider(create: (_) => NotificationsViewModel()),
         ChangeNotifierProvider(create: (_) => EventViewModel()),
         ChangeNotifierProvider(create: (_) => ThemeViewModel()),
+        ChangeNotifierProvider(create: (_) => ClubViewModel()),
       ],
       // Consumer + Key: quando o modo escuro alterna, força um rebuild
       // completo da árvore (todo widget lê AppColors.xxx de novo durante o

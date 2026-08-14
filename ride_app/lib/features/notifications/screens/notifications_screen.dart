@@ -8,11 +8,14 @@ import '../viewmodels/notifications_viewmodel.dart';
 import '../../../core/models/notification_model.dart';
 import '../../../core/models/ride_model.dart';
 import '../../../core/models/trip_model.dart';
+import '../../../core/models/club_model.dart';
 import '../../../core/services/supabase_trip_service.dart';
 import '../../../core/services/supabase_ride_service.dart';
+import '../../../core/services/supabase_club_service.dart';
 import '../../social/viewmodels/social_viewmodel.dart';
 import '../../trips/viewmodels/trip_viewmodel.dart';
 import '../../rides/viewmodels/ride_viewmodel.dart';
+import '../../clubs/viewmodels/club_viewmodel.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -171,6 +174,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       return;
     }
 
+    if (notif.type == 'club_invite') {
+      final clubId = notif.data['clubId'] as String?;
+      if (clubId == null || clubId.isEmpty) return;
+      _showClubInviteSheet(context, vm, notif, clubId);
+      return;
+    }
+
     if (notif.type == 'message') {
       final fromUserId = notif.data['fromUserId'] as String?;
       if (fromUserId != null && fromUserId.isNotEmpty) {
@@ -234,6 +244,54 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   }
                 } catch (_) {}
               },
+      ),
+    );
+  }
+
+  // ── Bottom sheet: convite de motoclube ────────────────────────────────────
+
+  void _showClubInviteSheet(BuildContext context, NotificationsViewModel vm,
+      NotificationModel notif, String clubId) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusXl)),
+      ),
+      builder: (sheetCtx) => _ClubInviteSheet(
+        clubId: clubId,
+        fallbackBody: notif.body,
+        onAccept: () async {
+          Navigator.pop(sheetCtx);
+          await context.read<ClubViewModel>().acceptInvite(clubId);
+          if (context.mounted) {
+            await vm.remove(notif.id);
+          }
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Você entrou no motoclube!'),
+                backgroundColor: AppColors.teal,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+            context.push('/clubs/$clubId');
+          }
+        },
+        onDecline: () async {
+          Navigator.pop(sheetCtx);
+          await context.read<ClubViewModel>().declineInvite(clubId);
+          if (context.mounted) await vm.remove(notif.id);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Convite recusado.'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        },
       ),
     );
   }
@@ -689,6 +747,147 @@ class _FriendRequestSheet extends StatelessWidget {
               Expanded(
                 child: ElevatedButton(
                   onPressed: onAccept,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.navy,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(AppSpacing.radiusFull),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Text('Aceitar',
+                      style: AppTextStyles.titleMedium.copyWith(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Sheet de convite de motoclube ─────────────────────────────────────────────
+
+class _ClubInviteSheet extends StatefulWidget {
+  final String clubId;
+  final String fallbackBody;
+  final VoidCallback onAccept;
+  final VoidCallback onDecline;
+
+  const _ClubInviteSheet({
+    required this.clubId,
+    required this.fallbackBody,
+    required this.onAccept,
+    required this.onDecline,
+  });
+
+  @override
+  State<_ClubInviteSheet> createState() => _ClubInviteSheetState();
+}
+
+class _ClubInviteSheetState extends State<_ClubInviteSheet> {
+  ClubModel? _club;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final c = await SupabaseClubService.getClubById(widget.clubId);
+      if (mounted) setState(() => _club = c);
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final club = _club;
+    return Padding(
+      padding: EdgeInsets.only(
+        left: AppSpacing.lg,
+        right: AppSpacing.lg,
+        top: AppSpacing.lg,
+        bottom: MediaQuery.of(context).viewPadding.bottom + AppSpacing.lg,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: AppColors.navy.withOpacity(0.1),
+              shape: BoxShape.circle,
+              image: (club?.avatarUrl != null && club!.avatarUrl!.isNotEmpty)
+                  ? DecorationImage(
+                      image: NetworkImage(club.avatarUrl!), fit: BoxFit.cover)
+                  : null,
+            ),
+            child:
+                (club?.avatarUrl == null || (club?.avatarUrl?.isEmpty ?? true))
+                    ? Icon(Icons.shield_moon_outlined,
+                        color: AppColors.navy, size: 32)
+                    : null,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text('Convite de Motoclube', style: AppTextStyles.headlineSmall),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            _loading
+                ? widget.fallbackBody
+                : (club != null
+                    ? 'Você foi convidado para o motoclube "${club.name}"'
+                        '${club.location.isNotEmpty ? ' · ${club.location}' : ''}.'
+                    : widget.fallbackBody),
+            style: AppTextStyles.bodyMedium
+                .copyWith(color: AppColors.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: widget.onDecline,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    side: const BorderSide(color: AppColors.error),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(AppSpacing.radiusFull),
+                    ),
+                  ),
+                  child: Text('Recusar',
+                      style: AppTextStyles.titleMedium
+                          .copyWith(color: AppColors.error)),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: widget.onAccept,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.navy,
                     foregroundColor: Colors.white,

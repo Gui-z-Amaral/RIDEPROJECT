@@ -19,7 +19,10 @@ import '../../../shared/widgets/app_avatar.dart';
 class CreateTripScreen extends StatefulWidget {
   /// Quando informado, a tela opera em modo edição da viagem com este ID.
   final String? tripId;
-  const CreateTripScreen({super.key, this.tripId});
+
+  /// Quando informado, cria a viagem vinculada a este motoclube.
+  final String? clubId;
+  const CreateTripScreen({super.key, this.tripId, this.clubId});
 
   @override
   State<CreateTripScreen> createState() => _CreateTripScreenState();
@@ -59,6 +62,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   void initState() {
     super.initState();
     context.read<TripViewModel>().resetForm();
+    context.read<TripViewModel>().setClubId(widget.clubId);
     Future.microtask(
         () => context.read<SocialViewModel>().loadFriends());
     _fetchOriginLocation();

@@ -5,6 +5,9 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/models/event_model.dart';
+import '../../../core/models/user_model.dart';
+import '../../../core/services/supabase_event_service.dart';
+import '../../../theme/app_spacing.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
@@ -151,31 +154,37 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             ),
                           ),
                         ),
-                        // Contador de interesse no canto do banner
+                        // Contador de interesse no canto do banner (toque = lista)
                         Positioned(
                           right: 12,
                           bottom: 12,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.55),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.people,
-                                    color: Colors.white, size: 14),
-                                const SizedBox(width: 5),
-                                Text(
-                                  '${e.interestsCount} interessado${e.interestsCount == 1 ? '' : 's'}',
-                                  style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700),
-                                ),
-                              ],
+                          child: GestureDetector(
+                            onTap: () => _showInterestedSheet(context, e.id),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.55),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.people,
+                                      color: Colors.white, size: 14),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    '${e.interestsCount} interessado${e.interestsCount == 1 ? '' : 's'}',
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(width: 3),
+                                  const Icon(Icons.chevron_right,
+                                      color: Colors.white70, size: 14),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -353,7 +362,12 @@ class _InterestBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final interested = event.isInterested;
-    final bottomPad = MediaQuery.of(context).padding.bottom;
+    // Dentro de um Scaffold.bottomSheet o MediaQuery vem SEM o inset inferior
+    // (padding e viewPadding zerados), então o botão ficava atrás da barra do
+    // sistema. Lemos o inset físico direto da View, que nunca é removido pela
+    // árvore de widgets.
+    final view = View.of(context);
+    final bottomPad = view.viewPadding.bottom / view.devicePixelRatio;
     return Container(
       padding: EdgeInsets.fromLTRB(24, 12, 24, bottomPad + 12),
       decoration: BoxDecoration(
@@ -509,6 +523,134 @@ class _ScheduleRow extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Folha: quem tem interesse ──────────────────────────────────────────────
+
+void _showInterestedSheet(BuildContext context, String eventId) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: AppColors.background,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (_) => _InterestedSheet(eventId: eventId),
+  );
+}
+
+class _InterestedSheet extends StatefulWidget {
+  final String eventId;
+  const _InterestedSheet({required this.eventId});
+  @override
+  State<_InterestedSheet> createState() => _InterestedSheetState();
+}
+
+class _InterestedSheetState extends State<_InterestedSheet> {
+  bool _loading = true;
+  List<UserModel> _users = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      _users = await SupabaseEventService.getInterestedUsers(widget.eventId);
+    } catch (_) {
+      _users = [];
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.of(context).viewPadding.bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 16, 20, bottomPad + 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.divider,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Icon(Icons.people_outline, color: AppColors.navy, size: 20),
+              const SizedBox(width: 8),
+              Text('Interessados',
+                  style: AppTextStyles.headlineSmall
+                      .copyWith(fontWeight: FontWeight.w800)),
+              const Spacer(),
+              if (!_loading)
+                Text('${_users.length}',
+                    style: AppTextStyles.titleMedium
+                        .copyWith(color: AppColors.textMuted)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_loading)
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: CircularProgressIndicator(color: AppColors.navy),
+            )
+          else if (_users.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Text('Ninguém marcou interesse ainda',
+                  style: AppTextStyles.bodyMedium
+                      .copyWith(color: AppColors.textMuted)),
+            )
+          else
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.5,
+              ),
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: _users.length,
+                separatorBuilder: (_, __) =>
+                    Divider(height: 1, color: AppColors.divider),
+                itemBuilder: (_, i) {
+                  final u = _users[i];
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: CircleAvatar(
+                      radius: 20,
+                      backgroundColor: AppColors.navy.withOpacity(0.1),
+                      backgroundImage:
+                          (u.avatarUrl != null && u.avatarUrl!.isNotEmpty)
+                              ? NetworkImage(u.avatarUrl!)
+                              : null,
+                      child: (u.avatarUrl == null || u.avatarUrl!.isEmpty)
+                          ? Text(
+                              u.name.isNotEmpty ? u.name[0].toUpperCase() : '?',
+                              style: AppTextStyles.titleMedium
+                                  .copyWith(color: AppColors.navy))
+                          : null,
+                    ),
+                    title: Text(u.name, style: AppTextStyles.bodyMedium),
+                    subtitle: u.username.isNotEmpty
+                        ? Text('@${u.username}',
+                            style: AppTextStyles.bodySmall
+                                .copyWith(color: AppColors.textMuted))
+                        : null,
+                  );
+                },
+              ),
+            ),
         ],
       ),
     );
