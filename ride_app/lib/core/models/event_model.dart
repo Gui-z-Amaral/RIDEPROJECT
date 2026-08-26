@@ -78,6 +78,7 @@ class EventModel {
   final String? locationLabel;
   final String? stateUf;
   final String? city;
+  final String? clubId; // != null = evento de motoclube
   final DateTime startsAt;
   final DateTime? endsAt;
   final int interestsCount;
@@ -102,6 +103,7 @@ class EventModel {
     this.locationLabel,
     this.stateUf,
     this.city,
+    this.clubId,
     required this.startsAt,
     this.endsAt,
     this.interestsCount = 0,
@@ -193,6 +195,7 @@ class EventModel {
       locationLabel: map['location_label'] as String?,
       stateUf: map['state_uf'] as String?,
       city: map['city'] as String?,
+      clubId: map['club_id'] as String?,
       startsAt: DateTime.parse(map['starts_at'] as String).toLocal(),
       endsAt: map['ends_at'] != null
           ? DateTime.parse(map['ends_at'] as String).toLocal()

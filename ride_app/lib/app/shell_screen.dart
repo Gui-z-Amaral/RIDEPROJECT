@@ -21,12 +21,12 @@ class _ShellScreenState extends State<ShellScreen> {
 
   int _currentIndex(BuildContext context) {
     final location = GoRouterState.of(context).uri.path;
-    if (location.startsWith('/profile')) return 0;
-    if (location.startsWith('/home'))    return 1;
-    if (location.startsWith('/trips'))  return 2;
-    if (location.startsWith('/rides'))  return 3;
-    if (location.startsWith('/clubs'))  return 4;
-    return 1;
+    if (location.startsWith('/friends')) return 0;
+    if (location.startsWith('/chat'))    return 1;
+    if (location.startsWith('/home'))    return 2;
+    if (location.startsWith('/events'))  return 3;
+    if (location.startsWith('/clubs'))   return 4;
+    return 2;
   }
 
   /// Intercepta o botão de voltar em rotas-raiz (shell):
@@ -107,30 +107,30 @@ class _ShellScreenState extends State<ShellScreen> {
             children: [
               Expanded(
                 child: _NavItem(
-                  icon: Icons.person_outline,
-                  activeIcon: Icons.person,
-                  label: 'Perfil',
+                  icon: Icons.people_outline,
+                  activeIcon: Icons.people,
+                  label: 'Amigos',
                   active: idx == 0,
-                  onTap: () => context.go('/profile'),
+                  onTap: () => context.go('/friends'),
                 ),
               ),
               Expanded(
                 child: _NavItem(
-                  icon: Icons.flight_takeoff_outlined,
-                  activeIcon: Icons.flight_takeoff,
-                  label: 'Viagens',
-                  active: idx == 2,
-                  onTap: () => context.go('/trips'),
+                  icon: Icons.chat_bubble_outline,
+                  activeIcon: Icons.chat_bubble,
+                  label: 'Chat',
+                  active: idx == 1,
+                  onTap: () => context.go('/chat'),
                 ),
               ),
               const Expanded(child: SizedBox()),
               Expanded(
                 child: _NavItem(
-                  icon: Icons.groups_outlined,
-                  activeIcon: Icons.groups,
-                  label: 'Rolês',
+                  icon: Icons.event_outlined,
+                  activeIcon: Icons.event,
+                  label: 'Eventos',
                   active: idx == 3,
-                  onTap: () => context.go('/rides'),
+                  onTap: () => context.go('/events'),
                 ),
               ),
               Expanded(

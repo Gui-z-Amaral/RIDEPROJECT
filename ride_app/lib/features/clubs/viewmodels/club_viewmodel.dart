@@ -94,6 +94,79 @@ class ClubViewModel extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Gerentes ativos (dono + admins) do clube selecionado.
+  List<ClubMemberModel> get managers =>
+      _members.where((m) => m.isAdmin).toList();
+
+  // ── Editar clube (configurações) ─────────────────────────────
+  Future<bool> updateClub({
+    String? name,
+    String? description,
+    String? city,
+    String? stateUf,
+    String? bannerUrl,
+    String? avatarUrl,
+    bool? eventsPublic,
+  }) async {
+    final id = _selected?.id;
+    if (id == null) return false;
+    _isSaving = true;
+    _saveError = null;
+    notifyListeners();
+    try {
+      final updated = await SupabaseClubService.updateClub(
+        id,
+        name: name,
+        description: description,
+        city: city,
+        stateUf: stateUf,
+        bannerUrl: bannerUrl,
+        avatarUrl: avatarUrl,
+        eventsPublic: eventsPublic,
+      );
+      if (updated != null) {
+        _selected = updated;
+        _myClubs = _myClubs.map((c) => c.id == id ? updated : c).toList();
+      }
+      _isSaving = false;
+      notifyListeners();
+      return updated != null;
+    } catch (e) {
+      debugPrint('❌ ClubViewModel.updateClub: $e');
+      _saveError = 'Não foi possível salvar. Tente novamente.';
+      _isSaving = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // ── Gerenciar membros ────────────────────────────────────────
+  /// Muda o papel de um membro ('admin' = gerente | 'member'). Só o dono
+  /// tem permissão (garantido pelo RLS); a UI só expõe isso pro dono.
+  Future<void> setMemberRole(String userId, String role) async {
+    final id = _selected?.id;
+    if (id == null) return;
+    final prev = _members;
+    _members = _members
+        .map((m) => m.userId == userId
+            ? ClubMemberModel(
+                clubId: m.clubId,
+                userId: m.userId,
+                role: role,
+                status: m.status,
+                joinedAt: m.joinedAt,
+                user: m.user)
+            : m)
+        .toList();
+    notifyListeners();
+    try {
+      await SupabaseClubService.setRole(id, userId, role);
+    } catch (_) {
+      _members = prev;
+      notifyListeners();
+    }
+  }
+
   // ── Murais: eventos e viagens do clube ───────────────────────
   Future<void> loadClubEvents(String clubId) async {
     _isLoadingEvents = true;

@@ -12,6 +12,7 @@ class ClubModel {
   final String? bannerUrl;
   final String? city;
   final String? stateUf;
+  final bool eventsPublic; // true = eventos do clube visíveis a todos
   final DateTime? createdAt;
   final int membersCount;
   final String? myRole;
@@ -26,6 +27,7 @@ class ClubModel {
     this.bannerUrl,
     this.city,
     this.stateUf,
+    this.eventsPublic = false,
     this.createdAt,
     this.membersCount = 0,
     this.myRole,
@@ -54,6 +56,7 @@ class ClubModel {
         bannerUrl: bannerUrl,
         city: city,
         stateUf: stateUf,
+        eventsPublic: eventsPublic,
         createdAt: createdAt,
         membersCount: membersCount ?? this.membersCount,
         myRole: myRole ?? this.myRole,
@@ -75,6 +78,7 @@ class ClubModel {
       bannerUrl: map['banner_url'] as String?,
       city: map['city'] as String?,
       stateUf: map['state_uf'] as String?,
+      eventsPublic: map['events_public'] as bool? ?? false,
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'] as String)
           : null,

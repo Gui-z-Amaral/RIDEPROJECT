@@ -17,7 +17,9 @@ import '../features/social/screens/friends_screen.dart';
 import '../features/social/screens/friend_profile_screen.dart';
 import '../features/social/screens/search_users_screen.dart';
 import '../features/social/screens/chat_screen.dart';
+import '../features/social/screens/messages_screen.dart';
 import '../features/social/screens/invites_screen.dart';
+import '../features/events/screens/events_screen.dart';
 import '../features/trips/screens/trips_list_screen.dart';
 import '../features/trips/screens/trip_detail_screen.dart';
 import '../features/trips/screens/create_trip_screen.dart';
@@ -40,6 +42,8 @@ import '../features/calls/screens/group_voice_screen.dart';
 import '../features/clubs/screens/clubs_tab_screen.dart';
 import '../features/clubs/screens/create_club_screen.dart';
 import '../features/clubs/screens/club_profile_screen.dart';
+import '../features/clubs/screens/club_settings_screen.dart';
+import '../features/clubs/screens/manage_members_screen.dart';
 import '../features/clubs/screens/attendance_screen.dart';
 import '../features/clubs/screens/trip_schedule_screen.dart';
 import 'shell_screen.dart';
@@ -69,6 +73,8 @@ final router = GoRouter(
         GoRoute(path: '/trips', builder: (_, __) => const TripsListScreen()),
         GoRoute(path: '/rides', builder: (_, __) => const RidesListScreen()),
         GoRoute(path: '/clubs', builder: (_, __) => const ClubsTabScreen()),
+        GoRoute(path: '/events', builder: (_, __) => const EventsScreen()),
+        GoRoute(path: '/chat', builder: (_, __) => const MessagesScreen()),
         GoRoute(path: '/friends', builder: (_, __) => const FriendsScreen()),
         GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
       ],
@@ -91,6 +97,28 @@ final router = GoRouter(
     GoRoute(
       path: '/events/:id',
       builder: (_, state) => EventDetailScreen(eventId: state.pathParameters['id']!),
+    ),
+
+    // ── Deep links curtos (compartilhamento) → resolvem no app ──
+    GoRoute(
+      path: '/e/:id',
+      builder: (_, state) =>
+          EventDetailScreen(eventId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/v/:id',
+      builder: (_, state) =>
+          TripDetailScreen(tripId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/r/:id',
+      builder: (_, state) =>
+          RideDetailScreen(rideId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/c/:id',
+      builder: (_, state) =>
+          ClubProfileScreen(clubId: state.pathParameters['id']!),
     ),
     GoRoute(path: '/profile/edit', builder: (_, __) => const EditProfileScreen()),
     GoRoute(path: '/profile/business/edit', builder: (_, __) => const EditBusinessProfileScreen()),
@@ -128,6 +156,16 @@ final router = GoRouter(
     ),
 
     GoRoute(path: '/clubs/create', builder: (_, __) => const CreateClubScreen()),
+    GoRoute(
+      path: '/clubs/:id/settings',
+      builder: (_, state) =>
+          ClubSettingsScreen(clubId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/clubs/:id/members/manage',
+      builder: (_, state) =>
+          ManageMembersScreen(clubId: state.pathParameters['id']!),
+    ),
     GoRoute(
       path: '/clubs/:id',
       builder: (_, state) =>

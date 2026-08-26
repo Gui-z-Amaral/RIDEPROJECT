@@ -104,37 +104,88 @@ class _ClubHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-      child: Row(
+    final hasBanner = club.bannerUrl != null && club.bannerUrl!.isNotEmpty;
+    final hasLogo = club.avatarUrl != null && club.avatarUrl!.isNotEmpty;
+    return SizedBox(
+      height: 158,
+      width: double.infinity,
+      child: Stack(
+        fit: StackFit.expand,
         children: [
-          CircleAvatar(
-            radius: 32,
-            backgroundColor: AppColors.navy.withOpacity(0.1),
-            backgroundImage: (club.avatarUrl != null && club.avatarUrl!.isNotEmpty)
-                ? NetworkImage(club.avatarUrl!)
-                : null,
-            child: (club.avatarUrl == null || club.avatarUrl!.isEmpty)
-                ? Icon(Icons.shield_moon_outlined,
-                    color: AppColors.navy, size: 30)
-                : null,
+          // Banner ao fundo (ou gradiente navy quando não há banner).
+          if (hasBanner)
+            Image.network(club.bannerUrl!, fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _bannerFallback())
+          else
+            _bannerFallback(),
+          // Escurece o rodapé pra leitura do nome/logo por cima.
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.transparent, Colors.black87],
+                stops: [0.35, 1.0],
+              ),
+            ),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          // Logo + nome por cima do banner (no rodapé).
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 12,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(club.name,
-                    style: AppTextStyles.headlineSmall
-                        .copyWith(fontWeight: FontWeight.w800)),
-                const SizedBox(height: 2),
-                Text(
-                  [
-                    if (club.location.isNotEmpty) club.location,
-                    '${club.membersCount} ${club.membersCount == 1 ? 'membro' : 'membros'}',
-                  ].join(' · '),
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: AppColors.textMuted),
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                  child: CircleAvatar(
+                    radius: 30,
+                    backgroundColor: AppColors.navy,
+                    backgroundImage:
+                        hasLogo ? NetworkImage(club.avatarUrl!) : null,
+                    child: hasLogo
+                        ? null
+                        : const Icon(Icons.shield_moon_outlined,
+                            color: Colors.white, size: 28),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        club.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.headlineSmall.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            shadows: const [
+                              Shadow(color: Colors.black54, blurRadius: 6),
+                            ]),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        [
+                          if (club.location.isNotEmpty) club.location,
+                          '${club.membersCount} ${club.membersCount == 1 ? 'membro' : 'membros'}',
+                        ].join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodySmall.copyWith(
+                            color: Colors.white70,
+                            shadows: const [
+                              Shadow(color: Colors.black54, blurRadius: 6),
+                            ]),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -143,6 +194,16 @@ class _ClubHeader extends StatelessWidget {
       ),
     );
   }
+
+  Widget _bannerFallback() => Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [AppColors.navy, AppColors.mediumBlue],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+      );
 }
 
 // ─── Aba Sobre ───────────────────────────────────────────────────────────────
@@ -153,25 +214,75 @@ class _AboutTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final vm = context.watch<ClubViewModel>();
+    final managers = vm.managers;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+      padding: EdgeInsets.fromLTRB(
+          20, 16, 20, 40 + MediaQuery.of(context).padding.bottom),
       children: [
-        if ((club.description ?? '').isNotEmpty) ...[
-          Text('Sobre',
-              style: AppTextStyles.titleMedium
-                  .copyWith(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 8),
-          Text(club.description!,
-              style: AppTextStyles.bodyMedium
-                  .copyWith(color: AppColors.textSecondary, height: 1.5)),
-          const SizedBox(height: 20),
+        // ── Sobre ───────────────────────────────────────────
+        Text('Sobre',
+            style: AppTextStyles.titleMedium
+                .copyWith(fontWeight: FontWeight.w800)),
+        const SizedBox(height: 8),
+        Text(
+          (club.description ?? '').isNotEmpty
+              ? club.description!
+              : 'Este motoclube ainda não tem uma descrição.',
+          style: AppTextStyles.bodyMedium
+              .copyWith(color: AppColors.textSecondary, height: 1.5),
+        ),
+        const SizedBox(height: 28),
+
+        // ── Gerentes ────────────────────────────────────────
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Gerentes',
+                style: AppTextStyles.titleMedium
+                    .copyWith(fontWeight: FontWeight.w800)),
+            GestureDetector(
+              onTap: () => DefaultTabController.of(context).animateTo(1),
+              child: Text('Ver todos',
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.navy)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        if (managers.isEmpty)
+          Text('Nenhum gerente ainda',
+              style: AppTextStyles.bodySmall
+                  .copyWith(color: AppColors.textMuted))
+        else
+          Wrap(
+            spacing: 20,
+            runSpacing: 14,
+            children:
+                managers.map((m) => _ManagerChip(member: m)).toList(),
+          ),
+
+        // ── Configurações (dono/gerente) ────────────────────
+        if (club.isAdmin) ...[
+          const SizedBox(height: 28),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => context.push('/clubs/${club.id}/settings'),
+              icon: Icon(Icons.settings_outlined, color: AppColors.navy),
+              label: Text('CONFIGURAÇÕES DO MOTOCLUBE',
+                  style: AppTextStyles.labelMedium.copyWith(
+                      color: AppColors.navy, fontWeight: FontWeight.w800)),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: AppColors.navy, width: 1.5),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ),
         ],
-        if (club.location.isNotEmpty)
-          _InfoRow(icon: Icons.place_outlined, text: club.location),
-        _InfoRow(
-            icon: Icons.groups_outlined,
-            text:
-                '${club.membersCount} ${club.membersCount == 1 ? 'membro' : 'membros'}'),
+
+        // ── Sair (membro não-dono) ──────────────────────────
         if (club.isActiveMember && !club.isOwner) ...[
           const SizedBox(height: 24),
           OutlinedButton.icon(
@@ -196,22 +307,41 @@ class _AboutTab extends StatelessWidget {
   }
 }
 
-class _InfoRow extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  const _InfoRow({required this.icon, required this.text});
+class _ManagerChip extends StatelessWidget {
+  final ClubMemberModel member;
+  const _ManagerChip({required this.member});
+
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
+    final u = member.user;
+    final name = (u?.name ?? 'Gerente').split(' ').first;
+    return SizedBox(
+      width: 64,
+      child: Column(
         children: [
-          Icon(icon, size: 18, color: AppColors.textMuted),
-          const SizedBox(width: 10),
-          Expanded(
-              child: Text(text,
-                  style: AppTextStyles.bodyMedium
-                      .copyWith(color: AppColors.textSecondary))),
+          CircleAvatar(
+            radius: 26,
+            backgroundColor: AppColors.navy.withOpacity(0.1),
+            backgroundImage: (u?.avatarUrl != null && u!.avatarUrl!.isNotEmpty)
+                ? NetworkImage(u.avatarUrl!)
+                : null,
+            child: (u?.avatarUrl == null || (u?.avatarUrl?.isEmpty ?? true))
+                ? Text(name.isNotEmpty ? name[0].toUpperCase() : '?',
+                    style: AppTextStyles.titleMedium
+                        .copyWith(color: AppColors.navy))
+                : null,
+          ),
+          const SizedBox(height: 6),
+          Text(name,
+              style: AppTextStyles.labelSmall,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center),
+          Text(member.isOwner ? 'Dono' : 'Gerente',
+              style: AppTextStyles.labelSmall.copyWith(
+                  color: AppColors.navy,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -475,6 +605,32 @@ class _ActivitiesTabState extends State<_ActivitiesTab> {
     final vm = context.watch<ClubViewModel>();
     final club = widget.club;
 
+    // Atividades: membros sempre veem; não-membros só se o clube for público.
+    if (!club.isActiveMember && !club.eventsPublic) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.lock_outline,
+                  size: 48, color: AppColors.navy.withOpacity(0.3)),
+              const SizedBox(height: 12),
+              Text('Atividades exclusivas dos membros',
+                  style: AppTextStyles.titleMedium
+                      .copyWith(color: AppColors.textSecondary),
+                  textAlign: TextAlign.center),
+              const SizedBox(height: 4),
+              Text('Entre no clube para ver as atividades',
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: AppColors.textMuted),
+                  textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      );
+    }
+
     // Une eventos e viagens numa lista só, ordenada por data (próximos primeiro).
     final items = <_Activity>[
       ...vm.clubEvents.map((e) => _Activity(
@@ -496,6 +652,7 @@ class _ActivitiesTabState extends State<_ActivitiesTab> {
                   title: e.title,
                   canCheckIn: club.isAdmin),
               showAttendance: club.isActiveMember,
+              showRsvp: club.isActiveMember,
             ),
           )),
       ...vm.clubTrips.map((t) {
@@ -520,6 +677,7 @@ class _ActivitiesTabState extends State<_ActivitiesTab> {
             onAttendance: () => _openAttendance(context,
                 isTrip: true, id: t.id, title: t.title, canCheckIn: club.isAdmin),
             showAttendance: club.isActiveMember,
+            showRsvp: club.isActiveMember,
           ),
         );
       }),
@@ -762,6 +920,7 @@ class _MuralCard extends StatelessWidget {
   final VoidCallback? onRoteiro;
   final VoidCallback onAttendance;
   final bool showAttendance;
+  final bool showRsvp;
 
   const _MuralCard({
     required this.icon,
@@ -772,6 +931,7 @@ class _MuralCard extends StatelessWidget {
     required this.onOpen,
     required this.onAttendance,
     required this.showAttendance,
+    this.showRsvp = true,
     this.onRoteiro,
   });
 
@@ -825,29 +985,32 @@ class _MuralCard extends StatelessWidget {
               ),
             ),
           ),
+          if (showRsvp || showAttendance || onRoteiro != null) ...[
           Divider(height: 1, color: AppColors.divider),
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
             child: Row(
               children: [
-                _RsvpChip(
-                    label: 'Vou',
-                    value: 'going',
-                    selected: myRsvp == 'going',
-                    color: AppColors.success,
-                    onTap: () => onRsvp('going')),
-                _RsvpChip(
-                    label: 'Talvez',
-                    value: 'maybe',
-                    selected: myRsvp == 'maybe',
-                    color: AppColors.warning,
-                    onTap: () => onRsvp('maybe')),
-                _RsvpChip(
-                    label: 'Não',
-                    value: 'declined',
-                    selected: myRsvp == 'declined',
-                    color: AppColors.error,
-                    onTap: () => onRsvp('declined')),
+                if (showRsvp) ...[
+                  _RsvpChip(
+                      label: 'Vou',
+                      value: 'going',
+                      selected: myRsvp == 'going',
+                      color: AppColors.success,
+                      onTap: () => onRsvp('going')),
+                  _RsvpChip(
+                      label: 'Talvez',
+                      value: 'maybe',
+                      selected: myRsvp == 'maybe',
+                      color: AppColors.warning,
+                      onTap: () => onRsvp('maybe')),
+                  _RsvpChip(
+                      label: 'Não',
+                      value: 'declined',
+                      selected: myRsvp == 'declined',
+                      color: AppColors.error,
+                      onTap: () => onRsvp('declined')),
+                ],
                 const Spacer(),
                 if (onRoteiro != null)
                   IconButton(
@@ -866,6 +1029,7 @@ class _MuralCard extends StatelessWidget {
               ],
             ),
           ),
+          ],
         ],
       ),
     );

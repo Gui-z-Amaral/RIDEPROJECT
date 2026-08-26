@@ -1,9 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
@@ -14,13 +12,8 @@ import '../viewmodels/home_viewmodel.dart';
 import '../../../core/models/trip_model.dart';
 import '../../../core/models/ride_model.dart';
 import '../../../core/models/trip_photo_model.dart';
-import '../../../core/services/places_service.dart';
 import '../../../core/services/supabase_social_service.dart';
-import '../../../core/services/geocoding_service.dart';
-import '../../../core/models/event_model.dart';
-import '../../events/viewmodels/event_viewmodel.dart';
 import '../../../shared/widgets/app_avatar.dart';
-import '../../../shared/widgets/create_menu.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -38,40 +31,11 @@ class _HomeScreenState extends State<HomeScreen> {
       await context.read<HomeViewModel>().load();
       context.read<NotificationsViewModel>().load();
       context.read<SocialViewModel>().loadRequests();
-      _fetchLocationAndRecommend();
       if (mounted) {
         context.read<HomeViewModel>().loadFriendsStories();
         context.read<HomeViewModel>().loadFeaturedHighlights();
       }
     });
-  }
-
-  Future<void> _fetchLocationAndRecommend() async {
-    try {
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.deniedForever ||
-          permission == LocationPermission.denied) return;
-
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.reduced, // rápido, suficiente para recomendações
-          timeLimit: Duration(seconds: 10),
-        ),
-      );
-      if (mounted) {
-        context
-            .read<HomeViewModel>()
-            .loadRecommendations(pos.latitude, pos.longitude);
-      }
-      // Resolve a UF atual e carrega eventos desse estado.
-      final uf = await GeocodingService.getStateUf(pos.latitude, pos.longitude);
-      if (uf != null && mounted) {
-        context.read<EventViewModel>().loadNearby(uf);
-      }
-    } catch (_) {}
   }
 
   String _greeting() {
@@ -130,12 +94,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: AppTextStyles.headlineMedium
                         .copyWith(fontWeight: FontWeight.w800)),
                 const Spacer(),
-                // Criar (viagem / rolê / motoclube)
-                IconButton(
-                  icon: Icon(Icons.add_circle_outline, color: AppColors.navy),
-                  tooltip: 'Criar',
-                  onPressed: () => showCreateSheet(context),
-                ),
                 // Friends icon with pending-request badge
                 Stack(
                   children: [
@@ -221,32 +179,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: AppTextStyles.bodySmall
                         .copyWith(color: AppColors.textSecondary),
                   ),
-                  const SizedBox(height: AppSpacing.md),
-
-                  // ── Barra de pesquisa ─────────────────────────────
-                  GestureDetector(
-                    onTap: () => context.push('/search'),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: AppColors.inputFill,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.search,
-                              color: AppColors.textMuted, size: 20),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Pesquise lugares, agendamentos ou pessoas!',
-                            style: AppTextStyles.bodySmall
-                                .copyWith(color: AppColors.textMuted),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
                   const SizedBox(height: AppSpacing.lg),
 
                   // ── NOVIDADES DOS AMIGOS (stories) ────────────────
@@ -277,69 +209,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: AppSpacing.lg),
                   ],
 
-                  // ── EVENTOS PERTO DE VOCÊ ─────────────────────────
-                  Builder(builder: (context) {
-                    final eventVm = context.watch<EventViewModel>();
-                    if (!eventVm.isLoadingNearby &&
-                        eventVm.nearbyEvents.isEmpty) {
-                      return const SizedBox.shrink();
-                    }
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            _SectionLabel(
-                                label: eventVm.loadedUf != null
-                                    ? 'EVENTOS EM ${eventVm.loadedUf}'
-                                    : 'EVENTOS PERTO DE VOCÊ'),
-                            const Spacer(),
-                            if (eventVm.isLoadingNearby)
-                              SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: AppColors.navy),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        SizedBox(
-                          height: 184,
-                          child: eventVm.isLoadingNearby &&
-                                  eventVm.nearbyEvents.isEmpty
-                              ? ListView.separated(
-                                  scrollDirection: Axis.horizontal,
-                                  itemCount: 2,
-                                  separatorBuilder: (_, __) =>
-                                      const SizedBox(width: AppSpacing.md),
-                                  itemBuilder: (_, __) => Container(
-                                    width: 240,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.inputFill,
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                  ),
-                                )
-                              : ListView.separated(
-                                  scrollDirection: Axis.horizontal,
-                                  itemCount: eventVm.nearbyEvents.length,
-                                  separatorBuilder: (_, __) =>
-                                      const SizedBox(width: AppSpacing.md),
-                                  itemBuilder: (_, i) => _EventCard(
-                                    event: eventVm.nearbyEvents[i],
-                                    onTap: () => context.push(
-                                        '/events/${eventVm.nearbyEvents[i].id}'),
-                                  ),
-                                ),
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                      ],
-                    );
-                  }),
-
                   // ── PRÓXIMA VIAGEM ────────────────────────────────
-                  _SectionLabel(label: 'PRÓXIMA VIAGEM'),
+                  _SectionRow(
+                    label: 'PRÓXIMA VIAGEM',
+                    actionLabel: 'Ver todas',
+                    onAction: () => context.go('/trips'),
+                  ),
                   const SizedBox(height: AppSpacing.sm),
                   nextTrip != null
                       ? _NextTripCard(
@@ -355,7 +230,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: AppSpacing.lg),
 
                   // ── PRÓXIMO ROLÊ ──────────────────────────────────
-                  _SectionLabel(label: 'PRÓXIMO ROLÊ'),
+                  _SectionRow(
+                    label: 'PRÓXIMO ROLÊ',
+                    actionLabel: 'Ver todos',
+                    onAction: () => context.go('/rides'),
+                  ),
                   const SizedBox(height: AppSpacing.sm),
                   nextRide != null
                       ? _NextRideCard(
@@ -394,55 +273,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   // ── ENCONTRE EMPRESAS ─────────────────────────────
                   _BusinessSection(onTap: () => context.push('/businesses')),
-                  const SizedBox(height: AppSpacing.lg),
-
-                  // ── SUGESTÕES PARA VOCÊ ───────────────────────────
-                  Row(
-                    children: [
-                      _SectionLabel(label: 'SUGESTÕES PARA VOCÊ'),
-                      const Spacer(),
-                      if (vm.isLoadingRecs)
-                        SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppColors.navy,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
+                  SizedBox(height: bottomPad + 100),
                 ],
               ),
             ),
           ),
-
-          // ── Sugestões (scroll horizontal) ─────────────────────────
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 210,
-              child: vm.isLoadingRecs && vm.recommendations.isEmpty
-                  ? _SuggestionSkeletons()
-                  : vm.recommendations.isEmpty
-                      ? _NoRecommendations()
-                      : ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.lg),
-                          itemCount: vm.recommendations.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(width: AppSpacing.md),
-                          itemBuilder: (_, i) => _SuggestionCard(
-                            place: vm.recommendations[i],
-                          ),
-                        ),
-            ),
-          ),
-
-          SliverToBoxAdapter(
-              child:
-                  SizedBox(height: bottomPad + 100)),
         ],
       ),
     );
@@ -463,6 +298,33 @@ class _SectionLabel extends StatelessWidget {
         fontWeight: FontWeight.w800,
         fontSize: 15,
       ),
+    );
+  }
+}
+
+/// Cabeçalho de seção com um atalho à direita (ex.: "Ver todas").
+class _SectionRow extends StatelessWidget {
+  final String label;
+  final String actionLabel;
+  final VoidCallback onAction;
+  const _SectionRow({
+    required this.label,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        _SectionLabel(label: label),
+        GestureDetector(
+          onTap: onAction,
+          child: Text(actionLabel,
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.navy)),
+        ),
+      ],
     );
   }
 }
@@ -887,302 +749,6 @@ class _EmptyCard extends StatelessWidget {
   }
 }
 
-// ─── Skeleton de sugestões (loading) ─────────────────────────────────────────
-
-class _SuggestionSkeletons extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return ListView.separated(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-      itemCount: 3,
-      separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
-      itemBuilder: (_, __) => Container(
-        width: 160,
-        decoration: BoxDecoration(
-          color: AppColors.inputFill,
-          borderRadius: BorderRadius.circular(14),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Sem recomendações ────────────────────────────────────────────────────────
-
-class _NoRecommendations extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.divider),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.location_off_outlined,
-                color: AppColors.textMuted.withOpacity(0.5), size: 28),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Ative a localização para ver sugestões perto de você',
-                style:
-                    AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Suggestion card (real data) ─────────────────────────────────────────────
-
-class _SuggestionCard extends StatelessWidget {
-  final PlaceRecommendation place;
-  const _SuggestionCard({required this.place});
-
-  // Gradiente por tipo quando não há foto
-  List<Color> get _gradient {
-    switch (place.type) {
-      case 'restaurant':
-      case 'cafe':
-        return [const Color(0xFF6B4E35), const Color(0xFF3D2B1F)];
-      case 'gas_station':
-        return [AppColors.navy, AppColors.mediumBlue];
-      case 'lodging':
-        return [const Color(0xFF4A1D6B), const Color(0xFF2D0D4E)];
-      default:
-        return [AppColors.navy, AppColors.mediumBlue];
-    }
-  }
-
-  // Badge de razão da recomendação
-  String get _reasonLabel {
-    switch (place.reason) {
-      case RecommendationReason.nearbyRestaurant:
-      case RecommendationReason.nearbyFuel:
-        return '📍 ${place.distanceLabel}';
-      case RecommendationReason.nearestFuel:
-        return '⛽ Mais próximo';
-      case RecommendationReason.nearestLodging:
-        return '🏨 Mais próximo';
-      case RecommendationReason.tripBased:
-        return '🗺️ ${place.tripContext ?? 'Sua viagem'}';
-      case RecommendationReason.trustedBusiness:
-        return '⭐ ${place.distanceLabel}';
-    }
-  }
-
-  IconData get _typeIcon {
-    switch (place.type) {
-      case 'restaurant':
-        return Icons.restaurant;
-      case 'cafe':
-        return Icons.coffee;
-      case 'gas_station':
-        return Icons.local_gas_station;
-      case 'lodging':
-        return Icons.hotel;
-      default:
-        return Icons.place;
-    }
-  }
-
-  Future<void> _openMaps() async {
-    final uri = Uri.parse(place.googleMapsUrl);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final hasPhoto = place.photoUrl.isNotEmpty;
-
-    return GestureDetector(
-      onTap: _openMaps,
-      child: Container(
-        width: 160,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 6,
-                offset: const Offset(0, 2))
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // ── Fundo: foto ou gradiente ──────────────────────────
-              if (hasPhoto)
-                CachedNetworkImage(
-                  imageUrl: place.photoUrl,
-                  fit: BoxFit.cover,
-                  errorWidget: (_, __, ___) => Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: _gradient,
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                  ),
-                )
-              else
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: _gradient,
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  child: Center(
-                    child: Icon(_typeIcon,
-                        color: Colors.white.withOpacity(0.12), size: 70),
-                  ),
-                ),
-
-              // ── Overlay escuro no rodapé ──────────────────────────
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  height: 110,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.transparent, Colors.black87],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                  ),
-                ),
-              ),
-
-              // ── Badge tipo (topo esquerdo) ────────────────────────
-              Positioned(
-                top: 10,
-                left: 10,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    place.typeLabel,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-
-              // ── Aberto agora (topo direito) ───────────────────────
-              if (place.isOpenNow)
-                Positioned(
-                  top: 10,
-                  right: 10,
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                        color: Color(0xFF22C55E), shape: BoxShape.circle),
-                  ),
-                ),
-
-              // ── Conteúdo (rodapé) ─────────────────────────────────
-              Positioned(
-                bottom: 10,
-                left: 10,
-                right: 10,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Rating
-                    if (place.rating != null)
-                      Row(
-                        children: [
-                          const Icon(Icons.star, color: Colors.amber, size: 12),
-                          const SizedBox(width: 3),
-                          Text(
-                            place.rating!.toStringAsFixed(1),
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700),
-                          ),
-                          if (place.userRatingsTotal != null) ...[
-                            const SizedBox(width: 3),
-                            Text(
-                              '(${_fmt(place.userRatingsTotal!)})',
-                              style: TextStyle(
-                                  color: Colors.white.withOpacity(0.7),
-                                  fontSize: 9),
-                            ),
-                          ],
-                        ],
-                      ),
-                    const SizedBox(height: 3),
-                    // Nome
-                    Text(
-                      place.name,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          height: 1.2),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 3),
-                    // Reason badge
-                    Text(
-                      _reasonLabel,
-                      style: TextStyle(
-                          color: Colors.white.withOpacity(0.85), fontSize: 10),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 6),
-                    // Ver no Maps
-                    Text(
-                      'Ver no Maps →',
-                      style: TextStyle(
-                          color: Colors.white.withOpacity(0.9),
-                          fontSize: 10,
-                          decoration: TextDecoration.underline,
-                          decorationColor: Colors.white.withOpacity(0.9)),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _fmt(int n) {
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}k';
-    return '$n';
-  }
-}
 
 // ─── Friend Stories Strip ─────────────────────────────────────────────────────
 
@@ -1466,182 +1032,6 @@ class _HighlightsStrip extends StatelessWidget {
   }
 }
 
-// ─── Event card (home) ────────────────────────────────────────────────────────
-
-class _EventCard extends StatelessWidget {
-  final EventModel event;
-  final VoidCallback onTap;
-  const _EventCard({required this.event, required this.onTap});
-
-  static const _months = [
-    '', 'JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN',
-    'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final d = event.startsAt;
-    final dateLabel =
-        '${d.day.toString().padLeft(2, '0')} ${_months[d.month]}';
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 240,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 6,
-                offset: const Offset(0, 2)),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (event.bannerUrl != null)
-                CachedNetworkImage(
-                  imageUrl: event.bannerUrl!,
-                  fit: BoxFit.cover,
-                  errorWidget: (_, __, ___) => Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [AppColors.navy, AppColors.mediumBlue],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                  ),
-                )
-              else
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [AppColors.navy, AppColors.mediumBlue],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  child: const Center(
-                    child: Icon(Icons.event, color: Colors.white24, size: 48),
-                  ),
-                ),
-              // Overlay
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  height: 120,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.transparent, Colors.black87],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                  ),
-                ),
-              ),
-              // Badge de data
-              Positioned(
-                top: 10,
-                left: 10,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.navy,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(dateLabel,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800)),
-                ),
-              ),
-              // Contador de interesse
-              Positioned(
-                top: 10,
-                right: 10,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                          event.isInterested
-                              ? Icons.star
-                              : Icons.people_outline,
-                          color: event.isInterested
-                              ? AppColors.teal
-                              : Colors.white,
-                          size: 12),
-                      const SizedBox(width: 4),
-                      Text('${event.interestsCount}',
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700)),
-                    ],
-                  ),
-                ),
-              ),
-              // Conteúdo
-              Positioned(
-                bottom: 12,
-                left: 12,
-                right: 12,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(event.title,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            height: 1.2),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                    if ((event.locationLabel ?? event.city ?? '').isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      Row(
-                        children: [
-                          const Icon(Icons.location_on,
-                              color: Colors.white70, size: 12),
-                          const SizedBox(width: 3),
-                          Expanded(
-                            child: Text(
-                              event.locationLabel ?? event.city ?? '',
-                              style: TextStyle(
-                                  color: Colors.white.withOpacity(0.85),
-                                  fontSize: 11),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _StoryItemSkeleton extends StatelessWidget {
   const _StoryItemSkeleton();

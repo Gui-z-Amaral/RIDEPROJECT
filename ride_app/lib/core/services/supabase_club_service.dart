@@ -196,6 +196,7 @@ class SupabaseClubService {
     String? stateUf,
     String? avatarUrl,
     String? bannerUrl,
+    bool? eventsPublic,
   }) async {
     final updates = <String, dynamic>{};
     if (name != null) updates['name'] = name;
@@ -204,6 +205,7 @@ class SupabaseClubService {
     if (stateUf != null) updates['state_uf'] = stateUf;
     if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
     if (bannerUrl != null) updates['banner_url'] = bannerUrl;
+    if (eventsPublic != null) updates['events_public'] = eventsPublic;
     if (updates.isNotEmpty) {
       await _db.from('clubs').update(updates).eq('id', id);
     }

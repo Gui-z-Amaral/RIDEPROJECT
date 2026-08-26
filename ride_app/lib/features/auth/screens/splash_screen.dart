@@ -49,35 +49,21 @@ class _SplashScreenState extends State<SplashScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Logo row: "RIDE" + globe icon
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    'RIDE',
-                    style: AppTextStyles.displayLarge.copyWith(
-                      fontSize: 36,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.navy,
-                      letterSpacing: 2,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.teal, width: 2),
-                    ),
-                    child: const Icon(
-                      Icons.language,
-                      color: AppColors.teal,
-                      size: 20,
-                    ),
-                  ),
-                ],
+              // Logo do RideApp
+              Image.asset(
+                'assets/logo/logo_sem_fundo.png',
+                width: 120,
+                height: 120,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'RIDE',
+                style: AppTextStyles.displayLarge.copyWith(
+                  fontSize: 36,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.navy,
+                  letterSpacing: 2,
+                ),
               ),
               const SizedBox(height: 10),
               Text(

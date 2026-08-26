@@ -208,7 +208,9 @@ class SupabaseEventService {
         .from('events')
         .select(_select)
         .eq('state_uf', uf)
-        .isFilter('club_id', null) // eventos de clube ficam só no mural do clube
+        // is_public: eventos públicos (empresa/pessoal sempre; clube só se o
+        // dono marcou "eventos públicos"). Privados de clube ficam no mural.
+        .eq('is_public', true)
         .gte('starts_at', DateTime.now().toIso8601String())
         .order('starts_at', ascending: true)
         .limit(limit);

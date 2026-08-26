@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/models/event_model.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/services/supabase_event_service.dart';
+import '../../../core/utils/share_utils.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../theme/app_colors.dart';
@@ -22,11 +23,27 @@ class EventDetailScreen extends StatefulWidget {
 }
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
+  // Gerente do clube pode editar/excluir eventos do clube mesmo sem ser o criador.
+  bool _canManageClub = false;
+  String? _clubChecked;
+
   @override
   void initState() {
     super.initState();
     Future.microtask(
         () => context.read<EventViewModel>().loadDetail(widget.eventId));
+  }
+
+  Future<void> _ensureClubAdminCheck(EventModel e) async {
+    final clubId = e.clubId;
+    if (clubId == null || _clubChecked == clubId) return;
+    _clubChecked = clubId;
+    try {
+      final uid = Supabase.instance.client.auth.currentUser?.id;
+      final res = await Supabase.instance.client.rpc('is_club_admin',
+          params: {'p_club': clubId, 'p_user': uid});
+      if (mounted && res == true) setState(() => _canManageClub = true);
+    } catch (_) {}
   }
 
   static const _months = [
@@ -81,7 +98,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final vm = context.watch<EventViewModel>();
     final e = vm.selected;
     final myId = Supabase.instance.client.auth.currentUser?.id;
-    final isOwner = e != null && e.creatorId == myId;
+    // Dispara a checagem de gerente do clube quando o evento é de um clube.
+    if (e != null) _ensureClubAdminCheck(e);
+    final isOwner =
+        e != null && (e.creatorId == myId || _canManageClub);
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
@@ -100,6 +120,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     onPressed: () => context.pop(),
                   ),
                   actions: [
+                    IconButton(
+                      icon: const Icon(Icons.share_outlined, color: Colors.white),
+                      tooltip: 'Compartilhar',
+                      onPressed: () => ShareUtils.shareEvent(e),
+                    ),
                     if (isOwner) ...[
                       IconButton(
                         icon: const Icon(Icons.edit_outlined,
