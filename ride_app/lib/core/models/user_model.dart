@@ -28,6 +28,8 @@ class UserModel {
   final int tripsCount;
   final int ridesCount;
   final bool isOnline;
+  final bool discoverable; // aparece na descoberta de riders próximos
+  final bool isPrivate; // perfil privado (não-amigo vê só o básico)
   final DateTime? createdAt;
 
   const UserModel({
@@ -55,6 +57,8 @@ class UserModel {
     this.tripsCount = 0,
     this.ridesCount = 0,
     this.isOnline = false,
+    this.discoverable = true,
+    this.isPrivate = false,
     this.createdAt,
   });
 
@@ -92,6 +96,8 @@ class UserModel {
     int? tripsCount,
     int? ridesCount,
     bool? isOnline,
+    bool? discoverable,
+    bool? isPrivate,
   }) {
     return UserModel(
       id: id,
@@ -119,6 +125,8 @@ class UserModel {
       tripsCount: tripsCount ?? this.tripsCount,
       ridesCount: ridesCount ?? this.ridesCount,
       isOnline: isOnline ?? this.isOnline,
+      discoverable: discoverable ?? this.discoverable,
+      isPrivate: isPrivate ?? this.isPrivate,
       createdAt: createdAt,
     );
   }
@@ -148,6 +156,8 @@ class UserModel {
         'trips_count': tripsCount,
         'rides_count': ridesCount,
         'is_online': isOnline,
+        'discoverable': discoverable,
+        'is_private': isPrivate,
       };
 
   factory UserModel.fromMap(Map<String, dynamic> map) {
@@ -179,6 +189,8 @@ class UserModel {
       tripsCount: (map['trips_count'] as num?)?.toInt() ?? 0,
       ridesCount: (map['rides_count'] as num?)?.toInt() ?? 0,
       isOnline: map['is_online'] as bool? ?? false,
+      discoverable: map['discoverable'] as bool? ?? true,
+      isPrivate: map['is_private'] as bool? ?? false,
       createdAt: rawCreatedAt is String
           ? DateTime.tryParse(rawCreatedAt)
           : rawCreatedAt as DateTime?,

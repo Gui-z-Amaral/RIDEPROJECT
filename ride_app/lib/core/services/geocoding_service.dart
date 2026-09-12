@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../constants/app_config.dart';
+import 'maps_proxy.dart';
 
 class PlaceInfo {
   final String name;
@@ -47,6 +48,7 @@ class PlaceInfo {
   /// URL para exibir a foto via Places Photo API.
   String? get photoUrl {
     if (photoRef == null || photoRef!.isEmpty) return null;
+    // Foto direto no Google: <img> não sofre CORS.
     return 'https://maps.googleapis.com/maps/api/place/photo'
         '?maxwidth=600&photo_reference=$photoRef'
         '&key=${AppConfig.googleMapsApiKey}';
@@ -60,14 +62,14 @@ class GeocodingService {
   /// (the part before the first comma) when address components don't carry it.
   static Future<PlaceInfo?> reverseGeocode(double lat, double lng) async {
     try {
-      final url = Uri.parse(
-        'https://maps.googleapis.com/maps/api/geocode/json'
-        '?latlng=$lat,$lng'
-        '&language=pt-BR'
-        '&key=${AppConfig.googleMapsApiKey}',
-      );
+      final url = MapsProxy.uri('geocode/json', {
+        'latlng': '$lat,$lng',
+        'language': 'pt-BR',
+      });
 
-      final response = await http.get(url).timeout(const Duration(seconds: 8));
+      final response = await http
+          .get(url, headers: MapsProxy.headers)
+          .timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return null;
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -177,14 +179,14 @@ class GeocodingService {
   /// coverage) so that POI taps on the map always resolve to a real place name.
   static Future<PlaceInfo?> nearbySearch(double lat, double lng) async {
     try {
-      final url = Uri.parse(
-        'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
-        '?location=$lat,$lng'
-        '&rankby=distance'
-        '&language=pt-BR'
-        '&key=${AppConfig.googleMapsApiKey}',
-      );
-      final res = await http.get(url).timeout(const Duration(seconds: 6));
+      final url = MapsProxy.uri('place/nearbysearch/json', {
+        'location': '$lat,$lng',
+        'rankby': 'distance',
+        'language': 'pt-BR',
+      });
+      final res = await http
+          .get(url, headers: MapsProxy.headers)
+          .timeout(const Duration(seconds: 6));
       if (res.statusCode != 200) return null;
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       final status = data['status'] as String?;
@@ -227,14 +229,14 @@ class GeocodingService {
   /// home pelo estado atual do usuário. Retorna null se não conseguir resolver.
   static Future<String?> getStateUf(double lat, double lng) async {
     try {
-      final url = Uri.parse(
-        'https://maps.googleapis.com/maps/api/geocode/json'
-        '?latlng=$lat,$lng'
-        '&language=pt-BR'
-        '&result_type=administrative_area_level_1'
-        '&key=${AppConfig.googleMapsApiKey}',
-      );
-      final response = await http.get(url).timeout(const Duration(seconds: 8));
+      final url = MapsProxy.uri('geocode/json', {
+        'latlng': '$lat,$lng',
+        'language': 'pt-BR',
+        'result_type': 'administrative_area_level_1',
+      });
+      final response = await http
+          .get(url, headers: MapsProxy.headers)
+          .timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return null;
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       if (data['status'] != 'OK') return null;

@@ -6,6 +6,7 @@ import '../../../theme/app_text_styles.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../../../core/utils/extensions.dart';
 import '../../../core/constants/supabase_config.dart';
+import '../../../shared/widgets/app_logo.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -65,9 +66,11 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const SizedBox(height: 48),
+                const SizedBox(height: 40),
 
                 // Logo
+                const AppLogo(size: 88),
+                const SizedBox(height: 12),
                 Text(
                   'RIDE',
                   style: AppTextStyles.displayLarge.copyWith(
@@ -78,7 +81,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 48),
+                const SizedBox(height: 40),
 
                 // Email / username field
                 _Field(

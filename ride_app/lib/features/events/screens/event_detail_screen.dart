@@ -8,7 +8,6 @@ import '../../../core/models/event_model.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/services/supabase_event_service.dart';
 import '../../../core/utils/share_utils.dart';
-import '../../../theme/app_spacing.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
@@ -117,7 +116,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   backgroundColor: AppColors.navy,
                   leading: IconButton(
                     icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: () => context.pop(),
+                    onPressed: () =>
+                        context.canPop() ? context.pop() : context.go('/home'),
                   ),
                   actions: [
                     IconButton(
@@ -365,7 +365,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             alignment: Alignment.centerLeft,
             child: IconButton(
               icon: Icon(Icons.arrow_back, color: AppColors.navy),
-              onPressed: () => context.pop(),
+              onPressed: () =>
+                  context.canPop() ? context.pop() : context.go('/home'),
             ),
           ),
           const Expanded(

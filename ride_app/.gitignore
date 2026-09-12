@@ -51,3 +51,6 @@ ios/Runner/GoogleService-Info.plist
 *.keystore
 *.jks
 key.properties
+
+# Chave do Maps para web (não commitar)
+/web/env.js

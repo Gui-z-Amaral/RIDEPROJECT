@@ -1,9 +1,7 @@
-import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
@@ -41,7 +39,6 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   String _destinoLabel = '';
   double? _destLat;
   double? _destLng;
-  bool _lookingUpCep = false;
   PlaceInfo? _destInfo; // info extra do destino (foto, horários, etc.)
 
   // Ponto de partida/encontro (opcional — padrão = localização atual)
@@ -159,35 +156,6 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     if (loc != null) setState(() => _departurePoint = loc);
   }
 
-  // ── CEP lookup via ViaCEP (grátis) ──────────────────────────
-  Future<void> _lookupCep(String cep) async {
-    final clean = cep.replaceAll(RegExp(r'\D'), '');
-    if (clean.length != 8) return;
-    if (!mounted) return;
-    setState(() => _lookingUpCep = true);
-    try {
-      final res = await http
-          .get(Uri.parse('https://viacep.com.br/ws/$clean/json/'))
-          .timeout(const Duration(seconds: 6));
-      if (!mounted) return;
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body) as Map<String, dynamic>;
-        if (data['erro'] != true) {
-          setState(() {
-            _ruaCtrl.text = data['logradouro'] ?? _ruaCtrl.text;
-            _bairroCtrl.text = data['bairro'] ?? _bairroCtrl.text;
-            final city = data['localidade'] ?? '';
-            final uf = data['uf'] ?? '';
-            if (_destinoLabel.isEmpty && city.isNotEmpty) {
-              _destinoLabel = '$city, $uf - BRASIL';
-            }
-          });
-        }
-      }
-    } catch (_) {}
-    if (mounted) setState(() => _lookingUpCep = false);
-  }
-
   // ── Navigation ───────────────────────────────────────────────
   void _back() {
     if (_step > 0) setState(() => _step--);
@@ -221,6 +189,8 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       label: _destinoLabel,
     ));
     vm.setScheduledAt(_departureDate);
+    // Foto do destino (banner do Google Places) vira a capa da viagem.
+    vm.setCoverImage(_destInfo?.photoUrl);
 
     final trip = _isEditing
         ? await vm.updateTrip(widget.tripId!)
@@ -423,90 +393,20 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 24),
-
-        // Endereço completo
-        _LabelSection(label: 'ENDEREÇO COMPLETO'),
-        Text('Ou adicione o CEP para puxar os dados',
-            style: AppTextStyles.bodySmall),
-        const SizedBox(height: 12),
-
-        Row(
-          children: [
-            Expanded(
-              flex: 3,
-              child: _FormField(
-                  controller: _ruaCtrl, hint: 'Rua'),
+        // "Buscar outro destino" só aparece depois de já ter um selecionado.
+        if (_destinoLabel.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: OutlinedButton(
+              onPressed: () => _pickDestinationFromMap(),
+              child: Text('BUSCAR OUTRO DESTINO',
+                  style: AppTextStyles.labelLarge
+                      .copyWith(color: AppColors.navy)),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _FormField(
-                  controller: _numCtrl, hint: 'N°'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        _FormField(controller: _bairroCtrl, hint: 'Bairro'),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _FormField(
-                controller: _cepCtrl,
-                hint: 'CEP',
-                keyboardType: TextInputType.number,
-                onChanged: (v) {
-                  if (v.length >= 8) _lookupCep(v);
-                },
-                suffix: _lookingUpCep
-                    ? SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppColors.navy),
-                      )
-                    : null,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: SizedBox(
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: () => _lookupCep(_cepCtrl.text),
-                  style: ElevatedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: Text('SALVAR DESTINO',
-                      style: AppTextStyles.labelLarge
-                          .copyWith(fontSize: 11)),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-
-        // Mini map preview / BUSCAR NO MAPA
-        _MapPreviewBox(
-          lat: _destLat,
-          lng: _destLng,
-          onTap: () => _pickDestinationFromMap(),
-        ),
-        const SizedBox(height: 12),
-
-        SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: OutlinedButton(
-            onPressed: () => _pickDestinationFromMap(),
-            child: Text('BUSCAR NO MAPA',
-                style: AppTextStyles.labelLarge
-                    .copyWith(color: AppColors.navy)),
           ),
-        ),
+        ],
         const SizedBox(height: 24),
 
         // ── Ponto de partida / encontro (opcional) ───────────────
@@ -1182,96 +1082,6 @@ class _LabelSection extends StatelessWidget {
         label,
         style: AppTextStyles.titleLarge
             .copyWith(fontWeight: FontWeight.w700),
-      ),
-    );
-  }
-}
-
-class _FormField extends StatelessWidget {
-  final TextEditingController controller;
-  final String hint;
-  final TextInputType? keyboardType;
-  final void Function(String)? onChanged;
-  final Widget? suffix;
-
-  const _FormField({
-    required this.controller,
-    required this.hint,
-    this.keyboardType,
-    this.onChanged,
-    this.suffix,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      keyboardType: keyboardType,
-      onChanged: onChanged,
-      style: AppTextStyles.bodyMedium
-          .copyWith(color: AppColors.textPrimary),
-      decoration: InputDecoration(
-        hintText: hint,
-        suffixIcon: suffix != null
-            ? Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: suffix)
-            : null,
-        contentPadding: const EdgeInsets.symmetric(
-            horizontal: 14, vertical: 14),
-      ),
-    );
-  }
-}
-
-class _MapPreviewBox extends StatelessWidget {
-  final double? lat;
-  final double? lng;
-  final VoidCallback onTap;
-
-  const _MapPreviewBox(
-      {required this.lat, required this.lng, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 160,
-        decoration: BoxDecoration(
-          color: AppColors.teal.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.divider),
-        ),
-        child: lat != null
-            ? Stack(
-                alignment: Alignment.center,
-                children: [
-                  Icon(Icons.location_on,
-                      color: AppColors.navy, size: 40),
-                  Positioned(
-                    bottom: 10,
-                    left: 0,
-                    right: 0,
-                    child: Text(
-                      '${lat!.toStringAsFixed(4)}, ${lng!.toStringAsFixed(4)}',
-                      textAlign: TextAlign.center,
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: AppColors.navy),
-                    ),
-                  ),
-                ],
-              )
-            : Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.map_outlined,
-                      color: AppColors.textMuted, size: 36),
-                  const SizedBox(height: 8),
-                  Text('Toque para selecionar no mapa',
-                      style: AppTextStyles.bodySmall),
-                ],
-              ),
       ),
     );
   }

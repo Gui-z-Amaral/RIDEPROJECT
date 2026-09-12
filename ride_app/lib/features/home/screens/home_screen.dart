@@ -181,6 +181,49 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: AppSpacing.lg),
 
+                  // ── RIDERS PRÓXIMOS ───────────────────────────────
+                  GestureDetector(
+                    onTap: () => context.push('/riders/nearby'),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.navy,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.near_me,
+                                color: Colors.white, size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Riders próximos',
+                                    style: AppTextStyles.titleMedium.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w800)),
+                                Text('Encontre motociclistas perto de você',
+                                    style: AppTextStyles.bodySmall
+                                        .copyWith(color: Colors.white70)),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right, color: Colors.white70),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+
                   // ── NOVIDADES DOS AMIGOS (stories) ────────────────
                   if (vm.isLoadingStories || vm.friendStories.isNotEmpty) ...[
                     _SectionLabel(label: 'NOVIDADES DOS AMIGOS'),

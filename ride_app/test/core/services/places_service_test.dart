@@ -121,6 +121,7 @@ void main() {
         isOpenNow: true,
         reason: RecommendationReason.trustedBusiness,
       );
+      // Foto vai direto ao Google (<img> não sofre CORS).
       expect(p.photoUrl, contains('place/photo'));
       expect(p.photoUrl, contains('photo_reference=CmRaAAAA-XYZ'));
       expect(p.photoUrl, contains('maxwidth=400'));

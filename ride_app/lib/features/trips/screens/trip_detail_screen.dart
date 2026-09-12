@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
+import '../../../core/services/places_service.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_map.dart';
@@ -88,6 +89,45 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     }
   }
 
+  Widget _headerFallback() => Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [AppColors.mediumBlue, AppColors.darkNavy],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: const Center(
+            child: Icon(Icons.map, size: 80, color: AppColors.teal)),
+      );
+
+  // Foto de capa do destino: usa a salva na viagem; se não houver (viagens
+  // antigas), busca a foto do local pelo nome/coordenada do destino.
+  String? _cover;
+  String? _coverTripId;
+  Future<void> _ensureCover(TripModel trip) async {
+    if (_coverTripId == trip.id) return;
+    _coverTripId = trip.id;
+    if (trip.coverImage != null && trip.coverImage!.isNotEmpty) {
+      setState(() => _cover = trip.coverImage);
+      return;
+    }
+    final query = (trip.destination.label?.isNotEmpty ?? false)
+        ? trip.destination.label!
+        : (trip.destination.address ?? '');
+    if (query.trim().isEmpty) return;
+    try {
+      final results = await PlacesService.searchPlaces(
+        query: query,
+        lat: trip.destination.lat,
+        lng: trip.destination.lng,
+        limit: 1,
+      );
+      final url = results.isNotEmpty ? results.first.photoUrl : '';
+      if (mounted && url.isNotEmpty) setState(() => _cover = url);
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<TripViewModel>();
@@ -103,6 +143,9 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         if (mounted) _loadPhotos(trip.id);
       });
     }
+
+    // Resolve a foto de capa (do local) quando a viagem chega.
+    if (trip != null) _ensureCover(trip);
 
     // Mostra loading enquanto: carregando detalhes, ou viagem ainda não chegou (e sem erro)
     if (vm.isLoadingDetail || (trip == null && !vm.hasError)) {
@@ -203,12 +246,29 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             ],
             flexibleSpace: FlexibleSpaceBar(
               title: Text(trip.title, style: AppTextStyles.headlineSmall),
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: [AppColors.mediumBlue, AppColors.darkNavy], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                ),
-                child: const Center(child: Icon(Icons.map, size: 80, color: AppColors.teal)),
-              ),
+              background: (_cover != null && _cover!.isNotEmpty)
+                  ? Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        CachedNetworkImage(
+                          imageUrl: _cover!,
+                          fit: BoxFit.cover,
+                          errorWidget: (_, __, ___) => _headerFallback(),
+                        ),
+                        // Escurece o rodapé para o título ficar legível.
+                        const DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [Colors.transparent, Colors.black54],
+                              stops: [0.5, 1.0],
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : _headerFallback(),
             ),
           ),
           SliverToBoxAdapter(

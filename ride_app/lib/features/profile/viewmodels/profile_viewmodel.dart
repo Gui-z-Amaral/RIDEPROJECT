@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/services/supabase_auth_service.dart';
+import '../../../core/services/supabase_rider_service.dart';
 
 class ProfileViewModel extends ChangeNotifier {
   // Sentinel para distinguir "não alterar" vs "setar para null" em updates.
@@ -104,6 +105,35 @@ class ProfileViewModel extends ChangeNotifier {
   Future<bool> setAccountType(String accountType) async {
     if (_user?.accountType == accountType) return true;
     return updateProfile(accountType: accountType);
+  }
+
+  // ── Privacidade ──────────────────────────────────────────
+  /// Aparecer (ou não) na descoberta de riders próximos. Ao desligar, apaga a
+  /// localização guardada.
+  Future<void> setDiscoverable(bool value) async {
+    final prev = _user?.discoverable;
+    _user = _user?.copyWith(discoverable: value);
+    notifyListeners();
+    try {
+      await SupabaseRiderService.setPrivacy(discoverable: value);
+      if (!value) await SupabaseRiderService.clearMyLocation();
+    } catch (_) {
+      _user = _user?.copyWith(discoverable: prev);
+      notifyListeners();
+    }
+  }
+
+  /// Perfil privado (não-amigo vê só o básico).
+  Future<void> setPrivate(bool value) async {
+    final prev = _user?.isPrivate;
+    _user = _user?.copyWith(isPrivate: value);
+    notifyListeners();
+    try {
+      await SupabaseRiderService.setPrivacy(isPrivate: value);
+    } catch (_) {
+      _user = _user?.copyWith(isPrivate: prev);
+      notifyListeners();
+    }
   }
 
   /// Limpa estado — chamado no logout.

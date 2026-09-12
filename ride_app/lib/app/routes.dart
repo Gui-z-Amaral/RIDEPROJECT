@@ -18,6 +18,7 @@ import '../features/social/screens/friend_profile_screen.dart';
 import '../features/social/screens/search_users_screen.dart';
 import '../features/social/screens/chat_screen.dart';
 import '../features/social/screens/messages_screen.dart';
+import '../features/social/screens/nearby_riders_screen.dart';
 import '../features/social/screens/invites_screen.dart';
 import '../features/events/screens/events_screen.dart';
 import '../features/trips/screens/trips_list_screen.dart';
@@ -50,6 +51,9 @@ import 'shell_screen.dart';
 
 final router = GoRouter(
   initialLocation: '/splash',
+  // Com o deep linking nativo ligado, a abertura normal chega como '/'.
+  // Redireciona pra splash; deep links (/e/:id etc.) passam direto.
+  redirect: (context, state) => state.uri.path == '/' ? '/splash' : null,
   routes: [
     GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
     GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
@@ -131,6 +135,7 @@ final router = GoRouter(
       builder: (_, state) => ChatScreen(userId: state.pathParameters['userId']!),
     ),
     GoRoute(path: '/friends/invites', builder: (_, __) => const InvitesScreen()),
+    GoRoute(path: '/riders/nearby', builder: (_, __) => const NearbyRidersScreen()),
     GoRoute(
       path: '/profile/:userId',
       builder: (_, state) {

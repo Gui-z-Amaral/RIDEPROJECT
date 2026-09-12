@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/services/supabase_auth_service.dart';
@@ -184,6 +185,12 @@ class AuthViewModel extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
+      // Na web isso dispara um redirect de página; a volta é tratada pelo
+      // listener de authStateChanges. Não há usuário para retornar aqui.
+      if (kIsWeb) {
+        await SupabaseAuthService.signInWithGoogle(webClientId);
+        return true;
+      }
       _user = await SupabaseAuthService.signInWithGoogle(webClientId);
       if (_user != null) {
         _state = AuthState.authenticated;

@@ -43,6 +43,7 @@ class PushNotificationService {
   /// Configura permissão, canal, listeners e registra o token se já logado.
   /// Tolerante a falha (ex: device sem Google Play Services).
   Future<void> initialize() async {
+    if (kIsWeb) return; // push web é Fase 2 (FCM web + service worker)
     if (_initialized) return;
     _initialized = true;
     try {
@@ -86,6 +87,7 @@ class PushNotificationService {
 
   /// Pega o token atual e salva em device_tokens para o usuário logado.
   Future<void> registerForCurrentUser() async {
+    if (kIsWeb) return;
     try {
       final token = await FirebaseMessaging.instance.getToken();
       if (token != null) {
@@ -98,6 +100,7 @@ class PushNotificationService {
 
   /// Remove o token do aparelho — chamar ANTES do signOut (precisa do uid).
   Future<void> removeForCurrentUser() async {
+    if (kIsWeb) return;
     try {
       final token = await FirebaseMessaging.instance.getToken();
       if (token != null) {
@@ -111,6 +114,7 @@ class PushNotificationService {
   /// Remove as notificações já entregues na bandeja do sistema. Chamado ao
   /// abrir/voltar para o app (toque no push ou retorno ao foreground).
   Future<void> clearDeliveredNotifications() async {
+    if (kIsWeb) return;
     try {
       await _local.cancelAll();
     } catch (_) {}

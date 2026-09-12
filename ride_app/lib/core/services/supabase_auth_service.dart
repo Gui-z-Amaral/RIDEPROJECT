@@ -104,6 +104,17 @@ class SupabaseAuthService {
   // ── Google Sign-In ─────────────────────────────────────────
   // webClientId: ID do cliente Web criado no Google Cloud Console
   static Future<UserModel?> signInWithGoogle(String webClientId) async {
+    // Na web o google_sign_in não suporta signIn() interativo (dá assertion).
+    // Usamos o OAuth do Supabase: redireciona pro Google e volta pra própria
+    // URL; a sessão é recuperada e o listener de authStateChanges assume daqui.
+    if (kIsWeb) {
+      await _db.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: Uri.base.origin,
+      );
+      return null; // fluxo continua após o redirect de volta
+    }
+
     final googleSignIn = GoogleSignIn(serverClientId: webClientId);
     final googleUser = await googleSignIn.signIn();
     if (googleUser == null) return null; // usuário cancelou
@@ -277,6 +288,9 @@ class SupabaseAuthService {
     if (row == null) return null;
     return UserModel.fromMap(row);
   }
+
+  /// Busca o perfil completo de [id] (dados atuais, incl. flags de privacidade).
+  static Future<UserModel?> getProfileById(String id) => _fetchProfile(id);
 
   static String _usernameFrom(String name) =>
       name.toLowerCase().replaceAll(RegExp(r'\s+'), '_');

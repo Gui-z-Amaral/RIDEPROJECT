@@ -1,7 +1,7 @@
 name: ride_app
 description: Ride - Rolês e Viagens de Moto
 publish_to: 'none'
-version: 0.0.20+20
+version: 0.0.26+26
 
 environment:
   sdk: ^3.11.3
@@ -67,9 +67,9 @@ flutter_launcher_icons:
   android: true
   ios: true
   remove_alpha_ios: true
-  image_path: "assets/logo/icone.png"
-  adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/logo/logo_sem_fundo.png"
+  image_path: "assets/logo/app_icon.png"
+  adaptive_icon_background: "#1B3058"
+  adaptive_icon_foreground: "assets/logo/app_icon_fg.png"
 
 flutter:
   uses-material-design: true

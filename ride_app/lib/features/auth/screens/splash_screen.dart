@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
+import '../../../shared/widgets/app_logo.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -49,12 +50,8 @@ class _SplashScreenState extends State<SplashScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Logo do RideApp
-              Image.asset(
-                'assets/logo/logo_sem_fundo.png',
-                width: 120,
-                height: 120,
-              ),
+              // Logo do RideApp (adapta ao tema)
+              const AppLogo(size: 120),
               const SizedBox(height: 12),
               Text(
                 'RIDE',

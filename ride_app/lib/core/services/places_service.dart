@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../constants/app_config.dart';
+import 'maps_proxy.dart';
 
 enum RecommendationReason {
   nearbyRestaurant, // Restaurante próximo (< 2km)
@@ -93,6 +94,8 @@ class PlaceRecommendation {
     this.tripContext,
   });
 
+  // Foto vai direto ao Google: <img> não sofre CORS (o bloqueio é só no
+  // fetch do JSON), então não precisa do proxy nem de header de auth.
   String get photoUrl {
     if (photoRef == null || photoRef!.isEmpty) return '';
     return 'https://maps.googleapis.com/maps/api/place/photo'
@@ -113,12 +116,6 @@ class PlaceRecommendation {
 }
 
 class PlacesService {
-  static const _baseUrl =
-      'https://maps.googleapis.com/maps/api/place/nearbysearch/json';
-  static const _textSearchUrl =
-      'https://maps.googleapis.com/maps/api/place/textsearch/json';
-  static String get _key => AppConfig.googleMapsApiKey;
-
   // Cliente HTTP injetável — em produção é o default do package:http;
   // em testes pode ser substituído por um MockClient via [debugSetClient].
   static http.Client _client = http.Client();
@@ -156,7 +153,6 @@ class PlacesService {
     try {
       final params = <String, String>{
         'location': '$lat,$lng',
-        'key': _key,
         'language': 'pt-BR',
       };
       if (type != null) params['type'] = type;
@@ -167,9 +163,10 @@ class PlacesService {
         params['radius'] = (radius ?? 2000).toString();
       }
 
-      final url = Uri.parse(_baseUrl).replace(queryParameters: params);
-      final res =
-          await _client.get(url).timeout(const Duration(seconds: 8));
+      final url = MapsProxy.uri('place/nearbysearch/json', params);
+      final res = await _client
+          .get(url, headers: MapsProxy.headers)
+          .timeout(const Duration(seconds: 8));
       if (res.statusCode != 200) return [];
 
       final data = jsonDecode(res.body) as Map<String, dynamic>;
@@ -394,7 +391,6 @@ class PlacesService {
     try {
       final params = <String, String>{
         'query': trimmed,
-        'key': _key,
         'language': 'pt-BR',
       };
       if (lat != null && lng != null) {
@@ -402,8 +398,10 @@ class PlacesService {
         params['radius'] = radiusMeters.toString();
       }
 
-      final url = Uri.parse(_textSearchUrl).replace(queryParameters: params);
-      final res = await _client.get(url).timeout(const Duration(seconds: 8));
+      final url = MapsProxy.uri('place/textsearch/json', params);
+      final res = await _client
+          .get(url, headers: MapsProxy.headers)
+          .timeout(const Duration(seconds: 8));
       if (res.statusCode != 200) return [];
 
       final data = jsonDecode(res.body) as Map<String, dynamic>;

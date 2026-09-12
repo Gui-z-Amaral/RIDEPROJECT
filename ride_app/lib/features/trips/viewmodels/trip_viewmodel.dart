@@ -27,9 +27,11 @@ class TripViewModel extends ChangeNotifier {
   List<UserModel> _participants = [];
   DateTime? _scheduledAt;
   String? _clubId; // viagem de motoclube (quando criada por dentro do clube)
+  String? _coverImage; // foto do destino (banner do Google Places)
 
   String? get clubId => _clubId;
   void setClubId(String? id) => _clubId = id;
+  void setCoverImage(String? url) => _coverImage = url;
 
   List<TripModel> get trips => _trips;
   TripModel? get selectedTrip => _selectedTrip;
@@ -114,6 +116,7 @@ class TripViewModel extends ChangeNotifier {
     _participants = [];
     _scheduledAt = null;
     _clubId = null;
+    _coverImage = null;
     notifyListeners();
   }
 
@@ -156,6 +159,7 @@ class TripViewModel extends ChangeNotifier {
         participantIds: _participants.map((u) => u.id).toList(),
         scheduledAt: _scheduledAt,
         clubId: _clubId,
+        coverImage: _coverImage,
       );
       _trips = [trip, ..._trips];
       resetForm();

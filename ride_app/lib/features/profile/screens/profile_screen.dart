@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
@@ -19,11 +18,9 @@ import '../../../core/constants/business_categories.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/models/trip_model.dart';
 import '../../../core/models/event_model.dart';
-import '../../../core/utils/image_utils.dart';
 import '../../../shared/widgets/photo_viewer.dart';
 import '../../../shared/widgets/framed_avatar.dart';
 import '../../../shared/widgets/profile_banner.dart';
-import '../../../core/constants/profile_appearance.dart';
 import '../viewmodels/profile_customization_viewmodel.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -55,81 +52,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     await auth.logout();
     if (context.mounted) context.go('/login');
-  }
-
-  // ── Photo upload ──────────────────────────────────────────
-  Future<void> _pickAndUploadPhoto(BuildContext context) async {
-    final picker = ImagePicker();
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: AppColors.background,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.divider,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: Icon(
-                Icons.camera_alt_outlined,
-                color: AppColors.navy,
-              ),
-              title: const Text('Câmera'),
-              onTap: () => Navigator.pop(context, ImageSource.camera),
-            ),
-            ListTile(
-              leading: Icon(
-                Icons.photo_library_outlined,
-                color: AppColors.navy,
-              ),
-              title: const Text('Galeria'),
-              onTap: () => Navigator.pop(context, ImageSource.gallery),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-    if (source == null || !mounted) return;
-
-    final file = await picker.pickImage(source: source, imageQuality: 80);
-    if (file == null || !mounted) return;
-
-    try {
-      final uid = Supabase.instance.client.auth.currentUser!.id;
-      // pasta uid/ garante que a policy de RLS aceite o upload
-      final fileName = '$uid/${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final bytes = await file.readAsBytes();
-      final jpeg = await ImageUtils.compressToJpeg(bytes);
-      await Supabase.instance.client.storage
-          .from('user-photos')
-          .uploadBinary(
-            fileName,
-            jpeg,
-            fileOptions: const FileOptions(contentType: 'image/jpeg'),
-          );
-      final url = Supabase.instance.client.storage
-          .from('user-photos')
-          .getPublicUrl(fileName);
-      if (!mounted) return;
-      await context.read<ProfileViewModel>().addPhoto(url);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Erro ao enviar foto. Tente novamente.')),
-      );
-    }
   }
 
   // ── Trip bottom sheet ─────────────────────────────────────
@@ -337,16 +259,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         .customization;
     final user = vm.user;
     final bottomPad = MediaQuery.of(context).padding.bottom;
-    final isBusiness = user?.isBusiness ?? false;
-    final profileBgColor = (!isBusiness)
-        ? resolveProfileColor(
-            customization?.backgroundColor,
-            AppColors.background,
-          )
-        : AppColors.background;
-    final profileTextColor = (!isBusiness)
-        ? resolveProfileColor(customization?.textColor, AppColors.textPrimary)
-        : AppColors.textPrimary;
+    // Perfil limpo: cores sempre no padrão, só o banner é personalizável.
+    final profileBgColor = AppColors.background;
+    final profileTextColor = AppColors.textPrimary;
 
     // Carrega os eventos da empresa uma vez por usuário (perfil empresa).
     if ((user?.isBusiness ?? false) && user!.id != _eventsLoadedForUid) {
@@ -470,7 +385,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: FramedAvatar(
                             imageUrl: user?.avatarUrl,
                             name: user?.name ?? '',
-                            frameId: customization?.avatarFrame ?? 'none',
+                            frameId: 'none',
                             size: 104,
                             onTap: user?.avatarUrl != null
                                 ? () => showPhotoViewer(
@@ -692,106 +607,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   const SizedBox(width: 12),
                               itemBuilder: (_, i) =>
                                   _ContactCard(user: socialVm.friends[i]),
-                            ),
-                          ),
-                        const SizedBox(height: 20),
-                        const Divider(height: 1),
-
-                        // ── Suas fotos ────────────────────────────────
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Suas Fotos',
-                                style: AppTextStyles.headlineMedium.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              GestureDetector(
-                                onTap: () => _pickAndUploadPhoto(context),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.add_a_photo_outlined,
-                                      color: AppColors.navy,
-                                      size: 18,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Adicionar',
-                                      style: AppTextStyles.bodySmall.copyWith(
-                                        color: AppColors.navy,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (user?.photos.isEmpty != false)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
-                            child: GestureDetector(
-                              onTap: () => _pickAndUploadPhoto(context),
-                              child: Container(
-                                height: 80,
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: AppColors.divider),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Center(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.add_a_photo_outlined,
-                                        color: AppColors.navy.withOpacity(0.4),
-                                        size: 28,
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Adicionar fotos',
-                                        style: AppTextStyles.bodySmall.copyWith(
-                                          color: AppColors.textMuted,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          )
-                        else
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
-                            child: GridView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: user!.photos.take(6).length,
-                              gridDelegate:
-                                  const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 3,
-                                    crossAxisSpacing: 4,
-                                    mainAxisSpacing: 4,
-                                  ),
-                              itemBuilder: (_, i) => GestureDetector(
-                                // Abre o visualizador na foto tocada (swipe entre todas)
-                                onTap: () => showPhotoViewer(
-                                  context,
-                                  urls: user.photos,
-                                  initialIndex: i,
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(4),
-                                  child: Image.network(
-                                    user.photos[i],
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              ),
                             ),
                           ),
                         const SizedBox(height: 20),

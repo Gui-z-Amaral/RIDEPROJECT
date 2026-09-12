@@ -45,7 +45,8 @@ class _ClubProfileScreenState extends State<ClubProfileScreen> {
           backgroundColor: AppColors.background,
           leading: IconButton(
             icon: Icon(Icons.arrow_back_ios, color: AppColors.navy),
-            onPressed: () => context.pop(),
+            onPressed: () =>
+                context.canPop() ? context.pop() : context.go('/home'),
           ),
         ),
         body: const Center(child: Text('Clube não encontrado.')),
@@ -61,7 +62,8 @@ class _ClubProfileScreenState extends State<ClubProfileScreen> {
           surfaceTintColor: Colors.transparent,
           leading: IconButton(
             icon: Icon(Icons.arrow_back_ios, color: AppColors.navy),
-            onPressed: () => context.pop(),
+            onPressed: () =>
+                context.canPop() ? context.pop() : context.go('/home'),
           ),
           actions: [_ClubMenu(club: club)],
           bottom: TabBar(

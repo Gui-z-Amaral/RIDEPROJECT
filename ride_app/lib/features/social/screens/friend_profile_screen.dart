@@ -6,8 +6,8 @@ import '../../../theme/app_spacing.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/models/profile_customization.dart';
 import '../../../core/services/supabase_social_service.dart';
+import '../../../core/services/supabase_auth_service.dart';
 import '../../../core/services/supabase_profile_customization_service.dart';
-import '../../../core/constants/profile_appearance.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/framed_avatar.dart';
 import '../../../shared/widgets/profile_banner.dart';
@@ -26,11 +26,33 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
   bool _loadingMutual = true;
   ProfileCustomization? _customization;
 
+  // Perfil privado: trava o conteúdo quando não sou amigo.
+  bool _privateLocked = false;
+  bool _sentRequest = false;
+
   @override
   void initState() {
     super.initState();
+    _checkPrivacy();
     _loadMutual();
     _loadCustomization();
+  }
+
+  Future<void> _checkPrivacy() async {
+    try {
+      final full = await SupabaseAuthService.getProfileById(widget.user.id);
+      if (full == null || !full.isPrivate) return;
+      final friends = await SupabaseSocialService.getFriends();
+      final isFriend = friends.any((f) => f.id == widget.user.id);
+      if (mounted && !isFriend) setState(() => _privateLocked = true);
+    } catch (_) {}
+  }
+
+  Future<void> _addFriend() async {
+    setState(() => _sentRequest = true);
+    try {
+      await SupabaseSocialService.sendFriendRequest(widget.user.id);
+    } catch (_) {}
   }
 
   Future<void> _loadCustomization() async {
@@ -66,18 +88,95 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
     }
   }
 
+  // Vista limitada de um perfil privado (para não-amigos).
+  Widget _buildLocked(UserModel user) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios, color: AppColors.navy),
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go('/home'),
+        ),
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 44,
+                backgroundColor: AppColors.navy.withOpacity(0.1),
+                backgroundImage:
+                    (user.avatarUrl != null && user.avatarUrl!.isNotEmpty)
+                        ? NetworkImage(user.avatarUrl!)
+                        : null,
+                child: (user.avatarUrl == null || user.avatarUrl!.isEmpty)
+                    ? Text(user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                        style: AppTextStyles.headlineLarge
+                            .copyWith(color: AppColors.navy))
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              Text(user.name,
+                  style: AppTextStyles.headlineSmall
+                      .copyWith(fontWeight: FontWeight.w800)),
+              if (user.username.isNotEmpty)
+                Text('@${user.username}',
+                    style: AppTextStyles.bodyMedium
+                        .copyWith(color: AppColors.textMuted)),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.lock_outline, size: 18, color: AppColors.textMuted),
+                  const SizedBox(width: 6),
+                  Text('Perfil privado',
+                      style: AppTextStyles.bodyMedium
+                          .copyWith(color: AppColors.textSecondary)),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text('Adicione como amigo para ver o perfil completo.',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: AppColors.textMuted)),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _sentRequest ? null : _addFriend,
+                  icon: Icon(_sentRequest
+                      ? Icons.check
+                      : Icons.person_add_alt_1),
+                  label: Text(_sentRequest
+                      ? 'Solicitação enviada'
+                      : 'Adicionar amigo'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.navy,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = widget.user;
+    if (_privateLocked) return _buildLocked(user);
     final bottomPad = MediaQuery.of(context).padding.bottom;
-    final bgColor = resolveProfileColor(
-      _customization?.backgroundColor,
-      AppColors.background,
-    );
-    final textColor = resolveProfileColor(
-      _customization?.textColor,
-      AppColors.textPrimary,
-    );
+    // Perfil limpo: cores sempre no padrão, só o banner é personalizável.
+    final bgColor = AppColors.background;
+    final textColor = AppColors.textPrimary;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -123,7 +222,7 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
                         FramedAvatar(
                           imageUrl: user.avatarUrl,
                           name: user.name,
-                          frameId: _customization?.avatarFrame ?? 'none',
+                          frameId: 'none',
                           size: 104,
                           onTap: user.avatarUrl != null
                               ? () => showPhotoViewer(

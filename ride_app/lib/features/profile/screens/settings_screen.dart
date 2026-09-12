@@ -111,7 +111,7 @@ class SettingsScreen extends StatelessWidget {
             child: ListTile(
               leading: Icon(Icons.palette_outlined, color: AppColors.navy),
               title: Text('Aparência do perfil', style: AppTextStyles.bodyMedium),
-              subtitle: Text('Banner, moldura do avatar e cores',
+              subtitle: Text('Banner do perfil e modo escuro',
                   style: AppTextStyles.bodySmall
                       .copyWith(color: AppColors.textMuted)),
               trailing: Icon(Icons.chevron_right,
@@ -143,6 +143,54 @@ class SettingsScreen extends StatelessWidget {
                     .instance.client.auth.currentUser?.email;
                 context.push('/forgot-password', extra: email);
               },
+            ),
+          ),
+
+          const SizedBox(height: 32),
+
+          // ── Privacidade ────────────────────────────────────────
+          const _SectionLabel('Privacidade'),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.inputFill,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                SwitchListTile(
+                  value: vm.user?.isPrivate ?? false,
+                  onChanged: (v) =>
+                      context.read<ProfileViewModel>().setPrivate(v),
+                  activeColor: AppColors.navy,
+                  secondary: Icon(Icons.lock_outline, color: AppColors.navy),
+                  title:
+                      Text('Perfil privado', style: AppTextStyles.bodyMedium),
+                  subtitle: Text(
+                      'Quem não é seu amigo vê só nome, @ e foto',
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.textMuted)),
+                ),
+                Divider(
+                    height: 1,
+                    color: AppColors.divider,
+                    indent: 16,
+                    endIndent: 16),
+                SwitchListTile(
+                  value: vm.user?.discoverable ?? true,
+                  onChanged: (v) =>
+                      context.read<ProfileViewModel>().setDiscoverable(v),
+                  activeColor: AppColors.navy,
+                  secondary:
+                      Icon(Icons.near_me_outlined, color: AppColors.navy),
+                  title: Text('Aparecer na descoberta',
+                      style: AppTextStyles.bodyMedium),
+                  subtitle: Text(
+                      'Aparecer nos riders próximos. Desligado, só te acham pelo @',
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.textMuted)),
+                ),
+              ],
             ),
           ),
 

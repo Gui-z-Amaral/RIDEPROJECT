@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -10,7 +11,7 @@ import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../core/models/location_model.dart';
 import '../../../core/services/geocoding_service.dart';
-import '../../../core/constants/app_config.dart';
+import '../../../core/services/maps_proxy.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_input.dart';
 
@@ -106,15 +107,15 @@ class _MapSelectScreenState extends State<MapSelectScreen> {
 
   Future<void> _searchPlaces(String query) async {
     try {
-      final url = Uri.parse(
-        'https://maps.googleapis.com/maps/api/place/autocomplete/json'
-        '?input=${Uri.encodeQueryComponent(query)}'
-        '&language=pt-BR'
-        '&location=${_mapCenter.latitude},${_mapCenter.longitude}'
-        '&radius=100000'
-        '&key=${AppConfig.googleMapsApiKey}',
-      );
-      final res = await http.get(url).timeout(const Duration(seconds: 6));
+      final url = MapsProxy.uri('place/autocomplete/json', {
+        'input': query,
+        'language': 'pt-BR',
+        'location': '${_mapCenter.latitude},${_mapCenter.longitude}',
+        'radius': '100000',
+      });
+      final res = await http
+          .get(url, headers: MapsProxy.headers)
+          .timeout(const Duration(seconds: 6));
       if (!mounted) return;
       if (res.statusCode != 200) {
         setState(() => _isSearching = false);
@@ -150,14 +151,15 @@ class _MapSelectScreenState extends State<MapSelectScreen> {
     });
 
     try {
-      final url = Uri.parse(
-        'https://maps.googleapis.com/maps/api/place/details/json'
-        '?place_id=${prediction.placeId}'
-        '&fields=geometry,formatted_address,name,types,opening_hours,photos,address_components'
-        '&language=pt-BR'
-        '&key=${AppConfig.googleMapsApiKey}',
-      );
-      final res = await http.get(url).timeout(const Duration(seconds: 6));
+      final url = MapsProxy.uri('place/details/json', {
+        'place_id': prediction.placeId,
+        'fields':
+            'geometry,formatted_address,name,types,opening_hours,photos,address_components',
+        'language': 'pt-BR',
+      });
+      final res = await http
+          .get(url, headers: MapsProxy.headers)
+          .timeout(const Duration(seconds: 6));
       if (!mounted) return;
       if (res.statusCode != 200) {
         setState(() => _isSearching = false);
@@ -257,33 +259,34 @@ class _MapSelectScreenState extends State<MapSelectScreen> {
             ),
           ),
 
-          // ── Mapa — expande ao selecionar ────────────────────────
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 350),
-            curve: Curves.easeInOut,
+          // ── Mapa — altura fixa e generosa (50% da tela). Fixa de
+          // propósito: se redimensionar ao selecionar, o mapa some
+          // na web (google_maps_flutter_web). ────────────────────
+          Container(
+            height: MediaQuery.of(context).size.height * 0.5,
             margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            height: _selected != null ? 280 : 200,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-              child: !_locationReady
-                  ? Container(
-                      color: AppColors.darkNavy,
-                      child: const Center(
-                        child: CircularProgressIndicator(color: AppColors.teal),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+                child: !_locationReady
+                    ? Container(
+                        color: AppColors.darkNavy,
+                        child: const Center(
+                          child:
+                              CircularProgressIndicator(color: AppColors.teal),
+                        ),
+                      )
+                    : _InteractiveMap(
+                        center: _mapCenter,
+                        selectedLocation: _selected,
+                        externalTap: _externalTap,
+                        onTap: (loc, info) => setState(() {
+                          _selected = loc;
+                          _selectedInfo = info;
+                          _searchCtrl.clear();
+                          _predictions = [];
+                        }),
                       ),
-                    )
-                  : _InteractiveMap(
-                      center: _mapCenter,
-                      selectedLocation: _selected,
-                      externalTap: _externalTap,
-                      onTap: (loc, info) => setState(() {
-                        _selected = loc;
-                        _selectedInfo = info;
-                        _searchCtrl.clear();
-                        _predictions = [];
-                      }),
-                    ),
-            ),
+              ),
           ),
 
           // ── Card do local selecionado ───────────────────────────
@@ -624,12 +627,15 @@ class _InteractiveMapState extends State<_InteractiveMap> {
     );
 
     if (_controller != null && mounted) {
-      if (_routePoints.length > 1) {
+      // newLatLngBounds do google_maps_flutter_web costuma abrir no mundo
+      // todo — na web (e quando não há rota) aproxima direto no destino.
+      if (!kIsWeb && _routePoints.length > 1) {
         final bounds = _boundsOf([widget.center, resolved, ..._routePoints]);
         await _controller!
             .animateCamera(CameraUpdate.newLatLngBounds(bounds, 56));
       } else {
-        _controller!.animateCamera(CameraUpdate.newLatLng(resolved));
+        await _controller!
+            .animateCamera(CameraUpdate.newLatLngZoom(resolved, 15));
       }
     }
   }
@@ -639,14 +645,15 @@ class _InteractiveMapState extends State<_InteractiveMap> {
   Future<(double, double, PlaceInfo)?> _fetchPlaceDetails(
       String placeId) async {
     try {
-      final url = Uri.parse(
-        'https://maps.googleapis.com/maps/api/place/details/json'
-        '?place_id=$placeId'
-        '&fields=geometry,formatted_address,name,types,opening_hours,photos,address_components'
-        '&language=pt-BR'
-        '&key=${AppConfig.googleMapsApiKey}',
-      );
-      final res = await http.get(url).timeout(const Duration(seconds: 6));
+      final url = MapsProxy.uri('place/details/json', {
+        'place_id': placeId,
+        'fields':
+            'geometry,formatted_address,name,types,opening_hours,photos,address_components',
+        'language': 'pt-BR',
+      });
+      final res = await http
+          .get(url, headers: MapsProxy.headers)
+          .timeout(const Duration(seconds: 6));
       if (res.statusCode != 200) return null;
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       if (data['status'] != 'OK') return null;
@@ -711,16 +718,15 @@ class _InteractiveMapState extends State<_InteractiveMap> {
   Future<List<LatLng>> _fetchRoute(
       double oLat, double oLng, double dLat, double dLng) async {
     try {
-      final url = Uri.parse(
-        'https://maps.googleapis.com/maps/api/directions/json'
-        '?origin=$oLat,$oLng'
-        '&destination=$dLat,$dLng'
-        '&mode=driving'
-        '&language=pt-BR'
-        '&key=${AppConfig.googleMapsApiKey}',
-      );
-      final response =
-          await http.get(url).timeout(const Duration(seconds: 8));
+      final url = MapsProxy.uri('directions/json', {
+        'origin': '$oLat,$oLng',
+        'destination': '$dLat,$dLng',
+        'mode': 'driving',
+        'language': 'pt-BR',
+      });
+      final response = await http
+          .get(url, headers: MapsProxy.headers)
+          .timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return [];
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       if (data['status'] != 'OK') return [];

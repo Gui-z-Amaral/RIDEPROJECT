@@ -9,8 +9,8 @@
 class AppLinks {
   AppLinks._();
 
-  /// Domínio oficial do site.
-  static const String base = 'https://ride.dev.br';
+  /// Subdomínio dedicado a redirecionamento/deep links.
+  static const String base = 'https://redirect.ride.dev.br';
 
   static String event(String id) => '$base/e/$id';
   static String trip(String id) => '$base/v/$id';

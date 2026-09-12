@@ -30,9 +30,23 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!-- Habilita o roteamento dos deep links pelo GoRouter -->
+            <meta-data
+              android:name="flutter_deeplinking_enabled"
+              android:value="true" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <!-- App Links: abre links de redirect.ride.dev.br direto no app -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="redirect.ride.dev.br" android:pathPrefix="/e/"/>
+                <data android:scheme="https" android:host="redirect.ride.dev.br" android:pathPrefix="/v/"/>
+                <data android:scheme="https" android:host="redirect.ride.dev.br" android:pathPrefix="/r/"/>
+                <data android:scheme="https" android:host="redirect.ride.dev.br" android:pathPrefix="/c/"/>
             </intent-filter>
         </activity>
         <!-- Canal padrão de push (FCM) quando a notificação chega com o app

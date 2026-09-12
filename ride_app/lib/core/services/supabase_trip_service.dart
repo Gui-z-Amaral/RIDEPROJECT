@@ -228,6 +228,7 @@ class SupabaseTripService {
     List<String> participantIds = const [],
     DateTime? scheduledAt,
     String? clubId,
+    String? coverImage,
     List<EventScheduleItem> schedule = const [],
   }) async {
     // Insert trip
@@ -244,6 +245,7 @@ class SupabaseTripService {
       'destination_address': destination.address,
       'destination_label': destination.label,
       'club_id': clubId,
+      'cover_image': coverImage,
       'scheduled_at': scheduledAt?.toIso8601String(),
     }).select().single();
 
