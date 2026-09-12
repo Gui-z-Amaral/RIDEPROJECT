@@ -32,4 +32,16 @@ class MapsProxy {
         'apikey': SupabaseConfig.anonKey,
         'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
       };
+
+  /// URL de foto pronta pra `Image.network`/`CachedNetworkImage`. Como a
+  /// imagem é carregada por `<img>`/CanvasKit (sem cabeçalhos), a `apikey`
+  /// vai na query. Passa pelo proxy pra ter CORS (o CanvasKit lê o pixel da
+  /// imagem, o que exige CORS — o endpoint do Google não manda).
+  static String photoUrl(Map<String, String> params) {
+    return _endpoint.replace(queryParameters: {
+      'path': 'place/photo',
+      ...params,
+      'apikey': SupabaseConfig.anonKey,
+    }).toString();
+  }
 }

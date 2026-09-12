@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../constants/app_config.dart';
 import 'maps_proxy.dart';
 
 class PlaceInfo {
@@ -48,10 +47,11 @@ class PlaceInfo {
   /// URL para exibir a foto via Places Photo API.
   String? get photoUrl {
     if (photoRef == null || photoRef!.isEmpty) return null;
-    // Foto direto no Google: <img> não sofre CORS.
-    return 'https://maps.googleapis.com/maps/api/place/photo'
-        '?maxwidth=600&photo_reference=$photoRef'
-        '&key=${AppConfig.googleMapsApiKey}';
+    // Foto pelo proxy (CanvasKit exige CORS pra ler o pixel).
+    return MapsProxy.photoUrl({
+      'maxwidth': '600',
+      'photo_reference': photoRef!,
+    });
   }
 }
 

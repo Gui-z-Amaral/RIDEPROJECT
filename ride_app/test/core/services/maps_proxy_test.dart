@@ -36,4 +36,19 @@ void main() {
       expect(h['Authorization'], 'Bearer ${SupabaseConfig.anonKey}');
     });
   });
+
+  group('MapsProxy.photoUrl', () {
+    test('usa path place/photo e leva a apikey na query (pra <img>)', () {
+      final uri = Uri.parse(MapsProxy.photoUrl({
+        'maxwidth': '400',
+        'photo_reference': 'abc123',
+      }));
+      expect(uri.path, '/functions/v1/gmaps');
+      expect(uri.queryParameters['path'], 'place/photo');
+      expect(uri.queryParameters['photo_reference'], 'abc123');
+      expect(uri.queryParameters['maxwidth'], '400');
+      expect(uri.queryParameters['apikey'], SupabaseConfig.anonKey);
+      expect(uri.queryParameters.containsKey('key'), isFalse);
+    });
+  });
 }

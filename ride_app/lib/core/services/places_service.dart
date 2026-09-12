@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import '../constants/app_config.dart';
 import 'maps_proxy.dart';
 
 enum RecommendationReason {
@@ -94,14 +93,14 @@ class PlaceRecommendation {
     this.tripContext,
   });
 
-  // Foto vai direto ao Google: <img> não sofre CORS (o bloqueio é só no
-  // fetch do JSON), então não precisa do proxy nem de header de auth.
+  // Foto passa pelo proxy: o CanvasKit (Flutter web) lê o pixel da imagem e
+  // isso exige CORS, que o endpoint do Google não manda. A apikey vai na query.
   String get photoUrl {
     if (photoRef == null || photoRef!.isEmpty) return '';
-    return 'https://maps.googleapis.com/maps/api/place/photo'
-        '?maxwidth=400'
-        '&photo_reference=$photoRef'
-        '&key=${AppConfig.googleMapsApiKey}';
+    return MapsProxy.photoUrl({
+      'maxwidth': '400',
+      'photo_reference': photoRef!,
+    });
   }
 
   String get googleMapsUrl =>

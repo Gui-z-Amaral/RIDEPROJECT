@@ -121,11 +121,14 @@ void main() {
         isOpenNow: true,
         reason: RecommendationReason.trustedBusiness,
       );
-      // Foto vai direto ao Google (<img> não sofre CORS).
-      expect(p.photoUrl, contains('place/photo'));
-      expect(p.photoUrl, contains('photo_reference=CmRaAAAA-XYZ'));
-      expect(p.photoUrl, contains('maxwidth=400'));
-      expect(p.photoUrl, contains('key='));
+      // Foto passa pelo proxy gmaps (CanvasKit exige CORS).
+      final uri = Uri.parse(p.photoUrl);
+      expect(uri.path, '/functions/v1/gmaps');
+      expect(uri.queryParameters['path'], 'place/photo');
+      expect(uri.queryParameters['photo_reference'], 'CmRaAAAA-XYZ');
+      expect(uri.queryParameters['maxwidth'], '400');
+      // A chave do Google fica no servidor — nunca na URL do cliente.
+      expect(uri.queryParameters.containsKey('key'), isFalse);
     });
   });
 
