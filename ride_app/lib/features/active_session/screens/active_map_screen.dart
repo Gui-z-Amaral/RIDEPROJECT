@@ -10,6 +10,7 @@ import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../core/models/user_model.dart';
+import '../../../core/utils/extensions.dart';
 import '../../../core/services/supabase_ride_service.dart';
 import '../../../core/services/supabase_notification_service.dart';
 import '../../auth/viewmodels/auth_viewmodel.dart';
@@ -28,6 +29,7 @@ class ActiveMapScreen extends StatefulWidget {
 class _ActiveMapScreenState extends State<ActiveMapScreen> {
   bool _showParticipants = true;
   bool _showAddDestination = false;
+  bool _wakeNoticeShown = false;
   final _destCtrl = TextEditingController();
 
   @override
@@ -49,6 +51,18 @@ class _ActiveMapScreenState extends State<ActiveMapScreen> {
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<ActiveSessionViewModel>();
+
+    // Avisa uma única vez que a tela ficará ligada — e o custo disso.
+    if (vm.screenKeptOn && !_wakeNoticeShown) {
+      _wakeNoticeShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.showSnack(
+          'Modo Rolê: a tela fica ligada para não perder a gravação. '
+          'Use um carregador em trajetos longos.',
+        );
+      });
+    }
 
     return WillPopScope(
       onWillPop: () async => false,
@@ -82,9 +96,34 @@ class _ActiveMapScreenState extends State<ActiveMapScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(vm.sessionTitle, style: AppTextStyles.titleLarge),
-                            Text(
-                              vm.isRide ? 'Rolê em andamento' : 'Viagem em andamento',
-                              style: AppTextStyles.labelSmall.copyWith(color: AppColors.teal),
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    vm.isRide
+                                        ? 'Rolê em andamento'
+                                        : 'Viagem em andamento',
+                                    style: AppTextStyles.labelSmall
+                                        .copyWith(color: AppColors.teal),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                // Indicador do Modo Rolê (tela segurada ligada).
+                                if (vm.screenKeptOn) ...[
+                                  const SizedBox(width: 6),
+                                  Icon(Icons.lightbulb_outline,
+                                      size: 12, color: AppColors.textMuted),
+                                  const SizedBox(width: 2),
+                                  Flexible(
+                                    child: Text(
+                                      'tela ligada',
+                                      style: AppTextStyles.labelSmall
+                                          .copyWith(color: AppColors.textMuted),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ],
                         ),
@@ -143,7 +182,7 @@ class _ActiveMapScreenState extends State<ActiveMapScreen> {
                           ),
                           child: Row(
                             children: [
-                              AppAvatar(name: p.user.name, imageUrl: p.user.avatarUrl, size: 28, showOnline: true, isOnline: true),
+                              AppAvatar(name: p.user.name, imageUrl: p.user.avatarUrl, size: 28, showOnline: true, isOnline: true, profileOf: p.user),
                               const SizedBox(width: 6),
                               Text(p.user.name.split(' ').first, style: AppTextStyles.labelMedium),
                             ],
@@ -655,7 +694,7 @@ class _VoiceChannelPanel extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.lg),
           ...vm.participants.map((p) => ListTile(
-                leading: AppAvatar(name: p.user.name, imageUrl: p.user.avatarUrl, size: 36),
+                leading: AppAvatar(name: p.user.name, imageUrl: p.user.avatarUrl, size: 36, profileOf: p.user),
                 title: Text(p.user.name, style: AppTextStyles.titleMedium),
                 trailing: Icon(Icons.mic, size: 18, color: AppColors.success),
               )),

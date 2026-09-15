@@ -1390,3 +1390,100 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   ORDER BY distance_km ASC
   LIMIT p_limit;
 $$;
+
+-- ═════════════════════════════════════════════════════════════════════════════
+-- 030_multi_device_chat_keys.sql
+-- ═════════════════════════════════════════════════════════════════════════════
+-- E2EE multi-dispositivo (app + web). Antes user_keys tinha UMA chave por
+-- usuário: logar em outro dispositivo sobrescrevia a pública e o aparelho
+-- anterior parava de decifrar. Agora cada aparelho publica a própria chave,
+-- identificada por device_id, e a mensagem vira um envelope com uma cópia
+-- cifrada por dispositivo.
+
+ALTER TABLE user_keys ADD COLUMN IF NOT EXISTS device_id TEXT;
+UPDATE user_keys SET device_id = 'legacy' WHERE device_id IS NULL;
+ALTER TABLE user_keys ALTER COLUMN device_id SET NOT NULL;
+
+ALTER TABLE user_keys DROP CONSTRAINT IF EXISTS user_keys_pkey;
+ALTER TABLE user_keys ADD CONSTRAINT user_keys_pkey PRIMARY KEY (user_id, device_id);
+
+CREATE INDEX IF NOT EXISTS idx_user_keys_user ON user_keys(user_id);
+
+DROP POLICY IF EXISTS "user_keys_delete" ON user_keys;
+CREATE POLICY "user_keys_delete" ON user_keys FOR DELETE USING (auth.uid() = user_id);
+
+-- Mensagens antigas ficariam ilegíveis no novo formato — começar limpo.
+TRUNCATE TABLE messages;
+
+-- ═════════════════════════════════════════════════════════════════════════════
+-- 031_messages_rls.sql
+-- ═════════════════════════════════════════════════════════════════════════════
+-- Privacidade das mensagens (antes QUALQUER autenticado lia TODAS) e permissão
+-- de marcar como lida (não existia UPDATE, então o contador não zerava).
+-- chat_id é canônico: os dois UUIDs ordenados unidos por "_".
+
+DROP POLICY IF EXISTS "messages_select" ON messages;
+CREATE POLICY "messages_select" ON messages FOR SELECT USING (
+  auth.uid()::text = split_part(chat_id, '_', 1)
+  OR auth.uid()::text = split_part(chat_id, '_', 2)
+);
+
+DROP POLICY IF EXISTS "messages_insert" ON messages;
+CREATE POLICY "messages_insert" ON messages FOR INSERT WITH CHECK (
+  auth.uid() = sender_id AND (
+    auth.uid()::text = split_part(chat_id, '_', 1)
+    OR auth.uid()::text = split_part(chat_id, '_', 2)
+  )
+);
+
+DROP POLICY IF EXISTS "messages_update_read" ON messages;
+CREATE POLICY "messages_update_read" ON messages FOR UPDATE
+  USING (
+    auth.uid() <> sender_id AND (
+      auth.uid()::text = split_part(chat_id, '_', 1)
+      OR auth.uid()::text = split_part(chat_id, '_', 2)
+    )
+  )
+  WITH CHECK (
+    auth.uid() <> sender_id AND (
+      auth.uid()::text = split_part(chat_id, '_', 1)
+      OR auth.uid()::text = split_part(chat_id, '_', 2)
+    )
+  );
+
+CREATE INDEX IF NOT EXISTS idx_messages_unread
+  ON messages(chat_id, sender_id) WHERE is_read = false;
+
+-- ═════════════════════════════════════════════════════════════════════════════
+-- 032_trip_stops.sql
+-- ═════════════════════════════════════════════════════════════════════════════
+-- Paradas da viagem. O TripModel já tinha `stops` e o buildGoogleMapsUrl() já
+-- as incluía como waypoints, mas não havia onde guardá-las.
+-- Policies espelham trip_schedule_items (filha de trips).
+
+CREATE TABLE IF NOT EXISTS trip_stops (
+  id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  trip_id     UUID REFERENCES trips(id) ON DELETE CASCADE NOT NULL,
+  position    INT NOT NULL DEFAULT 0,
+  name        TEXT NOT NULL,
+  category    TEXT NOT NULL DEFAULT 'other',
+  description TEXT,
+  image_url   TEXT,
+  lat         DOUBLE PRECISION NOT NULL,
+  lng         DOUBLE PRECISION NOT NULL,
+  address     TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_trip_stops_trip ON trip_stops(trip_id, position);
+
+ALTER TABLE trip_stops ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "trip_stops_select" ON trip_stops;
+CREATE POLICY "trip_stops_select" ON trip_stops FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "trip_stops_write" ON trip_stops;
+CREATE POLICY "trip_stops_write" ON trip_stops FOR ALL
+  USING (EXISTS (SELECT 1 FROM trips t WHERE t.id = trip_id AND (
+    t.creator_id = auth.uid() OR (t.club_id IS NOT NULL AND public.is_club_admin(t.club_id, auth.uid())))))
+  WITH CHECK (EXISTS (SELECT 1 FROM trips t WHERE t.id = trip_id AND (
+    t.creator_id = auth.uid() OR (t.club_id IS NOT NULL AND public.is_club_admin(t.club_id, auth.uid())))));

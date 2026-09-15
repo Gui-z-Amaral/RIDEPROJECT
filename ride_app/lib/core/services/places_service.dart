@@ -370,6 +370,93 @@ class PlacesService {
         .toList();
   }
 
+  // ── Sugestões de parada ao longo da rota ───────────────────────────────────
+
+  /// Pontos amostrados entre origem e destino, nas [fractions] do trajeto.
+  ///
+  /// Interpolação em linha reta: é uma aproximação do corredor da rota, o que
+  /// basta combinada com um raio de busca generoso — e evita uma chamada extra
+  /// à Directions API só para traçar a polyline.
+  @visibleForTesting
+  static List<({double lat, double lng})> sampleBetween(
+    double oLat,
+    double oLng,
+    double dLat,
+    double dLng, {
+    List<double> fractions = const [0.25, 0.5, 0.75],
+  }) {
+    return fractions
+        .map((f) => (
+              lat: oLat + (dLat - oLat) * f,
+              lng: oLng + (dLng - oLng) * f,
+            ))
+        .toList();
+  }
+
+  /// Sugere paradas **no caminho** entre origem e destino: restaurantes e
+  /// postos bem avaliados perto dos pontos amostrados do trajeto.
+  ///
+  /// [minReviews] existe porque nota sozinha engana — um posto 5,0 com três
+  /// avaliações apareceria à frente de um restaurante 4,7 com oitocentas.
+  ///
+  /// Devolve lista **vazia** quando nada passa no filtro; a UI simplesmente não
+  /// mostra a seção de sugestões nesse caso.
+  static Future<List<PlaceRecommendation>> suggestStopsAlongRoute({
+    required double originLat,
+    required double originLng,
+    required double destLat,
+    required double destLng,
+    double minRating = 4.5,
+    int minReviews = 50,
+    int radiusMeters = 8000,
+    int limit = 4,
+  }) async {
+    final samples =
+        sampleBetween(originLat, originLng, destLat, destLng);
+
+    // Para cada ponto amostrado: restaurantes e postos (nessa ordem).
+    final searches = <Future<List<Map<String, dynamic>>>>[];
+    for (final s in samples) {
+      searches.add(_search(
+          lat: s.lat, lng: s.lng, type: 'restaurant', radius: radiusMeters));
+      searches.add(_search(
+          lat: s.lat, lng: s.lng, type: 'gas_station', radius: radiusMeters));
+    }
+    final results = await Future.wait(searches);
+
+    final byPlaceId = <String, PlaceRecommendation>{};
+    for (var i = 0; i < results.length; i++) {
+      final isFuel = i.isOdd; // alterna restaurante, posto, restaurante...
+      final sample = samples[i ~/ 2];
+      for (final raw in results[i]) {
+        final rating = (raw['rating'] as num?)?.toDouble() ?? 0;
+        final reviews = (raw['user_ratings_total'] as num?)?.toInt() ?? 0;
+        if (rating < minRating || reviews < minReviews) continue;
+
+        final rec = _parse(
+          raw,
+          sample.lat,
+          sample.lng,
+          isFuel ? 'gas_station' : 'restaurant',
+          isFuel ? 'Posto de combustível' : 'Restaurante',
+          RecommendationReason.trustedBusiness,
+        );
+        if (rec.placeId.isEmpty) continue;
+        byPlaceId[rec.placeId] = rec; // dedupe entre pontos amostrados
+      }
+    }
+
+    final list = byPlaceId.values.toList()..sort(_byRatingThenReviews);
+    return list.take(limit).toList();
+  }
+
+  /// Melhor avaliado primeiro; empate desempata por nº de avaliações.
+  static int _byRatingThenReviews(PlaceRecommendation a, PlaceRecommendation b) {
+    final r = (b.rating ?? 0).compareTo(a.rating ?? 0);
+    if (r != 0) return r;
+    return (b.userRatingsTotal ?? 0).compareTo(a.userRatingsTotal ?? 0);
+  }
+
   /// Busca livre de lugares por texto via Google Places Text Search.
   /// Quando [lat]/[lng] são informados, prioriza resultados próximos
   /// (dentro do [radiusMeters]). Sem coordenadas, faz busca global.

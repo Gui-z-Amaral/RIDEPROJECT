@@ -35,7 +35,11 @@ class _ChatScreenState extends State<ChatScreen> {
     PushNotificationService.activeChatUserId = widget.userId;
     Future.microtask(() {
       if (!mounted) return;
-      context.read<SocialViewModel>().loadMessages(widget.userId);
+      final vm = context.read<SocialViewModel>();
+      vm.loadMessages(widget.userId);
+      // Abriu a conversa → zera o contador de não lidas deste contato
+      // (vale também quando o chat é aberto pelo push, não só pela lista).
+      vm.markChatRead(widget.userId);
     });
   }
 
@@ -195,6 +199,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     name: friend.name,
                     imageUrl: friend.avatarUrl,
                     size: 40,
+                    profileOf: friend,
                     showOnline: true,
                     isOnline: friend.isOnline,
                   ),

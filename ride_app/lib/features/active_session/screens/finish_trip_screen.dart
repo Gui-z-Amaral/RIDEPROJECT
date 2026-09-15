@@ -452,7 +452,7 @@ class _ParticipantsRow extends StatelessWidget {
             padding: const EdgeInsets.only(right: 14),
             child: Column(
               children: [
-                AppAvatar(name: p.name, imageUrl: p.avatarUrl, size: 50),
+                AppAvatar(name: p.name, imageUrl: p.avatarUrl, size: 50, profileOf: p),
                 const SizedBox(height: 6),
                 SizedBox(
                   width: 60,

@@ -5,8 +5,8 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../viewmodels/social_viewmodel.dart';
 
-/// Aba Chat: lista de amigos para iniciar/continuar uma conversa.
-/// (Versão simples — toca no amigo e abre o chat.)
+/// Aba Contatos: lista de amigos com o número de mensagens não lidas.
+/// Toque no **nome/linha** abre a conversa; toque na **foto** abre o perfil.
 class MessagesScreen extends StatefulWidget {
   const MessagesScreen({super.key});
 
@@ -18,7 +18,17 @@ class _MessagesScreenState extends State<MessagesScreen> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => context.read<SocialViewModel>().loadFriends());
+    Future.microtask(() {
+      final vm = context.read<SocialViewModel>();
+      vm.loadFriends();
+      vm.loadRequests(); // badge de pedidos de amizade no topo
+      vm.loadUnreadCounts();
+    });
+  }
+
+  Future<void> _refresh() async {
+    final vm = context.read<SocialViewModel>();
+    await Future.wait([vm.loadFriends(), vm.loadUnreadCounts()]);
   }
 
   @override
@@ -33,10 +43,28 @@ class _MessagesScreenState extends State<MessagesScreen> {
         backgroundColor: AppColors.background,
         surfaceTintColor: Colors.transparent,
         automaticallyImplyLeading: false,
-        title: Text('Mensagens',
+        title: Text('Contatos',
             style: AppTextStyles.headlineMedium
                 .copyWith(fontWeight: FontWeight.w800)),
         actions: [
+          // Amigos e pedidos de amizade (saiu da barra inferior, mas continua
+          // acessível aqui — com o contador de pedidos pendentes).
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: Icon(Icons.group_outlined, color: AppColors.navy),
+                tooltip: 'Amigos e pedidos',
+                onPressed: () => context.push('/friends'),
+              ),
+              if (vm.pendingCount > 0)
+                Positioned(
+                  top: 8,
+                  right: 6,
+                  child: _Badge(count: vm.pendingCount),
+                ),
+            ],
+          ),
           IconButton(
             icon: Icon(Icons.person_add_alt_1, color: AppColors.navy),
             tooltip: 'Buscar riders',
@@ -46,7 +74,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
       ),
       body: RefreshIndicator(
         color: AppColors.navy,
-        onRefresh: () => context.read<SocialViewModel>().loadFriends(),
+        onRefresh: _refresh,
         child: friends.isEmpty
             ? ListView(
                 children: [
@@ -76,11 +104,20 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     Divider(height: 1, color: AppColors.divider),
                 itemBuilder: (_, i) {
                   final f = friends[i];
+                  final unread = vm.unreadBySender[f.id] ?? 0;
                   return ListTile(
-                    onTap: () => context.push('/friends/chat/${f.id}'),
+                    // Linha/nome → conversa (e zera o badge).
+                    onTap: () {
+                      context.read<SocialViewModel>().markChatRead(f.id);
+                      context.push('/friends/chat/${f.id}');
+                    },
                     contentPadding:
                         const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                    leading: Stack(
+                    // Foto → perfil do rider.
+                    leading: GestureDetector(
+                      onTap: () =>
+                          context.push('/profile/${f.id}', extra: f),
+                      child: Stack(
                       children: [
                         CircleAvatar(
                           radius: 24,
@@ -114,6 +151,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                             ),
                           ),
                       ],
+                      ),
                     ),
                     title: Text(f.name,
                         style: AppTextStyles.bodyLarge
@@ -123,11 +161,43 @@ class _MessagesScreenState extends State<MessagesScreen> {
                       style: AppTextStyles.bodySmall
                           .copyWith(color: AppColors.textMuted),
                     ),
-                    trailing: Icon(Icons.chat_bubble_outline,
-                        color: AppColors.navy, size: 20),
+                    trailing: unread > 0
+                        ? _Badge(count: unread)
+                        : Icon(Icons.chat_bubble_outline,
+                            color: AppColors.navy, size: 20),
                   );
                 },
               ),
+      ),
+    );
+  }
+}
+
+/// Contador circular usado no badge de não-lidas e no de pedidos de amizade.
+class _Badge extends StatelessWidget {
+  final int count;
+  const _Badge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = count > 99 ? '99+' : '$count';
+    return Container(
+      constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.navy,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Center(
+        widthFactor: 1,
+        child: Text(
+          label,
+          style: AppTextStyles.labelSmall.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+            fontSize: 11,
+          ),
+        ),
       ),
     );
   }

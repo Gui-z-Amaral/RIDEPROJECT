@@ -71,7 +71,7 @@ class _GroupVoiceScreenState extends State<GroupVoiceScreen> {
                       border: speaking ? Border.all(color: AppColors.teal.withOpacity(0.3)) : null,
                     ),
                     child: ListTile(
-                      leading: AppAvatar(name: p.user.name, imageUrl: p.user.avatarUrl, size: 44, borderColor: speaking ? AppColors.teal : null),
+                      leading: AppAvatar(name: p.user.name, imageUrl: p.user.avatarUrl, size: 44, borderColor: speaking ? AppColors.teal : null, profileOf: p.user),
                       title: Text(p.user.name, style: AppTextStyles.titleMedium),
                       subtitle: Text(p.user.motoModel ?? '', style: AppTextStyles.bodySmall),
                       trailing: Row(

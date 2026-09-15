@@ -33,6 +33,14 @@ class MapsProxy {
         'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
       };
 
+  /// `true` para URLs de foto salvas **antes** do proxy existir: apontam direto
+  /// para o Google e quebram na web (sem CORS). Quem encontrar uma dessas deve
+  /// tratá-la como ausente e re-resolver a foto pelo proxy.
+  static bool isLegacyGooglePhotoUrl(String? url) {
+    if (url == null || url.isEmpty) return false;
+    return url.contains('maps.googleapis.com');
+  }
+
   /// URL de foto pronta pra `Image.network`/`CachedNetworkImage`. Como a
   /// imagem é carregada por `<img>`/CanvasKit (sem cabeçalhos), a `apikey`
   /// vai na query. Passa pelo proxy pra ter CORS (o CanvasKit lê o pixel da

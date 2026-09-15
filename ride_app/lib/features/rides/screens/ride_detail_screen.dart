@@ -139,7 +139,7 @@ class _RideDetailScreenState extends State<RideDetailScreen> {
                   padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                   child: Row(
                     children: [
-                      AppAvatar(name: u.name, imageUrl: u.avatarUrl, size: 40, showOnline: true, isOnline: u.isOnline),
+                      AppAvatar(name: u.name, imageUrl: u.avatarUrl, size: 40, showOnline: true, isOnline: u.isOnline, profileOf: u),
                       const SizedBox(width: AppSpacing.md),
                       Expanded(
                         child: Column(

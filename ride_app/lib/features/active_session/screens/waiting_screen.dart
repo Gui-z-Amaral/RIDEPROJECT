@@ -152,6 +152,7 @@ class _WaitingScreenState extends State<WaitingScreen> {
                             name: p.user.name,
                             imageUrl: p.user.avatarUrl,
                             size: 40,
+                            profileOf: p.user,
                           ),
                           title: Text(p.user.name,
                               style: AppTextStyles.titleMedium),

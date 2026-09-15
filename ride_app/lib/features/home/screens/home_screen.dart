@@ -1048,6 +1048,7 @@ class _HighlightsStrip extends StatelessWidget {
                             name: h.user.name,
                             imageUrl: h.user.avatarUrl,
                             size: 28,
+                            profileOf: h.user,
                           ),
                           const SizedBox(width: 8),
                           Expanded(

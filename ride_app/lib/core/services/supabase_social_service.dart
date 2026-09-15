@@ -303,6 +303,40 @@ class SupabaseSocialService {
     return ids.join('_');
   }
 
+  /// Quantas mensagens não lidas existem de cada contato (chave = remetente).
+  /// Filtra pelo `chat_id` (que contém o meu id) em vez de confiar na RLS,
+  /// então a contagem é das MINHAS conversas mesmo.
+  static Future<Map<String, int>> getUnreadCounts() async {
+    final uid = _uid;
+    if (uid.isEmpty) return {};
+    final rows = await _db
+        .from('messages')
+        .select('sender_id')
+        .like('chat_id', '%$uid%')
+        .eq('is_read', false)
+        .neq('sender_id', uid);
+
+    final counts = <String, int>{};
+    for (final r in (rows as List)) {
+      final s = (r as Map<String, dynamic>)['sender_id'] as String?;
+      if (s == null) continue;
+      counts[s] = (counts[s] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  /// Marca como lidas as mensagens RECEBIDAS na conversa com [otherUserId].
+  static Future<void> markChatRead(String otherUserId) async {
+    final uid = _uid;
+    if (uid.isEmpty) return;
+    await _db
+        .from('messages')
+        .update({'is_read': true})
+        .eq('chat_id', canonicalChatId(otherUserId))
+        .eq('is_read', false)
+        .neq('sender_id', uid);
+  }
+
   /// Carrega as últimas [limit] mensagens da conversa, em ordem cronológica
   /// ascendente. Limite padrão evita consumir memória em conversas longas.
   static Future<List<MessageModel>> getMessages(
@@ -318,12 +352,15 @@ class SupabaseSocialService {
         .order('sent_at', ascending: false)
         .limit(limit);
 
-    // Decifra cada mensagem no aparelho (E2EE) usando a chave da conversa.
+    // Decifra cada mensagem no aparelho (E2EE). O envelope é aberto com a
+    // chave do dispositivo que ENVIOU — por isso passamos o sender_id (que
+    // pode ser eu mesmo, nas mensagens que mandei).
     final list = await Future.wait((rows as List).map((r) async {
+      final row = r as Map<String, dynamic>;
       final clear = await ChatKeyService.decryptFrom(
-          otherUserId, r['content'] as String? ?? '');
-      return _rowToMessage(r as Map<String, dynamic>, chatId,
-          contentOverride: clear);
+          row['sender_id'] as String? ?? otherUserId,
+          row['content'] as String? ?? '');
+      return _rowToMessage(row, chatId, contentOverride: clear);
     }));
     return list.reversed.toList();
   }
@@ -420,9 +457,10 @@ class SupabaseSocialService {
                 .select('name, avatar_url')
                 .eq('id', newRow['sender_id'])
                 .maybeSingle();
-            // Decifra no aparelho (E2EE).
+            // Decifra no aparelho (E2EE) com a chave do dispositivo remetente.
             final clear = await ChatKeyService.decryptFrom(
-                otherUserId, newRow['content'] as String? ?? '');
+                newRow['sender_id'] as String? ?? otherUserId,
+                newRow['content'] as String? ?? '');
             onMessage(MessageModel(
               id: newRow['id'] as String,
               senderId: newRow['sender_id'] as String,

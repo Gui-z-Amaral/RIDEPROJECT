@@ -8,7 +8,9 @@ import '../../../theme/app_text_styles.dart';
 import '../../../core/models/location_model.dart';
 import '../../../core/models/trip_model.dart';
 import '../../../core/models/user_model.dart';
+import '../../../core/models/stop_model.dart';
 import '../../../core/services/geocoding_service.dart';
+import '../../../core/services/places_service.dart';
 import '../../social/viewmodels/social_viewmodel.dart';
 import '../viewmodels/trip_viewmodel.dart';
 import '../../../core/utils/extensions.dart';
@@ -52,8 +54,10 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   DateTime? _departureDate;
   final _peoplSearchCtrl = TextEditingController();
 
-  // Step 2 – Paradas
-  final List<String> _stopNames = [];
+  // Step 2 – Paradas (as escolhidas vivem no TripViewModel)
+  List<PlaceRecommendation> _suggestions = [];
+  bool _loadingSuggestions = false;
+  bool _suggestionsFetched = false;
 
   @override
   void initState() {
@@ -165,7 +169,74 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   void _advance() {
     if (_step < 3) {
       setState(() => _step++);
+      // Busca as sugestões só ao ENTRAR no passo de paradas: cada montagem
+      // custa chamadas ao Places, então não roda a cada rebuild.
+      if (_step == 2) _loadSuggestions();
     }
+  }
+
+  // ── Paradas ──────────────────────────────────────────────────
+  /// Sugestões de parada no caminho (restaurantes/postos bem avaliados).
+  /// Roda uma vez por viagem; sem resultado, a seção simplesmente não aparece.
+  Future<void> _loadSuggestions() async {
+    if (_suggestionsFetched) return;
+    final oLat = _departurePoint?.lat ?? _originLat;
+    final oLng = _departurePoint?.lng ?? _originLng;
+    if (oLat == null || oLng == null || _destLat == null || _destLng == null) {
+      return; // sem rota definida ainda
+    }
+    _suggestionsFetched = true;
+    setState(() => _loadingSuggestions = true);
+    try {
+      final list = await PlacesService.suggestStopsAlongRoute(
+        originLat: oLat,
+        originLng: oLng,
+        destLat: _destLat!,
+        destLng: _destLng!,
+      );
+      if (mounted) setState(() => _suggestions = list);
+    } catch (_) {
+      // Ficar sem sugestão é um estado válido — a seção some.
+    } finally {
+      if (mounted) setState(() => _loadingSuggestions = false);
+    }
+  }
+
+  StopModel _stopFromPlace(PlaceRecommendation p) => StopModel(
+        id: p.placeId,
+        name: p.name,
+        category: p.type,
+        imageUrl: p.photoUrl.isNotEmpty ? p.photoUrl : null,
+        rating: p.rating,
+        location: LocationModel(
+          lat: p.lat,
+          lng: p.lng,
+          address: p.vicinity,
+          label: p.name,
+        ),
+      );
+
+  /// Parada manual: reaproveita o mesmo seletor de mapa do ponto de partida.
+  Future<void> _addStopFromMap() async {
+    final result = await context.push<dynamic>('/map/select', extra: {
+      'title': 'Adicionar parada',
+      'onSelected': null,
+    });
+    if (result == null || !mounted) return;
+    LocationModel? loc;
+    if (result is Map) {
+      loc = result['location'] as LocationModel?;
+    } else if (result is LocationModel) {
+      loc = result;
+    }
+    if (loc == null) return;
+    final label = loc.label?.trim();
+    context.read<TripViewModel>().addStop(StopModel(
+          id: 'manual-${DateTime.now().microsecondsSinceEpoch}',
+          name: (label != null && label.isNotEmpty) ? label : 'Parada',
+          category: 'other',
+          location: loc,
+        ));
   }
 
   // ── Save ─────────────────────────────────────────────────────
@@ -594,7 +665,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
             style: AppTextStyles.bodyMedium),
         const SizedBox(height: 20),
 
-        _LabelSection(label: 'Data de partida'),
+        _LabelSection(label: 'Data e horário de partida'),
         _DatePickerBox(
           selectedDate: _departureDate,
           onTap: () async {
@@ -617,10 +688,34 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 child: child!,
               ),
             );
-            if (picked != null) {
-              setState(() => _departureDate = picked);
-              vm.setScheduledAt(picked);
-            }
+            if (picked == null || !context.mounted) return;
+
+            // Escolhida a data, pergunta o horário de partida.
+            final fallback = _departureDate != null
+                ? TimeOfDay.fromDateTime(_departureDate!)
+                : const TimeOfDay(hour: 8, minute: 0);
+            final time = await showTimePicker(
+              context: context,
+              initialTime: fallback,
+              builder: (ctx, child) => Theme(
+                data: Theme.of(ctx).copyWith(
+                  colorScheme: ColorScheme.light(
+                    primary: AppColors.navy,
+                    onPrimary: Colors.white,
+                    surface: Colors.white,
+                    onSurface: AppColors.navy,
+                  ),
+                ),
+                child: child!,
+              ),
+            );
+
+            // Cancelou o horário → mantém o que já estava (ou 08:00).
+            final chosen = time ?? fallback;
+            final when = DateTime(picked.year, picked.month, picked.day,
+                chosen.hour, chosen.minute);
+            setState(() => _departureDate = when);
+            vm.setScheduledAt(when);
           },
         ),
         const SizedBox(height: 24),
@@ -683,21 +778,55 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
 
         _LabelSection(label: 'PARADAS'),
         Text(
-            'Essa seção é opcional, se não houver paradas até o destino apenas avance para a próxima sessão',
+            'Opcional. Adicione lugares no caminho até o destino — eles entram '
+            'no mapa e na rota do Google Maps.',
             style: AppTextStyles.bodySmall),
         const SizedBox(height: 16),
 
-        // Suggested stop card
-        _SuggestedStopCard(
-          name: 'Parada sugerida',
-          category: 'RESTAURANTE',
-          location: _destinoLabel.isNotEmpty ? _destinoLabel : 'Destino',
-          onAdd: () => setState(() => _stopNames.add('Parada sugerida')),
-        ),
-        const SizedBox(height: 12),
+        // ── Sugestões na rota ────────────────────────────────
+        // A seção só existe quando há algo bom a sugerir: sem resultado, nada
+        // é renderizado (nenhum estado vazio ocupando espaço).
+        if (_loadingSuggestions)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Row(
+              children: [
+                SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: AppColors.navy)),
+                const SizedBox(width: 10),
+                Text('Procurando paradas na sua rota…',
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: AppColors.textMuted)),
+              ],
+            ),
+          )
+        else if (_suggestions.isNotEmpty) ...[
+          _LabelSection(label: 'SUGESTÕES NA SUA ROTA'),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 196,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _suggestions.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (_, i) {
+                final p = _suggestions[i];
+                return _SuggestedStopCard(
+                  place: p,
+                  added: vm.stops.any((s) => s.id == p.placeId),
+                  onAdd: () => vm.addStop(_stopFromPlace(p)),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
 
-        // Added stops
-        ..._stopNames.asMap().entries.map((e) => Padding(
+        // ── Paradas escolhidas ───────────────────────────────
+        ...vm.stops.asMap().entries.map((e) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 children: [
@@ -711,12 +840,31 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.place,
-                              color: AppColors.navy, size: 16),
+                          Text('${e.key + 1}',
+                              style: AppTextStyles.labelSmall.copyWith(
+                                  color: AppColors.navy,
+                                  fontWeight: FontWeight.w800)),
+                          const SizedBox(width: 10),
+                          Icon(Icons.place, color: AppColors.navy, size: 16),
                           const SizedBox(width: 8),
                           Expanded(
-                              child: Text(e.value,
-                                  style: AppTextStyles.titleMedium)),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(e.value.name,
+                                    style: AppTextStyles.titleMedium,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis),
+                                if (e.value.location.address?.isNotEmpty ==
+                                    true)
+                                  Text(e.value.location.address!,
+                                      style: AppTextStyles.bodySmall.copyWith(
+                                          color: AppColors.textMuted),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -724,36 +872,33 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                   IconButton(
                     icon: const Icon(Icons.close,
                         color: AppColors.error, size: 18),
-                    onPressed: () =>
-                        setState(() => _stopNames.removeAt(e.key)),
+                    onPressed: () => vm.removeStopAt(e.key),
                   ),
                 ],
               ),
             )),
 
-        // Search bar
-        Container(
-          margin: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            border: Border.all(color: AppColors.divider),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: TextField(
-            style: AppTextStyles.bodyMedium
-                .copyWith(color: AppColors.textPrimary),
-            decoration: InputDecoration(
-              hintText: 'Pesquise por paradas',
-              prefixIcon: Icon(Icons.search,
-                  color: AppColors.textMuted, size: 18),
-              filled: false,
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(
-                  vertical: 14, horizontal: 12),
+        // ── Adicionar manualmente ────────────────────────────
+        const SizedBox(height: 4),
+        GestureDetector(
+          onTap: _addStopFromMap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.navy),
+              borderRadius: BorderRadius.circular(8),
             ),
-            onSubmitted: (v) {
-              if (v.isNotEmpty)
-                setState(() => _stopNames.add(v));
-            },
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.add_location_alt_outlined,
+                    color: AppColors.navy, size: 18),
+                const SizedBox(width: 8),
+                Text('Adicionar parada',
+                    style: AppTextStyles.titleMedium
+                        .copyWith(color: AppColors.navy)),
+              ],
+            ),
           ),
         ),
 
@@ -870,7 +1015,8 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                             AppAvatar(
                                 name: p.name,
                                 imageUrl: p.avatarUrl,
-                                size: 44),
+                                size: 44,
+                                profileOf: p),
                             const SizedBox(height: 4),
                             Text(p.name.split(' ').first,
                                 style: AppTextStyles.bodySmall),
@@ -884,17 +1030,25 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         ],
 
         // Paradas
-        if (_stopNames.isNotEmpty) ...[
-          _LabelSection(
-              label: 'PARADAS (${_stopNames.length})'),
-          ..._stopNames.map((s) => Padding(
+        if (vm.stops.isNotEmpty) ...[
+          _LabelSection(label: 'PARADAS (${vm.stops.length})'),
+          ...vm.stops.asMap().entries.map((e) => Padding(
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Row(
                   children: [
-                    Icon(Icons.place,
-                        color: AppColors.navy, size: 16),
+                    Text('${e.key + 1}',
+                        style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.navy,
+                            fontWeight: FontWeight.w800)),
+                    const SizedBox(width: 8),
+                    Icon(Icons.place, color: AppColors.navy, size: 16),
                     const SizedBox(width: 6),
-                    Text(s, style: AppTextStyles.titleMedium),
+                    Expanded(
+                      child: Text(e.value.name,
+                          style: AppTextStyles.titleMedium,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                    ),
                   ],
                 ),
               )),
@@ -1131,7 +1285,9 @@ class _DatePickerBox extends StatelessWidget {
                   Text(
                     selectedDate != null
                         ? '${selectedDate!.day.toString().padLeft(2, '0')} de ${months[selectedDate!.month]} de ${selectedDate!.year}'
-                        : 'Toque para escolher a data',
+                            ' às ${selectedDate!.hour.toString().padLeft(2, '0')}'
+                            ':${selectedDate!.minute.toString().padLeft(2, '0')}'
+                        : 'Toque para escolher data e horário',
                     style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w600,
@@ -1376,78 +1532,118 @@ class _PersonChip extends StatelessWidget {
 }
 
 class _SuggestedStopCard extends StatelessWidget {
-  final String name;
-  final String category;
-  final String location;
+  final PlaceRecommendation place;
+  final bool added;
   final VoidCallback onAdd;
   const _SuggestedStopCard(
-      {required this.name,
-      required this.category,
-      required this.location,
-      required this.onAdd});
+      {required this.place, required this.added, required this.onAdd});
 
   @override
   Widget build(BuildContext context) {
+    final isFuel = place.type == 'gas_station';
+    final icon = isFuel ? Icons.local_gas_station : Icons.restaurant;
     return Container(
+      width: 168,
       decoration: BoxDecoration(
-        color: AppColors.navy.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(10),
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.divider),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Foto (ou icone da categoria quando o lugar nao tem foto)
           ClipRRect(
-            borderRadius: const BorderRadius.horizontal(
-                left: Radius.circular(10)),
-            child: Container(
-              width: 80,
-              height: 80,
-              color: AppColors.teal.withOpacity(0.2),
-              child: const Icon(Icons.restaurant,
-                  color: AppColors.teal, size: 32),
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    category,
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: AppColors.navy,
-                      letterSpacing: 1,
-                      fontWeight: FontWeight.w700,
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(12)),
+            child: SizedBox(
+              height: 84,
+              width: double.infinity,
+              child: place.photoUrl.isNotEmpty
+                  ? CachedNetworkImage(
+                      imageUrl: place.photoUrl,
+                      fit: BoxFit.cover,
+                      errorWidget: (_, __, ___) => Container(
+                        color: AppColors.teal.withOpacity(0.15),
+                        child: Icon(icon, color: AppColors.teal, size: 28),
+                      ),
+                      placeholder: (_, __) =>
+                          Container(color: AppColors.inputFill),
+                    )
+                  : Container(
+                      color: AppColors.teal.withOpacity(0.15),
+                      child: Icon(icon, color: AppColors.teal, size: 28),
                     ),
-                  ),
-                  Text(name, style: AppTextStyles.titleMedium),
-                  Text(location,
-                      style: AppTextStyles.bodySmall,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                ],
-              ),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(right: 10),
-            child: GestureDetector(
-              onTap: onAdd,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.navy,
-                  borderRadius: BorderRadius.circular(6),
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(place.name,
+                    style: AppTextStyles.titleMedium,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Icon(Icons.star, size: 12, color: AppColors.navy),
+                    const SizedBox(width: 3),
+                    Text(place.rating?.toStringAsFixed(1) ?? '-',
+                        style: AppTextStyles.labelSmall
+                            .copyWith(fontWeight: FontWeight.w800)),
+                    const SizedBox(width: 6),
+                    // Etiqueta do "porque" desta sugestao. E por aqui que os
+                    // estabelecimentos patrocinados entram no futuro.
+                    Expanded(
+                      child: Text('Bem avaliado',
+                          style: AppTextStyles.labelSmall
+                              .copyWith(color: AppColors.textMuted),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
                 ),
-                child: Text('ADICIONAR PARADA',
-                    style: AppTextStyles.labelSmall.copyWith(
-                        color: Colors.white,
-                        fontSize: 9,
-                        letterSpacing: 0.5)),
-              ),
+              ],
+            ),
+          ),
+          const Spacer(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+            child: SizedBox(
+              width: double.infinity,
+              height: 30,
+              child: added
+                  ? Container(
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.navy.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.check, size: 14, color: AppColors.navy),
+                          const SizedBox(width: 4),
+                          Text('Adicionada',
+                              style: AppTextStyles.labelSmall
+                                  .copyWith(color: AppColors.navy)),
+                        ],
+                      ),
+                    )
+                  : ElevatedButton(
+                      onPressed: onAdd,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.navy,
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: Text('Adicionar',
+                          style: AppTextStyles.labelSmall
+                              .copyWith(color: Colors.white)),
+                    ),
             ),
           ),
         ],
@@ -1455,4 +1651,3 @@ class _SuggestedStopCard extends StatelessWidget {
     );
   }
 }
-

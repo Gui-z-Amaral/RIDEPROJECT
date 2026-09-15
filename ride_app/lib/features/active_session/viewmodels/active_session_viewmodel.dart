@@ -7,6 +7,7 @@ import '../../../core/models/ride_model.dart';
 import '../../../core/models/trip_model.dart';
 import '../../../core/services/supabase_ride_service.dart';
 import '../../../core/services/supabase_trip_service.dart';
+import '../../../core/services/wake_lock_service.dart';
 
 enum ParticipantStatus { waiting, confirmed, declined }
 
@@ -102,6 +103,10 @@ class ActiveSessionViewModel extends ChangeNotifier with WidgetsBindingObserver 
   StreamSubscription<Position>? _positionStream;
 
   bool get hasActiveSession => _hasActiveSession;
+
+  /// `true` quando a tela está sendo mantida ligada para não perder a gravação
+  /// do trajeto (Modo Rolê). A UI usa isso para avisar sobre a bateria.
+  bool get screenKeptOn => WakeLockService.isActive;
   String get sessionId => _sessionId;
   String get sessionTitle => _sessionTitle;
   bool get isRide => _isRide;
@@ -271,6 +276,12 @@ class ActiveSessionViewModel extends ChangeNotifier with WidgetsBindingObserver 
               sessionId, pos.latitude, pos.longitude);
         } catch (_) {}
       });
+
+      // Modo Rolê: segura a tela ligada enquanto grava (necessário na web,
+      // no-op no nativo). Chamado aqui também no retorno do segundo plano,
+      // porque o navegador solta o lock ao esconder a aba.
+      await WakeLockService.enable();
+      notifyListeners();
     } catch (_) {}
   }
 
@@ -420,6 +431,8 @@ class ActiveSessionViewModel extends ChangeNotifier with WidgetsBindingObserver 
   }
 
   void _cancelAllSubscriptions() {
+    // Parou de gravar → a tela pode voltar a apagar.
+    WakeLockService.disable();
     _positionStream?.cancel();
     _positionStream = null;
     _participantsChannel?.unsubscribe();

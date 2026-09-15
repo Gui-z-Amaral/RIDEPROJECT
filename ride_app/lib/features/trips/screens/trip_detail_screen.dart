@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
+import '../../../core/services/maps_proxy.dart';
 import '../../../core/services/places_service.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_avatar.dart';
@@ -108,8 +109,13 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   Future<void> _ensureCover(TripModel trip) async {
     if (_coverTripId == trip.id) return;
     _coverTripId = trip.id;
-    if (trip.coverImage != null && trip.coverImage!.isNotEmpty) {
-      setState(() => _cover = trip.coverImage);
+    // Capas salvas antes do proxy apontam direto pro Google e quebram na web
+    // (CORS) — nesse caso ignora a salva e re-resolve a foto abaixo.
+    final saved = trip.coverImage;
+    if (saved != null &&
+        saved.isNotEmpty &&
+        !MapsProxy.isLegacyGooglePhotoUrl(saved)) {
+      setState(() => _cover = saved);
       return;
     }
     final query = (trip.destination.label?.isNotEmpty ?? false)
@@ -326,8 +332,20 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                   AppMap(
                     height: 160,
                     center: trip.origin,
-                    markers: [trip.origin, trip.destination, ...trip.waypoints],
-                    routePoints: [trip.origin, ...trip.waypoints, trip.destination],
+                    // As paradas entram como marcadores e como pontos da rota,
+                    // na ordem em que foram adicionadas.
+                    markers: [
+                      trip.origin,
+                      trip.destination,
+                      ...trip.waypoints,
+                      ...trip.stops.map((s) => s.location),
+                    ],
+                    routePoints: [
+                      trip.origin,
+                      ...trip.waypoints,
+                      ...trip.stops.map((s) => s.location),
+                      trip.destination,
+                    ],
                     interactive: false,
                     onTap: () => _openMaps(trip),
                   ),
@@ -340,7 +358,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                         padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                         child: Row(
                           children: [
-                            AppAvatar(name: u.name, imageUrl: u.avatarUrl, size: 40),
+                            AppAvatar(name: u.name, imageUrl: u.avatarUrl, size: 40, profileOf: u),
                             const SizedBox(width: AppSpacing.md),
                             Expanded(
                               child: Column(

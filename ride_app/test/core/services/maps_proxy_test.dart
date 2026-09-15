@@ -37,6 +37,38 @@ void main() {
     });
   });
 
+  group('MapsProxy.isLegacyGooglePhotoUrl', () {
+    test('detecta URL de foto salva antes do proxy (aponta pro Google)', () {
+      expect(
+        MapsProxy.isLegacyGooglePhotoUrl(
+            'https://maps.googleapis.com/maps/api/place/photo'
+            '?maxwidth=400&photo_reference=abc&key=AIza123'),
+        isTrue,
+      );
+    });
+
+    test('URL do proxy não é considerada legada', () {
+      final atual = MapsProxy.photoUrl({
+        'maxwidth': '400',
+        'photo_reference': 'abc123',
+      });
+      expect(MapsProxy.isLegacyGooglePhotoUrl(atual), isFalse);
+    });
+
+    test('null e vazio não são legados', () {
+      expect(MapsProxy.isLegacyGooglePhotoUrl(null), isFalse);
+      expect(MapsProxy.isLegacyGooglePhotoUrl(''), isFalse);
+    });
+
+    test('URL do Supabase Storage não é legada', () {
+      expect(
+        MapsProxy.isLegacyGooglePhotoUrl(
+            '${SupabaseConfig.url}/storage/v1/object/public/trip-photos/x.jpg'),
+        isFalse,
+      );
+    });
+  });
+
   group('MapsProxy.photoUrl', () {
     test('usa path place/photo e leva a apikey na query (pra <img>)', () {
       final uri = Uri.parse(MapsProxy.photoUrl({

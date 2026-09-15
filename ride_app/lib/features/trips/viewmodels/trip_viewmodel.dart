@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/trip_model.dart';
 import '../../../core/models/location_model.dart';
+import '../../../core/models/stop_model.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/services/supabase_trip_service.dart';
 
@@ -32,6 +33,32 @@ class TripViewModel extends ChangeNotifier {
   String? get clubId => _clubId;
   void setClubId(String? id) => _clubId = id;
   void setCoverImage(String? url) => _coverImage = url;
+
+  // ── Paradas do formulário ──────────────────────────────────
+  List<StopModel> _stops = [];
+  List<StopModel> get stops => List.unmodifiable(_stops);
+
+  void addStop(StopModel stop) {
+    // Não repete a mesma parada (mesmo lugar) na rota.
+    if (_stops.any((s) => s.id == stop.id)) return;
+    _stops = [..._stops, stop];
+    notifyListeners();
+  }
+
+  void removeStopAt(int index) {
+    if (index < 0 || index >= _stops.length) return;
+    _stops = [..._stops]..removeAt(index);
+    notifyListeners();
+  }
+
+  void reorderStops(int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= _stops.length) return;
+    final list = [..._stops];
+    final item = list.removeAt(oldIndex);
+    list.insert(newIndex.clamp(0, list.length), item);
+    _stops = list;
+    notifyListeners();
+  }
 
   List<TripModel> get trips => _trips;
   TripModel? get selectedTrip => _selectedTrip;
@@ -117,6 +144,7 @@ class TripViewModel extends ChangeNotifier {
     _scheduledAt = null;
     _clubId = null;
     _coverImage = null;
+    _stops = [];
     notifyListeners();
   }
 
@@ -126,6 +154,7 @@ class TripViewModel extends ChangeNotifier {
     _origin = trip.origin;
     _destination = trip.destination;
     _waypoints = [...trip.waypoints];
+    _stops = [...trip.stops];
     // Participantes excluindo o criador (o criador não é "convidado")
     _participants =
         trip.participants.where((u) => u.id != trip.creator.id).toList();
@@ -160,6 +189,7 @@ class TripViewModel extends ChangeNotifier {
         scheduledAt: _scheduledAt,
         clubId: _clubId,
         coverImage: _coverImage,
+        stops: _stops,
       );
       _trips = [trip, ..._trips];
       resetForm();
@@ -186,6 +216,7 @@ class TripViewModel extends ChangeNotifier {
         origin: _origin!,
         destination: _destination!,
         participantIds: _participants.map((u) => u.id).toList(),
+        stops: _stops,
         scheduledAt: _scheduledAt,
       );
       _trips = _trips.map((t) => t.id == tripId ? trip : t).toList();

@@ -27,6 +27,28 @@ class SocialViewModel extends ChangeNotifier {
   String get searchQuery => _searchQuery;
   int get pendingCount => _receivedRequests.length;
 
+  // ── Mensagens não lidas por contato ──────────────────────────
+  Map<String, int> _unread = {};
+  Map<String, int> get unreadBySender => _unread;
+  int get totalUnread => _unread.values.fold(0, (a, b) => a + b);
+
+  Future<void> loadUnreadCounts() async {
+    try {
+      _unread = await SupabaseSocialService.getUnreadCounts();
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// Zera o badge da conversa (otimista) e persiste. Chamado ao abrir o chat.
+  Future<void> markChatRead(String otherUserId) async {
+    if ((_unread[otherUserId] ?? 0) == 0) return;
+    _unread = Map<String, int>.from(_unread)..remove(otherUserId);
+    notifyListeners();
+    try {
+      await SupabaseSocialService.markChatRead(otherUserId);
+    } catch (_) {}
+  }
+
   Future<void> loadFriends() async {
     _isLoading = true;
     notifyListeners();
@@ -168,6 +190,7 @@ class SocialViewModel extends ChangeNotifier {
     _receivedRequests = [];
     _sentRequests = [];
     _messages = [];
+    _unread = {};
     _searchQuery = '';
     _isLoading = false;
     _isSearching = false;

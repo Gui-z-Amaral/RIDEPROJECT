@@ -21,8 +21,10 @@ class _ShellScreenState extends State<ShellScreen> {
 
   int _currentIndex(BuildContext context) {
     final location = GoRouterState.of(context).uri.path;
-    if (location.startsWith('/friends')) return 0;
-    if (location.startsWith('/chat'))    return 1;
+    if (location.startsWith('/profile')) return 0;
+    // /friends (amigos e pedidos) é alcançado a partir de Contatos.
+    if (location.startsWith('/chat') ||
+        location.startsWith('/friends'))   return 1;
     if (location.startsWith('/home'))    return 2;
     if (location.startsWith('/events'))  return 3;
     if (location.startsWith('/clubs'))   return 4;
@@ -107,18 +109,18 @@ class _ShellScreenState extends State<ShellScreen> {
             children: [
               Expanded(
                 child: _NavItem(
-                  icon: Icons.people_outline,
-                  activeIcon: Icons.people,
-                  label: 'Amigos',
+                  icon: Icons.person_outline,
+                  activeIcon: Icons.person,
+                  label: 'Perfil',
                   active: idx == 0,
-                  onTap: () => context.go('/friends'),
+                  onTap: () => context.go('/profile'),
                 ),
               ),
               Expanded(
                 child: _NavItem(
-                  icon: Icons.chat_bubble_outline,
-                  activeIcon: Icons.chat_bubble,
-                  label: 'Chat',
+                  icon: Icons.people_outline,
+                  activeIcon: Icons.people,
+                  label: 'Contatos',
                   active: idx == 1,
                   onTap: () => context.go('/chat'),
                 ),

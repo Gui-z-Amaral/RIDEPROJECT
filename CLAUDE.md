@@ -71,7 +71,11 @@ Tentar sempre do 1 para o 5, nessa ordem:
   testa só um lado, a divergência entra sem ninguém perceber.
 
 ### Limitações web conhecidas
-- **Background**: localização com tela apagada é impossível → Wake Lock.
+- **Background**: localização com tela apagada é impossível na web → "Modo Rolê"
+  via `WakeLockService` (`lib/core/services/wake_lock_service.dart`, usa
+  `wakelock_plus`). Segura a tela ligada durante a gravação; **no nativo é
+  no-op** de propósito (lá já existe background). A UI pergunta
+  `ActiveSessionViewModel.screenKeptOn` — capacidade, não plataforma.
 - **Push**: FCM e `flutter_local_notifications` não rodam na web (isolados com
   `kIsWeb`); web push exige config própria e, no iOS, só com o PWA instalado na
   tela de início.
@@ -89,8 +93,11 @@ flutter build apk --release
 flutter build web --release   # saída em build/web
 ```
 Deploy web: `scp -r build/web/* root@2.24.114.7:/var/www/app-ride/`
-(Nginx + Cloudflare). Depois de cada deploy, **purgar o cache do Cloudflare**,
-senão o `main.dart.js` antigo continua sendo servido.
+(Nginx na VPS, atrás do Cloudflare). Uma **Cache Rule** no Cloudflare já faz
+bypass dos arquivos de nome fixo que mudam a cada build (`/`, `index.html`,
+`main.dart.js`, `flutter_bootstrap.js`, `flutter_service_worker.js`,
+`version.json`, `/assets/*`), então **não é preciso purgar o cache** —
+só o `/canvaskit/` fica cacheado (muda só com a versão do Flutter).
 
 ## Banco de dados / Migrations
 - Migrations ficam em `ride_app/supabase/migrations/NNN_*.sql` e **também** são

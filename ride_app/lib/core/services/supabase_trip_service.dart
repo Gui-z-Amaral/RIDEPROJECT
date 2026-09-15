@@ -4,6 +4,7 @@ import '../models/trip_model.dart';
 import '../models/location_model.dart';
 import '../models/user_model.dart';
 import '../models/trip_photo_model.dart';
+import '../models/stop_model.dart';
 import '../models/session_invite.dart';
 import '../models/event_model.dart';
 import '../utils/image_utils.dart';
@@ -102,7 +103,14 @@ class SupabaseTripService {
     final allIds = {...participantIds, if (creatorId.isNotEmpty) creatorId};
     final profilesMap = await _fetchProfilesMap(allIds);
 
-    return _rowToTrip(row, profilesMap, participantIds: participantIds.toList());
+    // Paradas: best-effort — uma falha aqui não pode impedir abrir a viagem.
+    List<StopModel> stops = const [];
+    try {
+      stops = await getStops(id);
+    } catch (_) {}
+
+    return _rowToTrip(row, profilesMap,
+        participantIds: participantIds.toList(), stops: stops);
   }
 
   // ── Viagens de um motoclube ────────────────────────────────
@@ -206,6 +214,56 @@ class SupabaseTripService {
     await _db.from('trip_schedule_items').insert(rows);
   }
 
+  // ── Paradas da viagem (trip_stops) ─────────────────────────
+  static Future<List<StopModel>> getStops(String tripId) async {
+    final rows = await _db
+        .from('trip_stops')
+        .select()
+        .eq('trip_id', tripId)
+        .order('position', ascending: true);
+    return (rows as List)
+        .map((r) => _rowToStop(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Substitui as paradas inteiras (delete + insert), preservando a ordem.
+  /// Mesmo padrão de [replaceSchedule].
+  static Future<void> replaceStops(
+      String tripId, List<StopModel> stops) async {
+    await _db.from('trip_stops').delete().eq('trip_id', tripId);
+    if (stops.isEmpty) return;
+    final rows = <Map<String, dynamic>>[];
+    for (var i = 0; i < stops.length; i++) {
+      final s = stops[i];
+      rows.add({
+        'trip_id': tripId,
+        'position': i,
+        'name': s.name,
+        'category': s.category,
+        'description': s.description,
+        'image_url': s.imageUrl,
+        'lat': s.location.lat,
+        'lng': s.location.lng,
+        'address': s.location.address,
+      });
+    }
+    await _db.from('trip_stops').insert(rows);
+  }
+
+  static StopModel _rowToStop(Map<String, dynamic> r) => StopModel(
+        id: r['id'] as String? ?? '',
+        name: r['name'] as String? ?? '',
+        description: r['description'] as String?,
+        imageUrl: r['image_url'] as String?,
+        category: r['category'] as String? ?? 'other',
+        location: LocationModel(
+          lat: (r['lat'] as num?)?.toDouble() ?? 0,
+          lng: (r['lng'] as num?)?.toDouble() ?? 0,
+          address: r['address'] as String?,
+          label: r['name'] as String?,
+        ),
+      );
+
   // ── Busca perfis por IDs em uma só query ───────────────────
   static Future<Map<String, UserModel>> _fetchProfilesMap(Set<String> ids) async {
     if (ids.isEmpty) return {};
@@ -230,6 +288,7 @@ class SupabaseTripService {
     String? clubId,
     String? coverImage,
     List<EventScheduleItem> schedule = const [],
+    List<StopModel> stops = const [],
   }) async {
     // Insert trip
     final tripRow = await _db.from('trips').insert({
@@ -300,6 +359,11 @@ class SupabaseTripService {
       } catch (_) {}
     }
 
+    // Paradas (best-effort: a viagem já existe, não vale derrubar por isso).
+    try {
+      await replaceStops(tripId, stops);
+    } catch (_) {}
+
     return (await getTripById(tripId))!;
   }
 
@@ -320,6 +384,7 @@ class SupabaseTripService {
     required LocationModel destination,
     DateTime? scheduledAt,
     List<String> participantIds = const [],
+    List<StopModel> stops = const [],
   }) async {
     await _db.from('trips').update({
       'title': title,
@@ -391,6 +456,11 @@ class SupabaseTripService {
         );
       } catch (_) {}
     }
+
+    // Paradas: substitui pelo conjunto atual do formulário.
+    try {
+      await replaceStops(tripId, stops);
+    } catch (_) {}
 
     return (await getTripById(tripId))!;
   }
@@ -574,7 +644,8 @@ class SupabaseTripService {
   // ── Helpers ────────────────────────────────────────────────
   static TripModel _rowToTrip(
       Map<String, dynamic> r, Map<String, UserModel> profilesMap,
-      {List<String> participantIds = const []}) {
+      {List<String> participantIds = const [],
+      List<StopModel> stops = const []}) {
     final creatorId = r['creator_id'] as String? ?? '';
     final creator = profilesMap[creatorId] ??
         UserModel(id: creatorId, name: '', username: '');
@@ -596,6 +667,7 @@ class SupabaseTripService {
         label: r['destination_label'] as String?,
       ),
       creator: creator,
+      stops: stops,
       participants: participantIds
           .map((uid) => profilesMap[uid])
           .whereType<UserModel>()

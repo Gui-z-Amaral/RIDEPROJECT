@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:go_router/go_router.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_spacing.dart';
+import '../../core/models/user_model.dart';
 import '../../core/utils/extensions.dart';
 
 class AppAvatar extends StatelessWidget {
@@ -14,6 +16,13 @@ class AppAvatar extends StatelessWidget {
   final VoidCallback? onTap;
   final Color? borderColor;
 
+  /// Quando informado, tocar na foto abre o **perfil desse rider**.
+  ///
+  /// Centraliza aqui a regra "foto sempre abre o perfil", em vez de repetir a
+  /// navegação em cada tela. Se [onTap] for passado, ele tem prioridade (o
+  /// chamador assumiu o toque).
+  final UserModel? profileOf;
+
   const AppAvatar({
     super.key,
     this.imageUrl,
@@ -23,6 +32,7 @@ class AppAvatar extends StatelessWidget {
     this.isOnline = false,
     this.onTap,
     this.borderColor,
+    this.profileOf,
   });
 
   @override
@@ -53,10 +63,16 @@ class AppAvatar extends StatelessWidget {
           )
         : SizedBox(width: size, height: size, child: child);
 
+    final peer = profileOf;
+    final effectiveOnTap = onTap ??
+        (peer != null
+            ? () => context.push('/profile/${peer.id}', extra: peer)
+            : null);
+
     return Stack(
       children: [
-        onTap != null
-            ? GestureDetector(onTap: onTap, child: avatar)
+        effectiveOnTap != null
+            ? GestureDetector(onTap: effectiveOnTap, child: avatar)
             : avatar,
         if (showOnline)
           Positioned(
