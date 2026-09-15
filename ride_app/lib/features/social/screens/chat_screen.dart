@@ -11,6 +11,7 @@ import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/photo_viewer.dart';
 import '../../../core/models/message_model.dart';
 import '../../../core/services/push_notification_service.dart';
+import '../../../core/services/supabase_notification_service.dart';
 import '../viewmodels/social_viewmodel.dart';
 import '../../../core/utils/extensions.dart';
 
@@ -40,6 +41,9 @@ class _ChatScreenState extends State<ChatScreen> {
       // Abriu a conversa → zera o contador de não lidas deste contato
       // (vale também quando o chat é aberto pelo push, não só pela lista).
       vm.markChatRead(widget.userId);
+      // ...e limpa as notificações acumuladas desta pessoa: o usuário está
+      // lendo a conversa agora, não faz sentido continuarem na lista.
+      SupabaseNotificationService.clearMessageNotificationsFrom(widget.userId);
     });
   }
 

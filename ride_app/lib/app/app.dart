@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
+import '../shared/widgets/responsive_shell.dart';
 import '../core/services/supabase_auth_service.dart';
 import '../core/services/push_notification_service.dart';
 import '../features/auth/viewmodels/auth_viewmodel.dart';
@@ -79,6 +80,10 @@ class _RideAppState extends State<RideApp> with WidgetsBindingObserver {
             theme: AppTheme.current,
             routerConfig: router,
             debugShowCheckedModeBanner: false,
+            // Em telas largas o app vira uma coluna central em vez de esticar.
+            // Aqui vale para TODAS as rotas, inclusive as empurradas.
+            builder: (context, child) =>
+                ResponsiveShell(child: child ?? const SizedBox.shrink()),
           ),
         ),
       ),

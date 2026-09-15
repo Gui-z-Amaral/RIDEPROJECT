@@ -43,5 +43,129 @@
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
+
+  <!--
+    Convite para instalar o PWA. Vive aqui (e não no Dart) porque é uma
+    preocupação exclusiva da web: o app nativo já está instalado. Assim o
+    código Flutter não precisa de interop JS nem de conditional imports.
+
+    - iOS: não existe prompt automático. Mostramos o passo a passo do
+      "Adicionar à Tela de Início" (é também o único jeito de ter push no iOS).
+    - Android/desktop: usamos o prompt nativo (beforeinstallprompt).
+    - Já instalado (standalone) ou já dispensado: não aparece.
+  -->
+  <style>
+    #ride-install{
+      position:fixed; left:0; right:0; bottom:0; z-index:9999;
+      background:#fff; color:#16202e;
+      font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+      border-radius:18px 18px 0 0;
+      box-shadow:0 -6px 32px rgba(20,32,46,.22);
+      padding:20px 20px calc(20px + env(safe-area-inset-bottom));
+      max-width:560px; margin:0 auto;
+      transform:translateY(110%); transition:transform .32s ease;
+    }
+    #ride-install.show{transform:translateY(0)}
+    #ride-install h3{margin:0 0 4px;font-size:17px;font-weight:800;color:#1B3058}
+    #ride-install p.sub{margin:0 0 14px;font-size:13.5px;color:#5c6b80}
+    #ride-install ol{margin:0 0 16px;padding-left:20px;font-size:14px;line-height:1.7}
+    #ride-install ol b{color:#1B3058}
+    #ride-install .row{display:flex;gap:10px}
+    #ride-install button{
+      flex:1;border:0;border-radius:10px;padding:12px;font-size:14px;
+      font-weight:700;cursor:pointer;font-family:inherit;
+    }
+    #ride-install .primary{background:#1B3058;color:#fff}
+    #ride-install .ghost{background:#eef1f6;color:#5c6b80}
+    @media (prefers-color-scheme:dark){
+      #ride-install{background:#16202f;color:#e7edf5}
+      #ride-install h3{color:#8FA9D6}
+      #ride-install p.sub{color:#95a3b8}
+      #ride-install ol b{color:#8FA9D6}
+      #ride-install .ghost{background:#26344a;color:#95a3b8}
+    }
+  </style>
+
+  <div id="ride-install" role="dialog" aria-label="Instalar o RideApp" hidden>
+    <h3 id="ride-install-title">Instale o RideApp</h3>
+    <p class="sub" id="ride-install-sub"></p>
+    <ol id="ride-install-steps" hidden>
+      <li>Toque no botão <b>Compartilhar</b> (o quadrado com a seta pra cima).</li>
+      <li>Escolha <b>“Adicionar à Tela de Início”</b>.</li>
+      <li>Abra o RideApp pelo <b>ícone novo</b> — em tela cheia e com notificações.</li>
+    </ol>
+    <div class="row">
+      <button class="primary" id="ride-install-go" hidden>Instalar app</button>
+      <button class="ghost" id="ride-install-close">Agora não</button>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    var KEY = 'ride-install-dismissed-v1';
+    var el = document.getElementById('ride-install');
+    var sub = document.getElementById('ride-install-sub');
+    var steps = document.getElementById('ride-install-steps');
+    var go = document.getElementById('ride-install-go');
+    var close = document.getElementById('ride-install-close');
+    var deferred = null;
+
+    function dismissed() {
+      try { return localStorage.getItem(KEY) === '1'; } catch (e) { return false; }
+    }
+    function remember() {
+      try { localStorage.setItem(KEY, '1'); } catch (e) {}
+    }
+    function installed() {
+      return window.navigator.standalone === true ||
+        (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    }
+    function isIOS() {
+      var ua = navigator.userAgent || '';
+      // iPadOS 13+ se identifica como Macintosh — daí o teste de toque.
+      return /iphone|ipad|ipod/i.test(ua) ||
+        (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+    }
+    function show() {
+      if (dismissed() || installed()) return;
+      el.hidden = false;
+      // Espera o app pintar antes de subir a folha.
+      setTimeout(function () { el.classList.add('show'); }, 50);
+    }
+    function hide() {
+      el.classList.remove('show');
+      setTimeout(function () { el.hidden = true; }, 320);
+    }
+
+    close.addEventListener('click', function () { remember(); hide(); });
+
+    // Android / desktop: prompt nativo em um toque.
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      deferred = e;
+      sub.textContent = 'Tenha o RideApp na tela inicial, em tela cheia.';
+      go.hidden = false;
+      steps.hidden = true;
+      setTimeout(show, 2500);
+    });
+
+    go.addEventListener('click', function () {
+      if (!deferred) return;
+      hide();
+      deferred.prompt();
+      deferred.userChoice.then(function () { remember(); deferred = null; });
+    });
+
+    // iOS: sem prompt automático — ensinamos o caminho.
+    if (isIOS() && !installed() && !dismissed()) {
+      sub.textContent = 'No iPhone leva 3 toques — e é assim que as notificações passam a funcionar.';
+      steps.hidden = false;
+      go.hidden = true;
+      setTimeout(show, 2500);
+    }
+
+    window.addEventListener('appinstalled', function () { remember(); hide(); });
+  })();
+  </script>
 </body>
 </html>

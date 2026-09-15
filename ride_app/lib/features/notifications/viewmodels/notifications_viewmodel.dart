@@ -17,7 +17,7 @@ class NotificationsViewModel extends ChangeNotifier {
     notifyListeners();
     try {
       _notifications =
-          await SupabaseNotificationService.getNotifications();
+          await SupabaseNotificationService.getNotificationsGrouped();
     } catch (_) {
       _notifications = [];
     }

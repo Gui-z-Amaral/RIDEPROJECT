@@ -1,5 +1,17 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/notification_model.dart';
+
+/// Resultado do agrupamento das notificações de mensagem.
+class CollapsedNotifications {
+  /// O que a UI deve mostrar (uma linha por conversa, com contador).
+  final List<NotificationModel> visible;
+
+  /// IDs das linhas redundantes, que podem ser apagadas do banco.
+  final List<String> redundantIds;
+
+  const CollapsedNotifications(this.visible, this.redundantIds);
+}
 
 class SupabaseNotificationService {
   static SupabaseClient get _db => Supabase.instance.client;
@@ -14,6 +26,44 @@ class SupabaseNotificationService {
         .order('created_at', ascending: false)
         .limit(50);
     return rows.map(_rowToNotification).toList();
+  }
+
+  /// Notificações já **agrupadas**: várias mensagens do mesmo contato viram uma
+  /// linha só com contador, e as linhas redundantes são apagadas do banco.
+  ///
+  /// O agrupamento acontece aqui (no destinatário) e não no envio porque a RLS
+  /// só deixa cada usuário ler/alterar as PRÓPRIAS notificações — quem envia
+  /// nem enxerga a notificação anterior para somar.
+  static Future<List<NotificationModel>> getNotificationsGrouped() async {
+    final all = await getNotifications();
+    final result = collapseMessages(all);
+
+    if (result.redundantIds.isNotEmpty) {
+      // Best-effort: se a limpeza falhar, a UI já está correta de qualquer forma.
+      try {
+        await _db
+            .from('notifications')
+            .delete()
+            .inFilter('id', result.redundantIds)
+            .eq('user_id', _uid);
+      } catch (_) {}
+    }
+    return result.visible;
+  }
+
+  /// Apaga as notificações de mensagem vindas de [fromUserId].
+  ///
+  /// Usado quando o usuário está com a conversa dessa pessoa **aberta**: não
+  /// faz sentido acumular aviso de algo que ele está lendo agora.
+  static Future<void> clearMessageNotificationsFrom(String fromUserId) async {
+    try {
+      await _db
+          .from('notifications')
+          .delete()
+          .eq('user_id', _uid)
+          .eq('type', 'message')
+          .filter('data->>fromUserId', 'eq', fromUserId);
+    } catch (_) {}
   }
 
   // ── Marcar uma como lida ───────────────────────────────────
@@ -116,4 +166,58 @@ class SupabaseNotificationService {
         isRead: r['is_read'] as bool? ?? false,
         createdAt: DateTime.parse(r['created_at'] as String),
       );
+
+  /// Agrupa notificações de mensagem por remetente: mantém a **mais recente**
+  /// de cada conversa, com o total no corpo ("12 novas mensagens"), e devolve
+  /// as demais como redundantes.
+  ///
+  /// As notificações de outros tipos passam intactas, preservando a ordem.
+  /// Espera a lista já ordenada da mais nova para a mais antiga.
+  @visibleForTesting
+  static CollapsedNotifications collapseMessages(List<NotificationModel> all) {
+    final visible = <NotificationModel>[];
+    final redundant = <String>[];
+    final counts = <String, int>{};
+    final indexOfSender = <String, int>{};
+
+    for (final n in all) {
+      if (n.type != 'message') {
+        visible.add(n);
+        continue;
+      }
+      final from = n.data['fromUserId'] as String? ?? '';
+      if (from.isEmpty) {
+        visible.add(n); // sem remetente identificável: não dá para agrupar
+        continue;
+      }
+      final known = indexOfSender[from];
+      if (known == null) {
+        indexOfSender[from] = visible.length;
+        counts[from] = 1;
+        visible.add(n);
+      } else {
+        counts[from] = counts[from]! + 1;
+        redundant.add(n.id);
+      }
+    }
+
+    // Reescreve o corpo das que agruparam mais de uma.
+    indexOfSender.forEach((from, i) {
+      final total = counts[from] ?? 1;
+      if (total < 2) return;
+      final base = visible[i];
+      visible[i] = NotificationModel(
+        id: base.id,
+        userId: base.userId,
+        type: base.type,
+        title: base.title,
+        body: '📩 $total novas mensagens',
+        data: {...base.data, 'count': total},
+        isRead: base.isRead,
+        createdAt: base.createdAt,
+      );
+    });
+
+    return CollapsedNotifications(visible, redundant);
+  }
 }

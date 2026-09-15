@@ -5,6 +5,8 @@ import '../../../core/models/user_model.dart';
 import '../../../core/models/message_model.dart';
 import '../../../core/models/friend_request_model.dart';
 import '../../../core/services/supabase_social_service.dart';
+import '../../../core/services/supabase_notification_service.dart';
+import '../../../core/services/push_notification_service.dart';
 
 class SocialViewModel extends ChangeNotifier {
   List<UserModel> _friends = [];
@@ -118,6 +120,12 @@ class SocialViewModel extends ChangeNotifier {
           _messages = [..._messages, msg];
           _sortMessages();
           notifyListeners();
+        }
+        // Com esta conversa ABERTA, a notificação não deve acumular — o
+        // usuário está lendo agora. Com o chat fechado, ela fica normalmente.
+        if (PushNotificationService.activeChatUserId == otherUserId &&
+            msg.senderId == otherUserId) {
+          SupabaseNotificationService.clearMessageNotificationsFrom(otherUserId);
         }
       },
     );

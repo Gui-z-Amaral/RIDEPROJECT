@@ -17,6 +17,19 @@ import '../../auth/viewmodels/auth_viewmodel.dart';
 import '../../social/viewmodels/social_viewmodel.dart';
 import '../viewmodels/active_session_viewmodel.dart';
 
+/// Tamanho (px) do marcador de rider no mapa em função do zoom.
+///
+/// **Pequeno com o mapa afastado** — senão o avatar tapa o próprio mapa — e
+/// **maior conforme aproxima**. Quantizado em degraus de 10px de propósito:
+/// sem isso um bitmap novo seria gerado a cada frame do gesto de zoom.
+int markerSizeForZoom(double zoom) {
+  const minSize = 40.0, maxSize = 110.0;
+  const minZoom = 10.0, maxZoom = 17.0;
+  final t = ((zoom - minZoom) / (maxZoom - minZoom)).clamp(0.0, 1.0);
+  final raw = minSize + (maxSize - minSize) * t;
+  return (raw / 10).round() * 10;
+}
+
 class ActiveMapScreen extends StatefulWidget {
   final String sessionId;
   final bool isRide;
@@ -495,32 +508,40 @@ class _MapViewState extends State<_MapView> {
 ''';
 
   // Cache de ícones por userId (evita re-gerar o avatar a cada build)
+  // Chave do cache: "userId:tamanho" — o mesmo rider tem um bitmap por degrau
+  // de zoom.
   final Map<String, BitmapDescriptor> _markerIcons = {};
   final Set<String> _generatingIcons = {};
-  static const double _iconSize = 110; // tamanho do bitmap em px
+
+  /// Zoom atual do mapa (guia o tamanho do marcador).
+  double _zoom = 14;
+
 
   BitmapDescriptor _iconFor(UserModel user) {
-    final cached = _markerIcons[user.id];
+    final size = markerSizeForZoom(_zoom);
+    final key = '${user.id}:$size';
+    final cached = _markerIcons[key];
     if (cached != null) return cached;
-    if (!_generatingIcons.contains(user.id)) {
-      _generatingIcons.add(user.id);
-      _buildMarkerIcon(user).then((icon) {
-        _generatingIcons.remove(user.id);
-        if (mounted) setState(() => _markerIcons[user.id] = icon);
+    if (!_generatingIcons.contains(key)) {
+      _generatingIcons.add(key);
+      _buildMarkerIcon(user, size.toDouble()).then((icon) {
+        _generatingIcons.remove(key);
+        if (mounted) setState(() => _markerIcons[key] = icon);
       }).catchError((_) {
-        _generatingIcons.remove(user.id);
+        _generatingIcons.remove(key);
       });
     }
     // Enquanto o avatar carrega, usa pin padrão
     return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
   }
 
-  Future<BitmapDescriptor> _buildMarkerIcon(UserModel user) async {
-    const size = _iconSize;
-    const borderWidth = 7.0;
+  Future<BitmapDescriptor> _buildMarkerIcon(UserModel user, double size) async {
+    // Borda proporcional ao tamanho (mantém a mesma proporção do desenho
+    // original de 110px).
+    final borderWidth = size * (7 / 110);
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    final center = const Offset(size / 2, size / 2);
+    final center = Offset(size / 2, size / 2);
 
     // Fundo branco (aparece como gap entre foto e borda)
     canvas.drawCircle(
@@ -579,7 +600,7 @@ class _MapViewState extends State<_MapView> {
       final tp = TextPainter(
         text: TextSpan(
           text: initial,
-          style: const TextStyle(
+          style: TextStyle(
             color: Colors.white,
             fontSize: size * 0.42,
             fontWeight: FontWeight.bold,
@@ -657,6 +678,13 @@ class _MapViewState extends State<_MapView> {
       onMapCreated: (c) {
         _controller = c;
         c.setMapStyle(_mapStyle);
+      },
+      onCameraMove: (pos) {
+        // Só reconstrói quando o marcador realmente muda de tamanho — o
+        // callback dispara a cada frame do gesto.
+        final mudou = markerSizeForZoom(pos.zoom) != markerSizeForZoom(_zoom);
+        _zoom = pos.zoom;
+        if (mudou && mounted) setState(() {});
       },
     );
   }
