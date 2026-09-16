@@ -14,6 +14,7 @@ import '../../../core/models/ride_model.dart';
 import '../../../core/models/trip_photo_model.dart';
 import '../../../core/services/supabase_social_service.dart';
 import '../../../shared/widgets/app_avatar.dart';
+import '../../../shared/widgets/trip_cover.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -374,6 +375,30 @@ class _SectionRow extends StatelessWidget {
 
 // ─── Próxima Viagem card ──────────────────────────────────────────────────────
 
+/// Fundo do card de viagem quando não há foto do destino.
+class _TripCoverFallback extends StatelessWidget {
+  const _TripCoverFallback();
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppColors.navy,
+              AppColors.mediumBlue,
+              AppColors.teal.withOpacity(0.7),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: Center(
+          child: Icon(Icons.landscape,
+              color: Colors.white.withOpacity(0.15), size: 60),
+        ),
+      );
+}
+
 class _NextTripCard extends StatelessWidget {
   final TripModel trip;
   final VoidCallback onTap;
@@ -409,26 +434,14 @@ class _NextTripCard extends StatelessWidget {
             ClipRRect(
               borderRadius:
                   const BorderRadius.vertical(top: Radius.circular(14)),
-              child: Container(
+              child: SizedBox(
                 height: 120,
                 width: double.infinity,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      AppColors.navy,
-                      AppColors.mediumBlue,
-                      AppColors.teal.withOpacity(0.7),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
                 child: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    Center(
-                      child: Icon(Icons.landscape,
-                          color: Colors.white.withOpacity(0.15), size: 60),
-                    ),
+                    // Mesma capa que o detalhe da viagem mostra.
+                    TripCover(trip: trip, fallback: const _TripCoverFallback()),
                     Positioned(
                       top: 10,
                       right: 10,
