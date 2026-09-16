@@ -3,6 +3,7 @@ import '../models/ride_model.dart';
 import '../models/location_model.dart';
 import '../models/user_model.dart';
 import '../models/session_invite.dart';
+import '../utils/db_time.dart';
 
 class SupabaseRideService {
   static SupabaseClient get _db => Supabase.instance.client;
@@ -83,16 +84,10 @@ class SupabaseRideService {
             : (ride['meeting_address'] as String? ?? ''),
         status: _parseStatus(ride['status'] as String?),
         creatorId: ride['creator_id'] as String?,
-        startedAt: ride['started_at'] != null
-            ? DateTime.parse(ride['started_at'] as String)
-            : null,
-        createdAt: DateTime.parse(ride['created_at'] as String),
-        joinedAt: r['joined_at'] != null
-            ? DateTime.parse(r['joined_at'] as String)
-            : null,
-        leftAt: r['left_at'] != null
-            ? DateTime.parse(r['left_at'] as String)
-            : null,
+        startedAt: DbTime.tryParse(ride['started_at']),
+        createdAt: DbTime.parse(ride['created_at']),
+        joinedAt: DbTime.tryParse(r['joined_at']),
+        leftAt: DbTime.tryParse(r['left_at']),
       );
     }).toList();
   }
@@ -112,7 +107,7 @@ class SupabaseRideService {
       'meeting_lng': meetingPoint.lng,
       'meeting_address': meetingPoint.address,
       'meeting_label': meetingPoint.label,
-      'scheduled_at': scheduledAt?.toIso8601String(),
+      'scheduled_at': DbTime.toDb(scheduledAt),
       'is_immediate': isImmediate,
     }).select().single();
 
@@ -143,7 +138,7 @@ class SupabaseRideService {
   static Future<void> updateStatus(String rideId, RideStatus status) async {
     final update = <String, dynamic>{'status': status.name};
     if (status == RideStatus.active) {
-      update['started_at'] = DateTime.now().toIso8601String();
+      update['started_at'] = DbTime.nowForDb();
     }
     await _db
         .from('rides')
@@ -174,7 +169,7 @@ class SupabaseRideService {
     // Soft-delete: guarda o timestamp de saída para o histórico
     await _db
         .from('ride_participants')
-        .update({'left_at': DateTime.now().toIso8601String()})
+        .update({'left_at': DbTime.nowForDb()})
         .eq('ride_id', rideId)
         .eq('user_id', _uid);
   }
@@ -198,7 +193,7 @@ class SupabaseRideService {
       'user_id': _uid,
       'lat': lat,
       'lng': lng,
-      'updated_at': DateTime.now().toIso8601String(),
+      'updated_at': DbTime.nowForDb(),
     }, onConflict: 'ride_id,user_id');
   }
 
@@ -227,9 +222,7 @@ class SupabaseRideService {
         sessionId: ride['id'] as String,
         title: ride['title'] as String? ?? 'Rolê',
         isRide: true,
-        scheduledAt: ride['scheduled_at'] != null
-            ? DateTime.tryParse(ride['scheduled_at'] as String)
-            : null,
+        scheduledAt: DbTime.tryParse(ride['scheduled_at']),
       ));
     }
     return out;
@@ -288,14 +281,10 @@ class SupabaseRideService {
           .map((p) => UserModel.fromMap(p['user'] as Map<String, dynamic>? ?? {}))
           .toList(),
       status: _parseStatus(r['status'] as String?),
-      scheduledAt: r['scheduled_at'] != null
-          ? DateTime.parse(r['scheduled_at'] as String)
-          : null,
+      scheduledAt: DbTime.tryParse(r['scheduled_at']),
       isImmediate: r['is_immediate'] as bool? ?? false,
-      createdAt: DateTime.parse(r['created_at'] as String),
-      startedAt: r['started_at'] != null
-          ? DateTime.parse(r['started_at'] as String)
-          : null,
+      createdAt: DbTime.parse(r['created_at']),
+      startedAt: DbTime.tryParse(r['started_at']),
     );
   }
 

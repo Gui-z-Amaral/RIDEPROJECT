@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/event_model.dart';
 import '../models/user_model.dart';
 import '../utils/storage_utils.dart';
+import '../utils/db_time.dart';
 
 class SupabaseEventService {
   static SupabaseClient get _db => Supabase.instance.client;
@@ -48,8 +49,8 @@ class SupabaseEventService {
       'state_uf': stateUf,
       'city': city,
       'club_id': clubId,
-      'starts_at': startsAt.toIso8601String(),
-      'ends_at': endsAt?.toIso8601String(),
+      'starts_at': DbTime.toDb(startsAt),
+      'ends_at': DbTime.toDb(endsAt),
     }).select('id').single();
 
     final eventId = row['id'] as String;
@@ -90,8 +91,8 @@ class SupabaseEventService {
     if (locationLabel != null) updates['location_label'] = locationLabel;
     if (stateUf != null) updates['state_uf'] = stateUf;
     if (city != null) updates['city'] = city;
-    if (startsAt != null) updates['starts_at'] = startsAt.toIso8601String();
-    if (endsAt != null) updates['ends_at'] = endsAt.toIso8601String();
+    if (startsAt != null) updates['starts_at'] = DbTime.toDb(startsAt);
+    if (endsAt != null) updates['ends_at'] = DbTime.toDb(endsAt);
 
     if (updates.isNotEmpty) {
       await _db.from('events').update(updates).eq('id', eventId);
@@ -211,7 +212,7 @@ class SupabaseEventService {
         // is_public: eventos públicos (empresa/pessoal sempre; clube só se o
         // dono marcou "eventos públicos"). Privados de clube ficam no mural.
         .eq('is_public', true)
-        .gte('starts_at', DateTime.now().toIso8601String())
+        .gte('starts_at', DbTime.nowForDb())
         .order('starts_at', ascending: true)
         .limit(limit);
     return _attachInterest((rows as List).cast<Map<String, dynamic>>());
@@ -226,7 +227,7 @@ class SupabaseEventService {
         .from('events')
         .select(_select)
         .or('title.ilike.%$q%,description.ilike.%$q%,city.ilike.%$q%,location_label.ilike.%$q%')
-        .gte('starts_at', DateTime.now().toIso8601String())
+        .gte('starts_at', DbTime.nowForDb())
         .order('starts_at', ascending: true)
         .limit(limit);
     return _attachInterest((rows as List).cast<Map<String, dynamic>>());
@@ -298,7 +299,7 @@ class SupabaseEventService {
         .eq('creator_id', creatorId)
         .isFilter('club_id', null);
     if (upcomingOnly) {
-      query = query.gte('starts_at', DateTime.now().toIso8601String());
+      query = query.gte('starts_at', DbTime.nowForDb());
     }
     final rows = await query.order('starts_at', ascending: true);
     return _attachInterest((rows as List).cast<Map<String, dynamic>>());

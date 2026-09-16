@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'chat_crypto.dart';
+import '../utils/db_time.dart';
 
 /// Gerencia as chaves do E2EE do chat, **por dispositivo**:
 ///  - cada aparelho tem seu próprio par; a privada nunca sai dele
@@ -82,7 +83,7 @@ class ChatKeyService {
         'user_id': uid,
         'device_id': deviceId,
         'public_key': pub,
-        'updated_at': DateTime.now().toIso8601String(),
+        'updated_at': DbTime.nowForDb(),
       }, onConflict: 'user_id,device_id');
     } catch (_) {
       // best-effort — o envio/leitura tratam o erro adiante

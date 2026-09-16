@@ -1,3 +1,5 @@
+import '../utils/db_time.dart';
+
 class UserModel {
   final String id;
   final String name;
@@ -191,9 +193,7 @@ class UserModel {
       isOnline: map['is_online'] as bool? ?? false,
       discoverable: map['discoverable'] as bool? ?? true,
       isPrivate: map['is_private'] as bool? ?? false,
-      createdAt: rawCreatedAt is String
-          ? DateTime.tryParse(rawCreatedAt)
-          : rawCreatedAt as DateTime?,
+      createdAt: DbTime.tryParse(rawCreatedAt),
     );
   }
 }

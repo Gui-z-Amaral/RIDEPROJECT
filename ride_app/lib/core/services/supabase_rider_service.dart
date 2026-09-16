@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../utils/db_time.dart';
 
 /// Um rider próximo (retornado pela RPC nearby_riders). Traz só dados
 /// públicos + a distância — nunca a coordenada da pessoa.
@@ -49,7 +50,7 @@ class SupabaseRiderService {
       'user_id': _uid,
       'lat': lat,
       'lng': lng,
-      'updated_at': DateTime.now().toIso8601String(),
+      'updated_at': DbTime.nowForDb(),
     }, onConflict: 'user_id');
   }
 

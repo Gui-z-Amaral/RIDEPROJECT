@@ -1,4 +1,5 @@
 import 'user_model.dart';
+import '../utils/db_time.dart';
 
 class TripPhotoModel {
   final String id;
@@ -20,7 +21,7 @@ class TripPhotoModel {
         tripId: r['trip_id'] as String,
         uploadedBy: r['uploaded_by'] as String,
         photoUrl: r['photo_url'] as String,
-        createdAt: DateTime.parse(r['created_at'] as String),
+        createdAt: DbTime.parse(r['created_at']),
       );
 }
 

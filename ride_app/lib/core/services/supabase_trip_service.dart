@@ -10,6 +10,7 @@ import '../models/event_model.dart';
 import '../utils/image_utils.dart';
 import 'supabase_notification_service.dart';
 import 'supabase_social_service.dart';
+import '../utils/db_time.dart';
 
 class SupabaseTripService {
   static SupabaseClient get _db => Supabase.instance.client;
@@ -71,10 +72,42 @@ class SupabaseTripService {
         participantsByTrip.values.expand((ids) => ids).toSet();
     final profilesMap = await _fetchProfilesMap({...creatorIds, ...participantIds});
 
+    final stopsByTrip = await _fetchStopsMap(tripIds);
+
     return rows.map((row) {
-      final ids = participantsByTrip[row['id'] as String] ?? [];
-      return _rowToTrip(row, profilesMap, participantIds: ids);
+      final id = row['id'] as String;
+      return _rowToTrip(row, profilesMap,
+          participantIds: participantsByTrip[id] ?? [],
+          stops: stopsByTrip[id] ?? const []);
     }).toList();
+  }
+
+  /// Paradas de várias viagens numa query só — a lista precisa delas para
+  /// mostrar a contagem ("N PARADAS"). Sem isto os cards vinham sempre com 0,
+  /// porque só [getTripById] carregava paradas.
+  ///
+  /// Best-effort: falhar aqui não pode derrubar a listagem inteira.
+  static Future<Map<String, List<StopModel>>> _fetchStopsMap(
+      List<String> tripIds) async {
+    if (tripIds.isEmpty) return {};
+    try {
+      final rows = await _db
+          .from('trip_stops')
+          .select()
+          .inFilter('trip_id', tripIds)
+          .order('position', ascending: true)
+          .timeout(const Duration(seconds: 15));
+      final byTrip = <String, List<StopModel>>{};
+      for (final r in rows as List) {
+        final map = r as Map<String, dynamic>;
+        byTrip
+            .putIfAbsent(map['trip_id'] as String, () => [])
+            .add(_rowToStop(map));
+      }
+      return byTrip;
+    } catch (_) {
+      return {};
+    }
   }
 
   // ── Buscar viagem por ID ───────────────────────────────────
@@ -135,10 +168,13 @@ class SupabaseTripService {
     final creatorIds = rows.map((r) => r['creator_id'] as String).toSet();
     final partIds = byTrip.values.expand((e) => e).toSet();
     final profilesMap = await _fetchProfilesMap({...creatorIds, ...partIds});
-    return rows
-        .map((row) => _rowToTrip(row, profilesMap,
-            participantIds: byTrip[row['id'] as String] ?? []))
-        .toList();
+    final stopsByTrip = await _fetchStopsMap(tripIds);
+    return rows.map((row) {
+      final id = row['id'] as String;
+      return _rowToTrip(row, profilesMap,
+          participantIds: byTrip[id] ?? [],
+          stops: stopsByTrip[id] ?? const []);
+    }).toList();
   }
 
   // ── Presença (RSVP + check-in) ─────────────────────────────
@@ -305,7 +341,7 @@ class SupabaseTripService {
       'destination_label': destination.label,
       'club_id': clubId,
       'cover_image': coverImage,
-      'scheduled_at': scheduledAt?.toIso8601String(),
+      'scheduled_at': DbTime.toDb(scheduledAt),
     }).select().single();
 
     final tripId = tripRow['id'] as String;
@@ -396,7 +432,7 @@ class SupabaseTripService {
       'destination_lng': destination.lng,
       'destination_address': destination.address,
       'destination_label': destination.label,
-      'scheduled_at': scheduledAt?.toIso8601String(),
+      'scheduled_at': DbTime.toDb(scheduledAt),
     }).eq('id', tripId).eq('creator_id', _uid);
 
     // Sincroniza participantes (mantém criador, adiciona novos, remove retirados)
@@ -492,9 +528,7 @@ class SupabaseTripService {
         sessionId: trip['id'] as String,
         title: trip['title'] as String? ?? 'Viagem',
         isRide: false,
-        scheduledAt: trip['scheduled_at'] != null
-            ? DateTime.tryParse(trip['scheduled_at'] as String)
-            : null,
+        scheduledAt: DbTime.tryParse(trip['scheduled_at']),
       ));
     }
     return out;
@@ -596,13 +630,13 @@ class SupabaseTripService {
         .eq('user_id', _uid)
         .maybeSingle();
     if (row == null) return null;
-    final expires = DateTime.parse(row['expires_at'] as String);
-    if (expires.isBefore(DateTime.now().toUtc())) return null;
+    final expires = DbTime.parse(row['expires_at']);
+      if (expires.isBefore(DateTime.now())) return null;
     return FeaturedPhotoModel(
       user: UserModel(id: _uid, name: '', username: ''),
       photoUrl: row['photo_url'] as String,
       tripId: row['trip_id'] as String?,
-      featuredAt: DateTime.parse(row['featured_at'] as String),
+      featuredAt: DbTime.parse(row['featured_at']),
       expiresAt: expires,
     );
   }
@@ -630,8 +664,8 @@ class SupabaseTripService {
         user: user,
         photoUrl: r['photo_url'] as String,
         tripId: r['trip_id'] as String?,
-        featuredAt: DateTime.parse(r['featured_at'] as String),
-        expiresAt: DateTime.parse(r['expires_at'] as String),
+        featuredAt: DbTime.parse(r['featured_at']),
+          expiresAt: DbTime.parse(r['expires_at']),
       );
     }).whereType<FeaturedPhotoModel>().toList();
   }
@@ -674,13 +708,11 @@ class SupabaseTripService {
           .toList(),
       status: _parseStatus(r['status'] as String?),
       routeType: _parseRouteType(r['route_type'] as String?),
-      scheduledAt: r['scheduled_at'] != null
-          ? DateTime.parse(r['scheduled_at'] as String)
-          : null,
+      scheduledAt: DbTime.tryParse(r['scheduled_at']),
       estimatedDistance: (r['estimated_distance'] as num?)?.toDouble(),
       estimatedDuration: r['estimated_duration'] as String?,
       coverImage: r['cover_image'] as String?,
-      createdAt: DateTime.parse(r['created_at'] as String),
+      createdAt: DbTime.parse(r['created_at']),
     );
   }
 

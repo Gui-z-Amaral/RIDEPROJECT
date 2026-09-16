@@ -5,6 +5,7 @@ import '../models/friend_request_model.dart';
 import '../models/message_model.dart';
 import '../utils/image_utils.dart';
 import 'chat_key_service.dart';
+import '../utils/db_time.dart';
 
 class FriendTripStory {
   final UserModel friend;
@@ -183,7 +184,7 @@ class SupabaseSocialService {
         from: profileMap[fromId] ?? UserModel(id: fromId, name: '', username: ''),
         to: UserModel(id: _uid, name: '', username: ''),
         status: FriendRequestStatus.pending,
-        createdAt: DateTime.parse(r['created_at'] as String),
+        createdAt: DbTime.parse(r['created_at']),
       );
     }).toList();
   }
@@ -216,7 +217,7 @@ class SupabaseSocialService {
         from: UserModel(id: _uid, name: '', username: ''),
         to: profileMap[toId] ?? UserModel(id: toId, name: '', username: ''),
         status: FriendRequestStatus.pending,
-        createdAt: DateTime.parse(r['created_at'] as String),
+        createdAt: DbTime.parse(r['created_at']),
       );
     }).toList();
   }
@@ -430,7 +431,7 @@ class SupabaseSocialService {
       senderAvatar: sender['avatar_url'] as String?,
       content: contentOverride ?? (r['content'] as String? ?? ''),
       imageUrl: r['image_url'] as String?,
-      sentAt: DateTime.parse(r['sent_at'] as String).toLocal(),
+      sentAt: DbTime.parse(r['sent_at']),
       isRead: r['is_read'] as bool? ?? false,
       chatId: chatId,
     );
@@ -468,7 +469,7 @@ class SupabaseSocialService {
               senderAvatar: profile?['avatar_url'] as String?,
               content: clear,
               imageUrl: newRow['image_url'] as String?,
-              sentAt: DateTime.parse(newRow['sent_at'] as String).toLocal(),
+              sentAt: DbTime.parse(newRow['sent_at']),
               chatId: chatId,
             ));
           },

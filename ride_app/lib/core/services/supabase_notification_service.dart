@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/notification_model.dart';
+import '../utils/db_time.dart';
 
 /// Resultado do agrupamento das notificações de mensagem.
 class CollapsedNotifications {
@@ -126,7 +127,7 @@ class SupabaseNotificationService {
       'token': token,
       'user_id': _uid,
       'platform': platform,
-      'updated_at': DateTime.now().toIso8601String(),
+      'updated_at': DbTime.nowForDb(),
     }, onConflict: 'token');
   }
 
@@ -164,7 +165,7 @@ class SupabaseNotificationService {
         body: r['body'] as String,
         data: (r['data'] as Map<String, dynamic>?) ?? {},
         isRead: r['is_read'] as bool? ?? false,
-        createdAt: DateTime.parse(r['created_at'] as String),
+        createdAt: DbTime.parse(r['created_at']),
       );
 
   /// Agrupa notificações de mensagem por remetente: mantém a **mais recente**

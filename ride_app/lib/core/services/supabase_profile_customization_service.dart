@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/profile_customization.dart';
 import '../utils/storage_utils.dart';
+import '../utils/db_time.dart';
 
 class SupabaseProfileCustomizationService {
   static SupabaseClient get _db => Supabase.instance.client;
@@ -24,7 +25,7 @@ class SupabaseProfileCustomizationService {
     await _db.from('profile_customizations').upsert({
       ...c.toMap(),
       'user_id': _uid,
-      'updated_at': DateTime.now().toIso8601String(),
+      'updated_at': DbTime.nowForDb(),
     }, onConflict: 'user_id');
   }
 

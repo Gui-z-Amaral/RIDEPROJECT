@@ -1,4 +1,5 @@
 import 'user_model.dart';
+import '../utils/db_time.dart';
 
 /// Patrocinador/apoiador do evento (texto livre + logo opcional).
 class EventSponsor {
@@ -196,9 +197,9 @@ class EventModel {
       stateUf: map['state_uf'] as String?,
       city: map['city'] as String?,
       clubId: map['club_id'] as String?,
-      startsAt: DateTime.parse(map['starts_at'] as String).toLocal(),
+      startsAt: DbTime.parse(map['starts_at']),
       endsAt: map['ends_at'] != null
-          ? DateTime.parse(map['ends_at'] as String).toLocal()
+          ? DbTime.tryParse(map['ends_at'])
           : null,
       interestsCount: (map['interests_count'] as num?)?.toInt() ?? 0,
       schedule: items,

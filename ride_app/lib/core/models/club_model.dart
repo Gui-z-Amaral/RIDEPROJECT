@@ -1,4 +1,5 @@
 import 'user_model.dart';
+import '../utils/db_time.dart';
 
 /// Motoclube. Os campos `myRole`/`myStatus` descrevem a relação do usuário
 /// logado com o clube (quando conhecida): role = owner|admin|member,
@@ -79,9 +80,7 @@ class ClubModel {
       city: map['city'] as String?,
       stateUf: map['state_uf'] as String?,
       eventsPublic: map['events_public'] as bool? ?? false,
-      createdAt: map['created_at'] != null
-          ? DateTime.tryParse(map['created_at'] as String)
-          : null,
+      createdAt: DbTime.tryParse(map['created_at']),
       membersCount: membersCount ?? (map['members_count'] as num?)?.toInt() ?? 0,
       myRole: myRole,
       myStatus: myStatus,
@@ -142,9 +141,7 @@ class ClubMemberModel {
       userId: map['user_id'] as String? ?? '',
       role: map['role'] as String? ?? 'member',
       status: map['status'] as String? ?? 'active',
-      joinedAt: map['joined_at'] != null
-          ? DateTime.tryParse(map['joined_at'] as String)
-          : null,
+      joinedAt: DbTime.tryParse(map['joined_at']),
       user: userMap != null ? UserModel.fromMap(userMap) : null,
     );
   }
