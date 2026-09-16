@@ -99,6 +99,22 @@ bypass dos arquivos de nome fixo que mudam a cada build (`/`, `index.html`,
 `version.json`, `/assets/*`), então **não é preciso purgar o cache** —
 só o `/canvaskit/` fica cacheado (muda só com a versão do Flutter).
 
+## Cache: o que nunca cachear
+O cache offline do PWA existe para o **app shell** (HTML, JS, CanvasKit, fontes,
+ícones) — é o que faz o app abrir sem sinal.
+
+**Nunca cachear resposta de API nem conteúdo patrocinado.** O app vai ter
+anúncios/mini-marketplace, e ali cache quebra o negócio, não só a UX:
+- anúncio cacheado segue aparecendo depois do fim da campanha (exibição que o
+  lojista não pagou);
+- se a requisição não chega ao servidor, a **impressão não é contada** — e em
+  marketplace impressão e clique são o produto;
+- "personalizado" e "cacheado" são contraditórios por definição.
+
+Arquivo estático que muda de vez em quando (ícone, og-image): **versionar a URL**
+(`favicon.png?v=2`) em vez de tirar do cache. Atualiza na hora e mantém o
+desempenho. Purgar CDN é remédio pontual, não solução.
+
 ## Banco de dados / Migrations
 - Migrations ficam em `ride_app/supabase/migrations/NNN_*.sql` e **também** são
   acrescentadas a `_BUNDLE.sql`.
