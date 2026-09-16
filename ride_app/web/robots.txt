@@ -1,0 +1,3 @@
+# O RideApp é um app atrás de login; só a página inicial interessa a buscador.
+User-agent: *
+Allow: /

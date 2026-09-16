@@ -299,10 +299,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     IconButton(
                       icon: Icon(
-                        Icons.people_outline,
+                        Icons.person_add_alt_outlined,
                         color: AppColors.navy,
                       ),
-                      onPressed: () => context.push('/friends'),
+                      // Este botão sempre foi o dos PEDIDOS (tem o badge de
+                      // pendentes) — agora aponta direto para eles.
+                      onPressed: () => context.push('/friends/invites'),
                     ),
                     if (socialVm.pendingCount > 0)
                       Positioned(
@@ -544,7 +546,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ),
                               GestureDetector(
-                                onTap: () => context.push('/friends'),
+                                onTap: () => context.go('/chat'),
                                 child: Text(
                                   'Ver todos',
                                   style: AppTextStyles.bodySmall.copyWith(

@@ -68,7 +68,12 @@ class PushNotificationService {
             ?.createNotificationChannel(_channel);
       }
 
-      await FirebaseMessaging.instance.requestPermission();
+      // No Android pedir aqui é o esperado. Na WEB, pedir permissão no
+      // carregamento da página é má prática: o navegador penaliza e quem
+      // dispensa pode acabar bloqueando notificações para sempre. Lá a
+      // permissão é pedida em registerForCurrentUser — ou seja, depois que a
+      // pessoa fez login, uma ação dela.
+      if (!kIsWeb) await FirebaseMessaging.instance.requestPermission();
 
       // App em primeiro plano → exibe manualmente.
       FirebaseMessaging.onMessage.listen(_showForeground);
@@ -101,6 +106,11 @@ class PushNotificationService {
   Future<void> registerForCurrentUser() async {
     if (kIsWeb && !FirebaseWebConfig.hasVapidKey) return;
     try {
+      if (kIsWeb) {
+        // Chegou aqui = usuário logado. É o momento certo de pedir.
+        final settings = await FirebaseMessaging.instance.requestPermission();
+        if (settings.authorizationStatus == AuthorizationStatus.denied) return;
+      }
       final token = await _currentToken();
       if (token != null) {
         await SupabaseNotificationService.saveDeviceToken(

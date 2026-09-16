@@ -10,6 +10,7 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../core/models/location_model.dart';
+import '../../../core/services/directions_service.dart';
 import '../../../core/services/geocoding_service.dart';
 import '../../../core/services/maps_proxy.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -717,59 +718,17 @@ class _InteractiveMapState extends State<_InteractiveMap> {
 
   Future<List<LatLng>> _fetchRoute(
       double oLat, double oLng, double dLat, double dLng) async {
-    try {
-      final url = MapsProxy.uri('directions/json', {
-        'origin': '$oLat,$oLng',
-        'destination': '$dLat,$dLng',
-        'mode': 'driving',
-        'language': 'pt-BR',
-      });
-      final response = await http
-          .get(url, headers: MapsProxy.headers)
-          .timeout(const Duration(seconds: 8));
-      if (response.statusCode != 200) return [];
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      if (data['status'] != 'OK') return [];
-      final routes = data['routes'] as List<dynamic>;
-      if (routes.isEmpty) return [];
-      final polyline =
-          (routes[0] as Map<String, dynamic>)['overview_polyline']
-              as Map<String, dynamic>;
-      return _decodePolyline(polyline['points'] as String);
-    } catch (_) {
-      return [];
-    }
+    // Usa o serviço compartilhado (o mesmo do detalhe da viagem) em vez de
+    // repetir aqui a chamada e a decodificação da polyline.
+    final pts = await DirectionsService.route(
+      originLat: oLat,
+      originLng: oLng,
+      destLat: dLat,
+      destLng: dLng,
+    );
+    return pts.map((p) => LatLng(p.lat, p.lng)).toList();
   }
 
-  List<LatLng> _decodePolyline(String encoded) {
-    final List<LatLng> points = [];
-    int index = 0;
-    final int len = encoded.length;
-    int lat = 0, lng = 0;
-    while (index < len) {
-      int b, shift = 0, result = 0;
-      do {
-        b = encoded.codeUnitAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      final int dlat =
-          ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
-      lat += dlat;
-      shift = 0;
-      result = 0;
-      do {
-        b = encoded.codeUnitAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      final int dlng =
-          ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
-      lng += dlng;
-      points.add(LatLng(lat / 1E5, lng / 1E5));
-    }
-    return points;
-  }
 
   LatLngBounds _boundsOf(List<LatLng> list) {
     double minLat = list.first.latitude, maxLat = list.first.latitude;

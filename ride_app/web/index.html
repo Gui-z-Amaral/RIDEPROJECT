@@ -7,16 +7,48 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="Rolês e viagens de moto com seus amigos e motoclubes.">
   <meta name="theme-color" content="#1B3058">
+  <!--
+    Viewport explícito permitindo ZOOM. O Flutter injeta um com
+    `user-scalable=no`, o que impede quem enxerga mal de ampliar a tela — o
+    Lighthouse sinaliza isso em acessibilidade.
+    `viewport-fit=cover` faz o app usar a área do notch no iPhone.
+  -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+  <!--
+    Open Graph — prévia do link no WhatsApp, Instagram, Facebook, Telegram.
+    A imagem PRECISA de URL absoluta: os robôs não resolvem caminho relativo.
+    O ?v= permite trocar a arte depois (essas prévias ficam muito cacheadas).
+  -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="RideApp">
+  <meta property="og:locale" content="pt_BR">
+  <meta property="og:title" content="RideApp — Rolês e viagens de moto">
+  <meta property="og:description" content="Planeje rolês e viagens, encontre riders próximos e acompanhe o trajeto em tempo real.">
+  <meta property="og:url" content="https://app.ride.dev.br/">
+  <meta property="og:image" content="https://app.ride.dev.br/og-image.png?v=1">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="RideApp — rolês e viagens de moto">
+
+  <!-- Twitter/X usa o seu próprio conjunto de tags. -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="RideApp — Rolês e viagens de moto">
+  <meta name="twitter:description" content="Planeje rolês e viagens, encontre riders próximos e acompanhe o trajeto em tempo real.">
+  <meta name="twitter:image" content="https://app.ride.dev.br/og-image.png?v=1">
 
   <!-- iOS: PWA em tela cheia -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="RideApp">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <!-- 180px é o tamanho que o iOS usa na tela de início. -->
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=2">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <!-- ?v= força navegador e CDN a buscarem de novo quando o ícone muda -->
+  <link rel="icon" type="image/png" href="favicon.png?v=2"/>
 
   <title>RideApp</title>
   <link rel="manifest" href="manifest.json">
@@ -42,6 +74,45 @@
   </script>
 </head>
 <body>
+  <!--
+    Splash de carregamento. Feito em HTML (e não com apple-touch-startup-image)
+    porque uma implementação só cobre iOS, Android e desktop — a alternativa
+    seriam ~20 imagens, uma por tamanho de tela de iPhone.
+    Some no evento `flutter-first-frame`, quando o app desenha a primeira tela.
+  -->
+  <style>
+    #ride-splash{
+      position:fixed; inset:0; z-index:10000;
+      background:#1B3058;
+      display:flex; align-items:center; justify-content:center;
+      transition:opacity .35s ease;
+    }
+    #ride-splash img{width:132px;height:132px;animation:ride-pulse 1.6s ease-in-out infinite}
+    #ride-splash.out{opacity:0; pointer-events:none}
+    @keyframes ride-pulse{0%,100%{opacity:.75}50%{opacity:1}}
+    @media (prefers-reduced-motion:reduce){#ride-splash img{animation:none}}
+  </style>
+  <div id="ride-splash">
+    <img src="icons/logo-splash.png" alt="RideApp">
+  </div>
+  <script>
+    (function () {
+      var el = document.getElementById('ride-splash');
+      var done = false;
+      function hide() {
+        if (done || !el) return;
+        done = true;
+        el.classList.add('out');
+        setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 400);
+      }
+      // Flutter dispara este evento ao pintar o primeiro frame.
+      window.addEventListener('flutter-first-frame', hide);
+      // Rede de segurança: se algo falhar no carregamento, não deixa o usuário
+      // preso numa tela azul para sempre.
+      setTimeout(hide, 12000);
+    })();
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 
   <!--

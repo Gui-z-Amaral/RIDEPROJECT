@@ -47,15 +47,15 @@ class _MessagesScreenState extends State<MessagesScreen> {
             style: AppTextStyles.headlineMedium
                 .copyWith(fontWeight: FontWeight.w800)),
         actions: [
-          // Amigos e pedidos de amizade (saiu da barra inferior, mas continua
-          // acessível aqui — com o contador de pedidos pendentes).
+          // Pedidos de amizade. Esta aba é a ÚNICA lista de pessoas do app —
+          // a antiga tela "Amigos" mostrava a mesma coisa e foi removida.
           Stack(
             alignment: Alignment.center,
             children: [
               IconButton(
-                icon: Icon(Icons.group_outlined, color: AppColors.navy),
-                tooltip: 'Amigos e pedidos',
-                onPressed: () => context.push('/friends'),
+                icon: Icon(Icons.person_add_alt_outlined, color: AppColors.navy),
+                tooltip: 'Pedidos de amizade',
+                onPressed: () => context.push('/friends/invites'),
               ),
               if (vm.pendingCount > 0)
                 Positioned(

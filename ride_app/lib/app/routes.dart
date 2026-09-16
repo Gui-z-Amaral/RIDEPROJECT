@@ -13,7 +13,6 @@ import '../features/profile/screens/edit_business_profile_screen.dart';
 import '../features/profile/screens/settings_screen.dart';
 import '../features/profile/screens/profile_appearance_screen.dart';
 import '../features/profile/screens/history_screen.dart';
-import '../features/social/screens/friends_screen.dart';
 import '../features/social/screens/friend_profile_screen.dart';
 import '../features/social/screens/search_users_screen.dart';
 import '../features/social/screens/chat_screen.dart';
@@ -79,7 +78,6 @@ final router = GoRouter(
         GoRoute(path: '/clubs', builder: (_, __) => const ClubsTabScreen()),
         GoRoute(path: '/events', builder: (_, __) => const EventsScreen()),
         GoRoute(path: '/chat', builder: (_, __) => const MessagesScreen()),
-        GoRoute(path: '/friends', builder: (_, __) => const FriendsScreen()),
         GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
       ],
     ),

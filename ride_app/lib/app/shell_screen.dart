@@ -22,7 +22,8 @@ class _ShellScreenState extends State<ShellScreen> {
   int _currentIndex(BuildContext context) {
     final location = GoRouterState.of(context).uri.path;
     if (location.startsWith('/profile')) return 0;
-    // /friends (amigos e pedidos) é alcançado a partir de Contatos.
+    // As telas /friends/* (conversa, pedidos, buscar riders) são alcançadas a
+    // partir de Contatos, então acendem essa aba.
     if (location.startsWith('/chat') ||
         location.startsWith('/friends'))   return 1;
     if (location.startsWith('/home'))    return 2;

@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
+import '../../../core/services/directions_service.dart';
 import '../../../core/services/maps_proxy.dart';
 import '../../../core/services/places_service.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -14,6 +15,7 @@ import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_map.dart';
 import '../../../shared/widgets/stop_card.dart';
 import '../../../shared/widgets/loading_widget.dart';
+import '../../../core/models/location_model.dart';
 import '../../../core/models/trip_model.dart';
 import '../../../core/models/trip_photo_model.dart';
 import '../../../core/services/supabase_trip_service.dart';
@@ -134,6 +136,26 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     } catch (_) {}
   }
 
+  // Traçado real da rota (por estrada). Sem isso o mapa ligava origem e
+  // destino em LINHA RETA, cortando o mapa.
+  List<LocationModel> _route = [];
+  String? _routeTripId;
+  Future<void> _ensureRoute(TripModel trip) async {
+    if (_routeTripId == trip.id) return;
+    _routeTripId = trip.id;
+    final pts = await DirectionsService.route(
+      originLat: trip.origin.lat,
+      originLng: trip.origin.lng,
+      destLat: trip.destination.lat,
+      destLng: trip.destination.lng,
+      waypoints: [
+        ...trip.waypoints,
+        ...trip.stops.map((s) => s.location),
+      ],
+    );
+    if (mounted && pts.isNotEmpty) setState(() => _route = pts);
+  }
+
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<TripViewModel>();
@@ -150,8 +172,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       });
     }
 
-    // Resolve a foto de capa (do local) quando a viagem chega.
-    if (trip != null) _ensureCover(trip);
+    // Resolve a foto de capa e o traçado da rota quando a viagem chega.
+    if (trip != null) {
+      _ensureCover(trip);
+      _ensureRoute(trip);
+    }
 
     // Mostra loading enquanto: carregando detalhes, ou viagem ainda não chegou (e sem erro)
     if (vm.isLoadingDetail || (trip == null && !vm.hasError)) {
@@ -340,12 +365,16 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                       ...trip.waypoints,
                       ...trip.stops.map((s) => s.location),
                     ],
-                    routePoints: [
-                      trip.origin,
-                      ...trip.waypoints,
-                      ...trip.stops.map((s) => s.location),
-                      trip.destination,
-                    ],
+                    // Traçado real por estrada; se a rota não vier, liga os
+                    // pontos direto como antes (melhor que mapa sem linha).
+                    routePoints: _route.isNotEmpty
+                        ? _route
+                        : [
+                            trip.origin,
+                            ...trip.waypoints,
+                            ...trip.stops.map((s) => s.location),
+                            trip.destination,
+                          ],
                     interactive: false,
                     onTap: () => _openMaps(trip),
                   ),
