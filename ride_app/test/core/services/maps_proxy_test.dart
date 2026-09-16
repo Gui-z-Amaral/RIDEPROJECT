@@ -30,10 +30,21 @@ void main() {
   });
 
   group('MapsProxy.headers', () {
-    test('inclui apikey e Authorization com a anon key', () {
-      final h = MapsProxy.headers;
+    test('usa o token do usuário logado no Authorization', () {
+      final h = MapsProxy.headersWithToken('jwt-do-usuario');
+      // A apikey é do gateway (Kong); quem autentica é o Authorization.
+      expect(h['apikey'], SupabaseConfig.anonKey);
+      expect(h['Authorization'], 'Bearer jwt-do-usuario');
+    });
+
+    test('sem sessão cai na anon key (o servidor responde 401)', () {
+      final h = MapsProxy.headersWithToken(null);
       expect(h['apikey'], SupabaseConfig.anonKey);
       expect(h['Authorization'], 'Bearer ${SupabaseConfig.anonKey}');
+    });
+
+    test('sem Supabase inicializado não estoura', () {
+      expect(MapsProxy.headers['apikey'], SupabaseConfig.anonKey);
     });
   });
 

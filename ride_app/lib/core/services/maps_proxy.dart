@@ -1,3 +1,6 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../constants/supabase_config.dart';
 
 /// Proxy para os *web services* do Google Maps (Places, Geocoding, Directions).
@@ -27,11 +30,32 @@ class MapsProxy {
     });
   }
 
-  /// Cabeçalhos exigidos pelo gateway do Supabase (apikey anônima).
-  static Map<String, String> get headers => {
+  /// Cabeçalhos do proxy: `apikey` para o gateway (Kong) e o **token do usuário
+  /// logado** no `Authorization`.
+  ///
+  /// A função `gmaps` valida esse token e só responde busca/geocoding/rotas a
+  /// usuário autenticado — a chave anônima é pública (vai dentro do app), então
+  /// mandá-la aqui deixaria o proxy aberto para qualquer um gastar nossa cota
+  /// do Google. Sem sessão, cai no anônimo e o servidor responde 401.
+  static Map<String, String> get headers => headersWithToken(_accessToken());
+
+  /// Parte pura de [headers]. Sem sessão ([token] nulo) cai na chave anônima —
+  /// o servidor responde 401, que é o comportamento correto.
+  @visibleForTesting
+  static Map<String, String> headersWithToken(String? token) => {
         'apikey': SupabaseConfig.anonKey,
-        'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
+        'Authorization': 'Bearer ${token ?? SupabaseConfig.anonKey}',
       };
+
+  /// Token da sessão atual, ou `null` se não houver login — ou se o Supabase
+  /// nem estiver inicializado (é o caso nos testes unitários).
+  static String? _accessToken() {
+    try {
+      return Supabase.instance.client.auth.currentSession?.accessToken;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// `true` para URLs de foto salvas **antes** do proxy existir: apontam direto
   /// para o Google e quebram na web (sem CORS). Quem encontrar uma dessas deve
@@ -45,6 +69,12 @@ class MapsProxy {
   /// imagem é carregada por `<img>`/CanvasKit (sem cabeçalhos), a `apikey`
   /// vai na query. Passa pelo proxy pra ter CORS (o CanvasKit lê o pixel da
   /// imagem, o que exige CORS — o endpoint do Google não manda).
+  ///
+  /// `place/photo` é o único caminho do proxy que dispensa token, justamente
+  /// porque `<img>` não manda cabeçalho. O risco é contido: a foto exige um
+  /// `photo_reference`, que só sai de uma busca — e a busca exige login.
+  /// Evolução futura: cachear as fotos no Supabase Storage (vira URL pública
+  /// comum, sem proxy, e o Google cobra uma vez por foto em vez de por view).
   static String photoUrl(Map<String, String> params) {
     return _endpoint.replace(queryParameters: {
       'path': 'place/photo',
