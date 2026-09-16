@@ -8,10 +8,12 @@
   <meta name="description" content="Rolês e viagens de moto com seus amigos e motoclubes.">
   <meta name="theme-color" content="#1B3058">
   <!--
-    Viewport explícito permitindo ZOOM. O Flutter injeta um com
-    `user-scalable=no`, o que impede quem enxerga mal de ampliar a tela — o
-    Lighthouse sinaliza isso em acessibilidade.
-    `viewport-fit=cover` faz o app usar a área do notch no iPhone.
+    ATENÇÃO: este meta é DESCARTADO em tempo de execução. O engine do Flutter
+    remove TODA tag `meta[name=viewport]` do head e instala a sua
+    (`maximum-scale=1.0, user-scalable=no`). Ou seja: nem o zoom liberado nem o
+    `viewport-fit=cover` sobrevivem ao boot — vale só na tela de carregamento.
+    Mantido porque é o viewport correto durante o splash; não adianta "corrigir"
+    acessibilidade aqui, teria que ser no engine.
   -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
@@ -41,7 +43,14 @@
   <!-- iOS: PWA em tela cheia -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <!--
+    "default" (e NÃO black-translucent): com black-translucent o conteúdo web
+    corre POR BAIXO da barra de status do iPhone, e os controles do topo do app
+    (sino de notificações, convites) ficam sob ela — o toque às vezes ia para o
+    sistema em vez do app. SafeArea não resolve aqui: na web o Flutter não
+    recebe os insets do iOS, então MediaQuery.padding vem zerado.
+  -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="RideApp">
   <!-- 180px é o tamanho que o iOS usa na tela de início. -->
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=2">
@@ -180,6 +189,8 @@
     var go = document.getElementById('ride-install-go');
     var close = document.getElementById('ride-install-close');
     var deferred = null;
+    // A folha já foi preparada (texto/botões) e só espera uma tela onde caiba.
+    var pending = false;
 
     function dismissed() {
       try { return localStorage.getItem(KEY) === '1'; } catch (e) { return false; }
@@ -197,16 +208,38 @@
       return /iphone|ipad|ipod/i.test(ua) ||
         (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
     }
+    // Rotas onde a folha NÃO pode aparecer: ela é fixa no rodapé, por cima do
+    // Flutter, e cobria o "Continuar com Google" e o "Entrar" — no iPhone os
+    // botões simplesmente não respondiam, porque o toque batia nela.
+    // Só o campo de senha, mais acima, ficava alcançável.
+    var BLOCKED = ['/', '/splash', '/onboarding', '/login', '/register',
+                   '/verify-email', '/forgot-password'];
+    function onBlockedRoute() {
+      return BLOCKED.indexOf(window.location.pathname) !== -1;
+    }
+
     function show() {
-      if (dismissed() || installed()) return;
+      if (dismissed() || installed() || onBlockedRoute()) return;
       el.hidden = false;
       // Espera o app pintar antes de subir a folha.
       setTimeout(function () { el.classList.add('show'); }, 50);
     }
+
     function hide() {
       el.classList.remove('show');
       setTimeout(function () { el.hidden = true; }, 320);
     }
+
+    // Tenta de novo quando a pessoa sai das telas de login. O GoRouter troca a
+    // URL sem recarregar a página, então o setTimeout inicial já passou — e o
+    // `popstate` não cobre navegação por push.
+    var lastPath = window.location.pathname;
+    setInterval(function () {
+      if (window.location.pathname === lastPath) return;
+      lastPath = window.location.pathname;
+      if (onBlockedRoute()) hide();
+      else if (pending && el.hidden) show();
+    }, 1000);
 
     close.addEventListener('click', function () { remember(); hide(); });
 
@@ -217,6 +250,7 @@
       sub.textContent = 'Tenha o RideApp na tela inicial, em tela cheia.';
       go.hidden = false;
       steps.hidden = true;
+      pending = true;
       setTimeout(show, 2500);
     });
 
@@ -232,6 +266,7 @@
       sub.textContent = 'No iPhone leva 3 toques — e é assim que as notificações passam a funcionar.';
       steps.hidden = false;
       go.hidden = true;
+      pending = true;
       setTimeout(show, 2500);
     }
 
