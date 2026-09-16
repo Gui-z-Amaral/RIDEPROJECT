@@ -1,16 +1,42 @@
+
 /// URLs públicas do RideApp usadas em compartilhamento e deep links.
 ///
-/// [base] deve apontar para o site oficial. Quando o site estiver no ar com
-/// App Links (Android) / Universal Links (iOS) configurados, esses links
-/// abrirão direto no app quando ele estiver instalado; caso contrário, caem
-/// numa página web. Enquanto isso, o link já é compartilhável.
+/// [base] é o **próprio PWA**. Assim o link compartilhado abre o app: o Nginx
+/// faz fallback de SPA, então `/e/<id>` carrega o `index.html` e o GoRouter
+/// resolve a rota. No Android, com o PWA instalado, o sistema abre o app
+/// instalado em vez do navegador.
+///
+/// Antes apontava para `redirect.ride.dev.br` (o site de apresentação antigo),
+/// e era por isso que o link caía fora do app.
+///
+/// **Limitação do iOS:** o Safari não entrega links para PWA instalado —
+/// mesmo com o app na tela de início, o link abre numa aba. É limitação do
+/// sistema, não tem contorno no nosso lado.
 ///
 /// Para trocar o domínio depois: basta alterar [base].
 class AppLinks {
   AppLinks._();
 
-  /// Subdomínio dedicado a redirecionamento/deep links.
-  static const String base = 'https://redirect.ride.dev.br';
+  /// Domínio do PWA.
+  static const String base = 'https://app.ride.dev.br';
+
+  /// Para onde mandar a pessoa depois de entrar, quando ela chegou por um link
+  /// compartilhado (`/login?next=/e/<id>`).
+  ///
+  /// **Só aceita caminho interno.** Sem esta checagem, um link
+  /// `/login?next=https://site-falso/...` levaria a pessoa recém-logada para
+  /// fora do app — é o clássico *open redirect*, usado para phishing.
+  static String safeNext(String? next, {String fallback = '/home'}) {
+    if (next == null || next.isEmpty) return fallback;
+    // '//host' é URL protocol-relative: sai do domínio. '/\' idem em alguns
+    // navegadores.
+    if (!next.startsWith('/') ||
+        next.startsWith('//') ||
+        next.startsWith('/\\')) {
+      return fallback;
+    }
+    return next;
+  }
 
   static String event(String id) => '$base/e/$id';
   static String trip(String id) => '$base/v/$id';

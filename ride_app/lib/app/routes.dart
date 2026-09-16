@@ -1,5 +1,7 @@
 import 'package:go_router/go_router.dart';
+import '../core/models/share_preview.dart';
 import '../core/models/user_model.dart';
+import '../features/share/screens/shared_link_screen.dart';
 import '../features/auth/screens/splash_screen.dart';
 import '../features/auth/screens/onboarding_screen.dart';
 import '../features/auth/screens/login_screen.dart';
@@ -102,20 +104,22 @@ final router = GoRouter(
     ),
 
     // ── Deep links curtos (compartilhamento) → resolvem no app ──
+    // Passam pelo SharedLinkScreen: logado cai no detalhe de sempre, visitante
+    // vê a prévia pública com convite para entrar.
     GoRoute(
       path: '/e/:id',
-      builder: (_, state) =>
-          EventDetailScreen(eventId: state.pathParameters['id']!),
+      builder: (_, state) => SharedLinkScreen(
+          kind: ShareKind.event, id: state.pathParameters['id']!),
     ),
     GoRoute(
       path: '/v/:id',
-      builder: (_, state) =>
-          TripDetailScreen(tripId: state.pathParameters['id']!),
+      builder: (_, state) => SharedLinkScreen(
+          kind: ShareKind.trip, id: state.pathParameters['id']!),
     ),
     GoRoute(
       path: '/r/:id',
-      builder: (_, state) =>
-          RideDetailScreen(rideId: state.pathParameters['id']!),
+      builder: (_, state) => SharedLinkScreen(
+          kind: ShareKind.ride, id: state.pathParameters['id']!),
     ),
     GoRoute(
       path: '/c/:id',

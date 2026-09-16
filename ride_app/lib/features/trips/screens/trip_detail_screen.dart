@@ -8,9 +8,8 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../core/services/directions_service.dart';
-import '../../../core/services/maps_proxy.dart';
-import '../../../core/services/places_service.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/trip_cover.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_map.dart';
 import '../../../shared/widgets/stop_card.dart';
@@ -22,6 +21,7 @@ import '../../../core/services/supabase_trip_service.dart';
 import '../../../core/utils/extensions.dart';
 import '../viewmodels/trip_viewmodel.dart';
 import '../../active_session/viewmodels/active_session_viewmodel.dart';
+import '../../../core/utils/share_utils.dart';
 
 class TripDetailScreen extends StatefulWidget {
   final String tripId;
@@ -104,37 +104,9 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             child: Icon(Icons.map, size: 80, color: AppColors.teal)),
       );
 
-  // Foto de capa do destino: usa a salva na viagem; se não houver (viagens
-  // antigas), busca a foto do local pelo nome/coordenada do destino.
-  String? _cover;
-  String? _coverTripId;
-  Future<void> _ensureCover(TripModel trip) async {
-    if (_coverTripId == trip.id) return;
-    _coverTripId = trip.id;
-    // Capas salvas antes do proxy apontam direto pro Google e quebram na web
-    // (CORS) — nesse caso ignora a salva e re-resolve a foto abaixo.
-    final saved = trip.coverImage;
-    if (saved != null &&
-        saved.isNotEmpty &&
-        !MapsProxy.isLegacyGooglePhotoUrl(saved)) {
-      setState(() => _cover = saved);
-      return;
-    }
-    final query = (trip.destination.label?.isNotEmpty ?? false)
-        ? trip.destination.label!
-        : (trip.destination.address ?? '');
-    if (query.trim().isEmpty) return;
-    try {
-      final results = await PlacesService.searchPlaces(
-        query: query,
-        lat: trip.destination.lat,
-        lng: trip.destination.lng,
-        limit: 1,
-      );
-      final url = results.isNotEmpty ? results.first.photoUrl : '';
-      if (mounted && url.isNotEmpty) setState(() => _cover = url);
-    } catch (_) {}
-  }
+  // A foto de capa é resolvida pelo TripCover (shared/widgets/trip_cover.dart),
+  // o mesmo usado no card da home — antes a lógica morava só aqui e a home
+  // ficava sem capa.
 
   // Traçado real da rota (por estrada). Sem isso o mapa ligava origem e
   // destino em LINHA RETA, cortando o mapa.
@@ -172,11 +144,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       });
     }
 
-    // Resolve a foto de capa e o traçado da rota quando a viagem chega.
-    if (trip != null) {
-      _ensureCover(trip);
-      _ensureRoute(trip);
-    }
+    // Resolve o traçado da rota quando a viagem chega.
+    if (trip != null) _ensureRoute(trip);
 
     // Mostra loading enquanto: carregando detalhes, ou viagem ainda não chegou (e sem erro)
     if (vm.isLoadingDetail || (trip == null && !vm.hasError)) {
@@ -258,6 +227,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
               }
             }),
             actions: [
+              IconButton(
+                tooltip: 'Compartilhar viagem',
+                icon: const Icon(Icons.share_outlined, color: Colors.white),
+                onPressed: () => ShareUtils.shareTrip(trip),
+              ),
               if (_canEdit(trip)) ...[
                 IconButton(
                   tooltip: 'Editar viagem',
@@ -277,29 +251,12 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             ],
             flexibleSpace: FlexibleSpaceBar(
               title: Text(trip.title, style: AppTextStyles.headlineSmall),
-              background: (_cover != null && _cover!.isNotEmpty)
-                  ? Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        CachedNetworkImage(
-                          imageUrl: _cover!,
-                          fit: BoxFit.cover,
-                          errorWidget: (_, __, ___) => _headerFallback(),
-                        ),
-                        // Escurece o rodapé para o título ficar legível.
-                        const DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [Colors.transparent, Colors.black54],
-                              stops: [0.5, 1.0],
-                            ),
-                          ),
-                        ),
-                      ],
-                    )
-                  : _headerFallback(),
+              // scrim: escurece o rodapé para o título ficar legível.
+              background: TripCover(
+                trip: trip,
+                fallback: _headerFallback(),
+                scrim: true,
+              ),
             ),
           ),
           SliverToBoxAdapter(

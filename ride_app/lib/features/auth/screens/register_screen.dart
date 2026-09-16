@@ -5,6 +5,7 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../../../core/utils/extensions.dart';
+import '../../../core/constants/app_links.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -31,6 +32,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
+  /// Mesmo destino do login: quem veio de um link compartilhado volta para o
+  /// conteudo depois de criar a conta.
+  String get _target => AppLinks.safeNext(
+      GoRouterState.of(context).uri.queryParameters['next']);
+
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
     final vm = context.read<AuthViewModel>();
@@ -43,7 +49,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!mounted) return;
     switch (outcome) {
       case RegisterOutcome.success:
-        context.go('/home');
+        context.go(_target);
       case RegisterOutcome.needsConfirmation:
         // Código de 6 dígitos enviado por email — segue pra verificação.
         context.push('/verify-email', extra: email);
@@ -73,7 +79,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: IconButton(
                     icon: Icon(Icons.arrow_back_ios,
                         color: AppColors.navy, size: 22),
-                    onPressed: () => context.go('/login'),
+                    onPressed: () => context.go('/login?next=${Uri.encodeQueryComponent(_target)}'),
                     padding: EdgeInsets.zero,
                   ),
                 ),
@@ -188,7 +194,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   width: double.infinity,
                   height: 52,
                   child: OutlinedButton(
-                    onPressed: () => context.go('/login'),
+                    onPressed: () => context.go('/login?next=${Uri.encodeQueryComponent(_target)}'),
                     child: Text(
                       'LOGIN',
                       style: AppTextStyles.labelLarge

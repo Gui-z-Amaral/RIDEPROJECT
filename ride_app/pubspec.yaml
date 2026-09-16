@@ -9,6 +9,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # URL sem '#' na web (usePathUrlStrategy). Só é importado no build web,
+  # via import condicional em lib/core/utils/url_strategy.dart.
+  flutter_web_plugins:
+    sdk: flutter
 
   cupertino_icons: ^1.0.8
 

@@ -16,6 +16,7 @@ import '../../../core/utils/extensions.dart';
 import '../viewmodels/ride_viewmodel.dart';
 import '../../active_session/viewmodels/active_session_viewmodel.dart';
 import '../../auth/viewmodels/auth_viewmodel.dart';
+import '../../../core/utils/share_utils.dart';
 
 class RideDetailScreen extends StatefulWidget {
   final String rideId;
@@ -74,6 +75,11 @@ class _RideDetailScreenState extends State<RideDetailScreen> {
         ),
         title: Text(ride.title),
         actions: [
+          IconButton(
+            tooltip: 'Compartilhar rolê',
+            icon: const Icon(Icons.share_outlined),
+            onPressed: () => ShareUtils.shareRide(ride),
+          ),
           if (isCreator) IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () {}),
         ],
       ),

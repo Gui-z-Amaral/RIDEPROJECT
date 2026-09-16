@@ -9,6 +9,7 @@ import 'core/constants/firebase_web_config.dart';
 import 'core/constants/supabase_config.dart';
 import 'core/services/push_notification_service.dart';
 import 'core/services/theme_preference_service.dart';
+import 'core/utils/url_strategy.dart';
 import 'theme/app_colors.dart';
 import 'app/app.dart';
 
@@ -20,6 +21,11 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // URL sem `#` na web. Tem que vir antes do runApp: é o que permite o link
+  // compartilhado (`/v/<id>`) abrir direto no conteúdo — com `#`, o Flutter
+  // iniciava em `/` e o link caía no splash. No nativo é no-op.
+  configureUrlStrategy();
 
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
@@ -46,6 +52,18 @@ void main() async {
   await Supabase.initialize(
     url: SupabaseConfig.url,
     anonKey: SupabaseConfig.anonKey,
+    // Chave FIXA de onde a sessão fica guardada.
+    //
+    // Por padrão o pacote monta a chave a partir do host
+    // (`sb-${host.split('.').first}-auth-token`), então trocar o domínio da API
+    // deslogaria todo mundo: a sessão continuaria salva, mas debaixo de um nome
+    // que o app não procura mais. Fixando aqui, o domínio pode mudar sem
+    // derrubar ninguém.
+    authOptions: FlutterAuthClientOptions(
+      localStorage: SharedPreferencesLocalStorage(
+        persistSessionKey: SupabaseConfig.sessionKey,
+      ),
+    ),
   );
 
   // Push notifications (FCM). Tolerante a falha — não bloqueia o app se o

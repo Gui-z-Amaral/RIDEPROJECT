@@ -7,6 +7,7 @@ import '../viewmodels/auth_viewmodel.dart';
 import '../../../core/utils/extensions.dart';
 import '../../../core/constants/supabase_config.dart';
 import '../../../shared/widgets/app_logo.dart';
+import '../../../core/constants/app_links.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -30,12 +31,18 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  /// Para onde ir depois de entrar. Quem chegou por um link compartilhado
+  /// (`/login?next=/e/<id>`) volta para o conteudo que veio ver, em vez de
+  /// cair na home e perder o motivo do clique.
+  String get _target => AppLinks.safeNext(
+      GoRouterState.of(context).uri.queryParameters['next']);
+
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
     final vm = context.read<AuthViewModel>();
     final ok = await vm.login(_emailCtrl.text.trim(), _passCtrl.text);
     if (ok && mounted) {
-      context.go('/home');
+      context.go(_target);
     } else if (mounted && vm.error != null) {
       context.showSnack(vm.error!, isError: true);
     }
@@ -45,7 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final vm = context.read<AuthViewModel>();
     final ok = await vm.loginWithGoogle(SupabaseConfig.googleWebClientId);
     if (ok && mounted) {
-      context.go('/home');
+      context.go(_target);
     } else if (mounted && vm.error != null) {
       context.showSnack(vm.error!, isError: true);
     }
@@ -243,7 +250,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton(
-                    onPressed: () => context.go('/register'),
+                    onPressed: () => context.go('/register?next=${Uri.encodeQueryComponent(_target)}'),
                     child: Text('CADASTRE-SE',
                         style: AppTextStyles.labelLarge),
                   ),
