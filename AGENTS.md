@@ -18,6 +18,16 @@ e o **PWA web** (`app.ride.dev.br`). Ver **Paridade App ↔ Web** abaixo.
   Places/Geocoding/Directions vão **sempre** pela Edge Function `gmaps` via
   `MapsProxy` (`lib/core/services/maps_proxy.dart`) — **nunca** direto do cliente:
   o servidor injeta a chave e devolve o CORS.
+  A função **valida o JWT por conta própria** (o `VERIFY_JWT` do self-hosted é
+  global, não dá pra configurar por função): busca/geocoding/rotas exigem usuário
+  logado — `MapsProxy.headers` manda o token da sessão, não a chave anônima.
+  Só `place/photo` fica aberto, porque `<img>`/CanvasKit não manda cabeçalho;
+  o risco é contido porque a foto exige um `photo_reference`, que só sai de uma
+  busca autenticada.
+  **A fazer no futuro:** cachear as fotos de Places no **Supabase Storage** — a
+  foto vira URL pública comum (sem proxy, sem CORS, nada aberto) e o Google
+  passa a ser cobrado uma vez por foto em vez de por visualização. Hoje não dá
+  porque `MapsProxy.photoUrl` é síncrono e é usado por ~7 telas.
 - Imagens: `image` (compressão) + `cached_network_image` / `flutter_cache_manager`.
 - Web/PWA: pasta `web/` (manifest + `env.js` com a chave do Maps, git-ignored).
 
@@ -115,12 +125,71 @@ Arquivo estático que muda de vez em quando (ícone, og-image): **versionar a UR
 (`favicon.png?v=2`) em vez de tirar do cache. Atualiza na hora e mantém o
 desempenho. Purgar CDN é remédio pontual, não solução.
 
+## Datas e horários
+**Guarda em UTC, mostra na hora do aparelho.** No Brasil isso dá o horário de
+Brasília sozinho, e quem está no Acre, Amazonas ou Fernando de Noronha vê a hora
+certa do lugar onde está — sem depender de UF cadastrada.
+
+Toda data que atravessa o Supabase passa por `DbTime`
+(`lib/core/utils/db_time.dart`) — **nunca** `DateTime.parse`/`toIso8601String`
+direto:
+- lendo: `DbTime.tryParse(row['campo'])` (ou `DbTime.parse` para campo obrigatório);
+- gravando: `DbTime.toDb(data)`;
+- comparando com coluna (`.gte('starts_at', ...)`): `DbTime.nowForDb()`.
+
+Por que a regra existe: os dois lados estavam errados e os erros se cancelavam
+**na tela**, escondendo o problema. `toIso8601String()` num `DateTime` local gera
+string sem fuso, e o Postgres (em UTC) lia o horário como se já fosse UTC —
+gravando 3h adiantado. Na leitura o valor voltava UTC e o `DateFormat` imprimia o
+relógio UTC. Parecia certo no app e estava errado para o worker de push, para
+`NOW()` e para qualquer um em outro fuso.
+
+O formato (`dd/MM/yyyy HH:mm`, 24h, em `DateTimeExt`) já é o brasileiro — o que
+faltava era o fuso.
+
 ## Banco de dados / Migrations
 - Migrations ficam em `ride_app/supabase/migrations/NNN_*.sql` e **também** são
   acrescentadas a `_BUNDLE.sql`.
 - Ao criar uma migration nova: rodar no **SQL Editor do Studio** do Supabase
   self-hosted (não há `supabase db push` automático aqui).
 - RLS está ligada em quase todas as tabelas — lembrar de policies em features novas.
+
+## Segurança — vale para TODA alteração
+**Antes de dar qualquer mudança por pronta, perguntar: isso abre alguma falha?**
+E, se abrir, apresentar o meio de contornar junto com a mudança — não depois.
+Vale para código, config de servidor, migration, cache e dependência nova.
+
+### Perguntas obrigatórias
+1. **Quem consegue chamar isso?** Endpoint novo (Edge Function, rota, storage)
+   nasce **fechado**. Se precisar ficar aberto, dizer por quê e o que limita o
+   estrago. Ex.: o proxy `gmaps` exige usuário logado; `place/photo` é a exceção
+   (a tag `<img>` não manda cabeçalho) e só se sustenta porque a foto depende de
+   um `photo_reference`, que só sai de uma busca autenticada.
+2. **Quem consegue ler/escrever essa linha?** Tabela nova = **policy de RLS na
+   mesma migration**. Conferir SELECT, INSERT, UPDATE e DELETE separadamente —
+   `USING (auth.uid() IS NOT NULL)` não é filtro, é "qualquer logado"; foi assim
+   que as mensagens de todo mundo ficaram legíveis por qualquer conta.
+3. **Esse segredo pode ir pro cliente?** Chave de API, token de serviço e senha
+   ficam **no servidor**. A `anon key` é pública (vai dentro do app), então não
+   serve como autenticação de nada.
+4. **Isso gasta dinheiro de quem?** Rota que chama API paga (Google Maps, push,
+   storage) sem autenticação vira conta aberta na nossa fatura.
+5. **O que acontece se o campo vier nulo, gigante ou malicioso?** Entrada de
+   usuário que vira query, caminho de arquivo, HTML ou URL precisa ser validada.
+6. **Cache pode vazar ou congelar algo?** Não cachear resposta de API nem
+   conteúdo por usuário (ver "Cache: o que nunca cachear"). `add_header ...
+   always` no Nginx cacheia até resposta de erro.
+
+### Regras
+- Mudança em **config de servidor** (Nginx, Docker, firewall, SSH): revisar a
+  própria proposta procurando o efeito colateral antes de aplicar.
+- **Nunca** afrouxar autenticação para "fazer funcionar". Se travou, procurar o
+  caminho que mantém fechado — quase sempre existe (ver a escada de decisão).
+- Ao encontrar uma falha em código que já está no ar, **avisar na hora**, mesmo
+  que esteja no meio de outra tarefa.
+- Segredo que nunca deve ser colado no chat nem commitado: Service Account do
+  Firebase, `service_role` do Supabase, senha de root da VPS, chave SSH privada,
+  `GOOGLE_SECRET` do OAuth.
 
 ## Testes
 - Foco em **funções puras**: models (`fromMap`/getters), helpers, lógica sem rede.
