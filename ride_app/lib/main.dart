@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'core/constants/firebase_web_config.dart';
 import 'core/constants/supabase_config.dart';
 import 'core/services/push_notification_service.dart';
 import 'core/services/theme_preference_service.dart';
@@ -49,16 +50,19 @@ void main() async {
 
   // Push notifications (FCM). Tolerante a falha — não bloqueia o app se o
   // device não tiver Google Play Services ou o Firebase falhar ao iniciar.
-  // Na web o push (FCM + notificações locais) é configurado só na Fase 2, então
-  // pulamos aqui para não quebrar o build/runtime web.
-  if (!kIsWeb) {
-    try {
-      await Firebase.initializeApp();
+  try {
+    // Android lê o google-services.json; a web precisa das opções na mão.
+    await Firebase.initializeApp(
+      options: kIsWeb ? FirebaseWebConfig.options : null,
+    );
+    // Na web quem exibe a notificação com o app fechado é o service worker
+    // (web/firebase-messaging-sw.js), não um handler Dart.
+    if (!kIsWeb) {
       FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
-      await PushNotificationService.instance.initialize();
-    } catch (e) {
-      debugPrint('Push init falhou (seguindo sem push): $e');
     }
+    await PushNotificationService.instance.initialize();
+  } catch (e) {
+    debugPrint('Push init falhou (seguindo sem push): $e');
   }
 
   runApp(const RideApp());

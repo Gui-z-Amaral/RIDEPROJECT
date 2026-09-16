@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../app/routes.dart';
+import '../constants/firebase_web_config.dart';
 import '../utils/notification_router.dart';
 import 'supabase_notification_service.dart';
 
@@ -43,23 +44,29 @@ class PushNotificationService {
   /// Configura permissão, canal, listeners e registra o token se já logado.
   /// Tolerante a falha (ex: device sem Google Play Services).
   Future<void> initialize() async {
-    if (kIsWeb) return; // push web é Fase 2 (FCM web + service worker)
+    // Na web, sem a chave VAPID não há como inscrever no push — pula em
+    // silêncio em vez de estourar.
+    if (kIsWeb && !FirebaseWebConfig.hasVapidKey) return;
     if (_initialized) return;
     _initialized = true;
     try {
-      const androidInit =
-          AndroidInitializationSettings('@mipmap/ic_launcher');
-      await _local.initialize(
-        const InitializationSettings(android: androidInit),
-        onDidReceiveNotificationResponse: (resp) {
-          final payload = resp.payload;
-          if (payload != null && payload.isNotEmpty) _navigate(payload);
-        },
-      );
-      await _local
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.createNotificationChannel(_channel);
+      // Notificações locais são só do Android (o pacote não tem web). Na web
+      // quem exibe com o app fechado é o service worker do FCM.
+      if (!kIsWeb) {
+        const androidInit =
+            AndroidInitializationSettings('@mipmap/ic_launcher');
+        await _local.initialize(
+          const InitializationSettings(android: androidInit),
+          onDidReceiveNotificationResponse: (resp) {
+            final payload = resp.payload;
+            if (payload != null && payload.isNotEmpty) _navigate(payload);
+          },
+        );
+        await _local
+            .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin>()
+            ?.createNotificationChannel(_channel);
+      }
 
       await FirebaseMessaging.instance.requestPermission();
 
@@ -76,7 +83,12 @@ class PushNotificationService {
       }
       // Token rotacionado.
       FirebaseMessaging.instance.onTokenRefresh.listen((t) {
-        if (_isAuthed) SupabaseNotificationService.saveDeviceToken(t);
+        if (_isAuthed) {
+          SupabaseNotificationService.saveDeviceToken(
+            t,
+            platform: kIsWeb ? 'web' : 'android',
+          );
+        }
       });
 
       if (_isAuthed) await registerForCurrentUser();
@@ -87,11 +99,14 @@ class PushNotificationService {
 
   /// Pega o token atual e salva em device_tokens para o usuário logado.
   Future<void> registerForCurrentUser() async {
-    if (kIsWeb) return;
+    if (kIsWeb && !FirebaseWebConfig.hasVapidKey) return;
     try {
-      final token = await FirebaseMessaging.instance.getToken();
+      final token = await _currentToken();
       if (token != null) {
-        await SupabaseNotificationService.saveDeviceToken(token);
+        await SupabaseNotificationService.saveDeviceToken(
+          token,
+          platform: kIsWeb ? 'web' : 'android',
+        );
       }
     } catch (e) {
       debugPrint('PushNotificationService.registerForCurrentUser: $e');
@@ -100,9 +115,9 @@ class PushNotificationService {
 
   /// Remove o token do aparelho — chamar ANTES do signOut (precisa do uid).
   Future<void> removeForCurrentUser() async {
-    if (kIsWeb) return;
+    if (kIsWeb && !FirebaseWebConfig.hasVapidKey) return;
     try {
-      final token = await FirebaseMessaging.instance.getToken();
+      final token = await _currentToken();
       if (token != null) {
         await SupabaseNotificationService.removeDeviceToken(token);
       }
@@ -120,7 +135,18 @@ class PushNotificationService {
     } catch (_) {}
   }
 
+  /// Token FCM deste aparelho/navegador. Na web o `getToken` exige a chave
+  /// VAPID; no Android ela não existe.
+  Future<String?> _currentToken() => kIsWeb
+      ? FirebaseMessaging.instance
+          .getToken(vapidKey: FirebaseWebConfig.vapidKey)
+      : FirebaseMessaging.instance.getToken();
+
   Future<void> _showForeground(RemoteMessage m) async {
+    // Na web, com o app ABERTO, a lista de notificações já se atualiza sozinha
+    // pelo realtime do Supabase — exibir outra aqui seria duplicar o aviso.
+    // Com o app fechado, quem mostra é o service worker.
+    if (kIsWeb) return;
     final n = m.notification;
     if (n == null) return;
     // Não notifica mensagem de quem o usuário já está conversando agora.
