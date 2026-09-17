@@ -217,8 +217,10 @@ class AuthViewModel extends ChangeNotifier {
     // Marca offline e remove o token deste aparelho ANTES do signOut (precisa do uid).
     await SupabaseAuthService.setOnline(false);
     await PushNotificationService.instance.removeForCurrentUser();
-    // Limpa cache das chaves em memória (a privada continua no secure storage).
-    ChatKeyService.clearCache();
+    // Apaga a chave do chat deste aparelho. Com await de proposito: sem ele,
+    // o proximo usuario a logar no mesmo aparelho poderia encontrar a chave
+    // de quem saiu. A chave volta do servidor no proximo login.
+    await ChatKeyService.clearCache();
     await SupabaseAuthService.logout();
     _user = null;
     _state = AuthState.unauthenticated;
