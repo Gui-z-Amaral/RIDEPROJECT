@@ -38,15 +38,23 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            <!-- App Links: abre links de redirect.ride.dev.br direto no app -->
+            <!-- App Links: abre links compartilhados direto no app.
+                 O host tem que ser o mesmo que AppLinks.base gera. Apontava
+                 para redirect.ride.dev.br (o site de apresentação antigo), por
+                 isso o link abria o navegador em vez do app.
+
+                 O autoVerify exige que https://app.ride.dev.br/.well-known/
+                 assetlinks.json liste a impressão digital da chave que assina
+                 o APK — sem esse arquivo o Android ignora o intent-filter.
+                 Ver web/.well-known/assetlinks.json. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="https" android:host="redirect.ride.dev.br" android:pathPrefix="/e/"/>
-                <data android:scheme="https" android:host="redirect.ride.dev.br" android:pathPrefix="/v/"/>
-                <data android:scheme="https" android:host="redirect.ride.dev.br" android:pathPrefix="/r/"/>
-                <data android:scheme="https" android:host="redirect.ride.dev.br" android:pathPrefix="/c/"/>
+                <data android:scheme="https" android:host="app.ride.dev.br" android:pathPrefix="/e/"/>
+                <data android:scheme="https" android:host="app.ride.dev.br" android:pathPrefix="/v/"/>
+                <data android:scheme="https" android:host="app.ride.dev.br" android:pathPrefix="/r/"/>
+                <data android:scheme="https" android:host="app.ride.dev.br" android:pathPrefix="/c/"/>
             </intent-filter>
         </activity>
         <!-- Canal padrão de push (FCM) quando a notificação chega com o app

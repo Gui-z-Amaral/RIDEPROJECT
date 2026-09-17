@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.rideapp.ride_app",
+      "sha256_cert_fingerprints": [
+        "DE:E8:E0:27:A8:69:8A:37:32:C5:11:10:23:7F:88:21:8C:0B:69:E9:21:36:E1:E5:9A:4C:A0:86:94:64:A0:53"
+      ]
+    }
+  }
+]
