@@ -50,7 +50,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _loginWithGoogle() async {
     final vm = context.read<AuthViewModel>();
-    final ok = await vm.loginWithGoogle(SupabaseConfig.googleWebClientId);
+    final ok = await vm.loginWithGoogle(SupabaseConfig.googleWebClientId,
+          returnTo: _target);
     if (ok && mounted) {
       context.go(_target);
     } else if (mounted && vm.error != null) {

@@ -38,6 +38,29 @@ void main() {
     });
   });
 
+  group('AppLinks.oauthReturnUrl', () {
+    // Na web o Google recarrega a pagina inteira: o destino precisa ir no
+    // proprio redirect, senao a pessoa entra e cai na home.
+    const origin = 'https://app.ride.dev.br';
+
+    test('mantem o caminho do conteudo compartilhado', () {
+      expect(AppLinks.oauthReturnUrl(origin, '/v/abc123'),
+          'https://app.ride.dev.br/v/abc123');
+    });
+
+    test('sem destino volta para a home', () {
+      expect(AppLinks.oauthReturnUrl(origin, null),
+          'https://app.ride.dev.br/home');
+    });
+
+    test('destino forjado nao leva para fora do app', () {
+      expect(AppLinks.oauthReturnUrl(origin, 'https://site-falso.com'),
+          'https://app.ride.dev.br/home');
+      expect(AppLinks.oauthReturnUrl(origin, '//site-falso.com'),
+          'https://app.ride.dev.br/home');
+    });
+  });
+
   group('ShareKind', () {
     test('cada tipo tem o segmento da URL curta', () {
       expect(ShareKind.event.path, 'e');

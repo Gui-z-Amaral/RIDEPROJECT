@@ -180,7 +180,10 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
-  Future<bool> loginWithGoogle(String webClientId) async {
+  /// [returnTo]: caminho para onde voltar depois de entrar, quando a pessoa
+  /// chegou por um link compartilhado. Na web o Google recarrega a pagina
+  /// inteira, entao o destino precisa ir junto no redirect.
+  Future<bool> loginWithGoogle(String webClientId, {String? returnTo}) async {
     _state = AuthState.loading;
     _error = null;
     notifyListeners();
@@ -188,10 +191,10 @@ class AuthViewModel extends ChangeNotifier {
       // Na web isso dispara um redirect de página; a volta é tratada pelo
       // listener de authStateChanges. Não há usuário para retornar aqui.
       if (kIsWeb) {
-        await SupabaseAuthService.signInWithGoogle(webClientId);
+        await SupabaseAuthService.signInWithGoogle(webClientId, returnTo: returnTo);
         return true;
       }
-      _user = await SupabaseAuthService.signInWithGoogle(webClientId);
+      _user = await SupabaseAuthService.signInWithGoogle(webClientId, returnTo: returnTo);
       if (_user != null) {
         _state = AuthState.authenticated;
         notifyListeners();

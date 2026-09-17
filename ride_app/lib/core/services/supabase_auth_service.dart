@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
+import '../constants/app_links.dart';
 
 class SupabaseAuthService {
   static SupabaseClient get _db => Supabase.instance.client;
@@ -20,7 +21,7 @@ class SupabaseAuthService {
       password: password,
     );
     if (res.user == null) return null;
-    return _fetchProfile(res.user!.id);
+    return _profileAfterAuth(res.user!.id);
   }
 
   // ── Register ───────────────────────────────────────────────
@@ -70,7 +71,7 @@ class SupabaseAuthService {
       token: code.trim(),
     );
     if (res.user == null) return null;
-    return _fetchProfile(res.user!.id);
+    return _profileAfterAuth(res.user!.id);
   }
 
   /// Reenvia o código de confirmação do cadastro.
@@ -103,14 +104,21 @@ class SupabaseAuthService {
 
   // ── Google Sign-In ─────────────────────────────────────────
   // webClientId: ID do cliente Web criado no Google Cloud Console
-  static Future<UserModel?> signInWithGoogle(String webClientId) async {
+  /// [returnTo]: caminho interno para onde voltar depois de entrar (ex.:
+  /// `/v/<id>`). Só tem efeito na web — no nativo não há redirect de página.
+  static Future<UserModel?> signInWithGoogle(
+    String webClientId, {
+    String? returnTo,
+  }) async {
     // Na web o google_sign_in não suporta signIn() interativo (dá assertion).
-    // Usamos o OAuth do Supabase: redireciona pro Google e volta pra própria
-    // URL; a sessão é recuperada e o listener de authStateChanges assume daqui.
+    // Usamos o OAuth do Supabase: redireciona pro Google e volta pra URL que
+    // passarmos; a sessão é recuperada e o listener de authStateChanges assume.
     if (kIsWeb) {
       await _db.auth.signInWithOAuth(
         OAuthProvider.google,
-        redirectTo: Uri.base.origin,
+        // Antes era só `Uri.base.origin`, que descartava o caminho: quem vinha
+        // do link de uma viagem entrava e caía na home.
+        redirectTo: AppLinks.oauthReturnUrl(Uri.base.origin, returnTo),
       );
       return null; // fluxo continua após o redirect de volta
     }
@@ -143,7 +151,26 @@ class SupabaseAuthService {
       });
     }
 
-    return _fetchProfile(res.user!.id);
+    return _profileAfterAuth(res.user!.id);
+  }
+
+  // ── Desativação de conta (LGPD) ────────────────────────────
+  /// Desliga a conta do usuário logado, sem apagar nada.
+  ///
+  /// A lei brasileira exige guardar os dados por pelo menos 6 meses. A função
+  /// no banco (migration 034) move os dados pessoais para uma tabela que
+  /// ninguém consegue ler pela API e deixa o perfil como "Usuário inativo":
+  /// sem foto, sem bio, fora da busca por proximidade e sem push.
+  ///
+  /// Chame [logout] logo depois — a sessão continua válida até sair.
+  static Future<void> deactivateAccount() async {
+    await _db.rpc('deactivate_my_account');
+  }
+
+  /// Traz a conta de volta com os dados de antes. Chamada no login quando o
+  /// perfil está marcado como desativado.
+  static Future<void> reactivateAccount() async {
+    await _db.rpc('reactivate_my_account');
   }
 
   // ── Logout ─────────────────────────────────────────────────
@@ -279,6 +306,19 @@ class SupabaseAuthService {
   static const _unset = Object();
 
   // ── Helpers ────────────────────────────────────────────────
+  /// Perfil de quem acabou de autenticar, reativando a conta se ela estava
+  /// desativada.
+  ///
+  /// Só nos caminhos de LOGIN, e não dentro de _fetchProfile: aquele também
+  /// carrega o perfil de outras pessoas, e ressuscitaria a conta no intervalo
+  /// entre desativar e sair.
+  static Future<UserModel?> _profileAfterAuth(String id) async {
+    final profile = await _fetchProfile(id);
+    if (profile == null || profile.deactivatedAt == null) return profile;
+    await _db.rpc('reactivate_my_account');
+    return _fetchProfile(id);
+  }
+
   static Future<UserModel?> _fetchProfile(String id) async {
     final row = await _db
         .from('profiles')
