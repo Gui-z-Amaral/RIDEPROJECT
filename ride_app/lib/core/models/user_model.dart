@@ -32,6 +32,11 @@ class UserModel {
   final bool isOnline;
   final bool discoverable; // aparece na descoberta de riders próximos
   final bool isPrivate; // perfil privado (não-amigo vê só o básico)
+
+  /// Preenchido quando a conta foi desativada pelo próprio usuário.
+  /// Os dados pessoais ficam guardados à parte (migration 034) e o perfil
+  /// aparece como "Usuário inativo" para todo mundo.
+  final DateTime? deactivatedAt;
   final DateTime? createdAt;
 
   const UserModel({
@@ -61,6 +66,7 @@ class UserModel {
     this.isOnline = false,
     this.discoverable = true,
     this.isPrivate = false,
+    this.deactivatedAt,
     this.createdAt,
   });
 
@@ -129,6 +135,7 @@ class UserModel {
       isOnline: isOnline ?? this.isOnline,
       discoverable: discoverable ?? this.discoverable,
       isPrivate: isPrivate ?? this.isPrivate,
+      deactivatedAt: deactivatedAt,
       createdAt: createdAt,
     );
   }
@@ -194,6 +201,7 @@ class UserModel {
       discoverable: map['discoverable'] as bool? ?? true,
       isPrivate: map['is_private'] as bool? ?? false,
       createdAt: DbTime.tryParse(rawCreatedAt),
+      deactivatedAt: DbTime.tryParse(map['deactivated_at']),
     );
   }
 }

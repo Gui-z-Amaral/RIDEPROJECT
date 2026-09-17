@@ -80,6 +80,10 @@ class EventModel {
   final String? stateUf;
   final String? city;
   final String? clubId; // != null = evento de motoclube
+
+  /// Visibilidade do evento. Era herdada do motoclube por trigger; desde a
+  /// migration 034 cada evento tem a sua, marcada na tela de criação.
+  final bool isPublic;
   final DateTime startsAt;
   final DateTime? endsAt;
   final int interestsCount;
@@ -105,6 +109,7 @@ class EventModel {
     this.stateUf,
     this.city,
     this.clubId,
+    this.isPublic = true,
     required this.startsAt,
     this.endsAt,
     this.interestsCount = 0,
@@ -197,6 +202,7 @@ class EventModel {
       stateUf: map['state_uf'] as String?,
       city: map['city'] as String?,
       clubId: map['club_id'] as String?,
+      isPublic: map['is_public'] as bool? ?? true,
       startsAt: DbTime.parse(map['starts_at']),
       endsAt: map['ends_at'] != null
           ? DbTime.tryParse(map['ends_at'])

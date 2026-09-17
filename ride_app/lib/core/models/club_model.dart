@@ -13,7 +13,12 @@ class ClubModel {
   final String? bannerUrl;
   final String? city;
   final String? stateUf;
-  final bool eventsPublic; // true = eventos do clube visíveis a todos
+  /// SEM USO desde a migration 034: a visibilidade passou a ser de cada evento
+  /// e de cada viagem, marcada na tela de criação. O campo continua aqui só
+  /// porque a coluna `clubs.events_public` ainda existe no banco — ela é
+  /// removida numa migration seguinte, depois de confirmado que nada a lê.
+  /// Não use para decidir o que mostrar; quem filtra é a RLS.
+  final bool eventsPublic;
   final DateTime? createdAt;
   final int membersCount;
   final String? myRole;

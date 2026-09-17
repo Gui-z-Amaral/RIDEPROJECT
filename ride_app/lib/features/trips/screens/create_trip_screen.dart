@@ -15,6 +15,7 @@ import '../../social/viewmodels/social_viewmodel.dart';
 import '../viewmodels/trip_viewmodel.dart';
 import '../../../core/utils/extensions.dart';
 import '../../../shared/widgets/app_avatar.dart';
+import '../../../shared/widgets/visibility_switch.dart';
 
 class CreateTripScreen extends StatefulWidget {
   /// Quando informado, a tela opera em modo edição da viagem com este ID.
@@ -717,6 +718,16 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
             setState(() => _departureDate = when);
             vm.setScheduledAt(when);
           },
+        ),
+        const SizedBox(height: 24),
+
+        _LabelSection(label: 'Quem pode ver'),
+        const SizedBox(height: 12),
+        VisibilitySwitch(
+          isPublic: vm.isPublic,
+          onChanged: vm.setIsPublic,
+          publicHint: 'Aparece na busca e qualquer pessoa pode abrir o link',
+          privateHint: 'Só você, quem for convidado e o motoclube',
         ),
         const SizedBox(height: 24),
 

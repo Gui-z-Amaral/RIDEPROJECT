@@ -324,6 +324,7 @@ class SupabaseTripService {
     String? clubId,
     String? coverImage,
     List<EventScheduleItem> schedule = const [],
+    bool isPublic = true,
     List<StopModel> stops = const [],
   }) async {
     // Insert trip
@@ -342,6 +343,7 @@ class SupabaseTripService {
       'club_id': clubId,
       'cover_image': coverImage,
       'scheduled_at': DbTime.toDb(scheduledAt),
+      'is_public': isPublic,
     }).select().single();
 
     final tripId = tripRow['id'] as String;
@@ -420,6 +422,7 @@ class SupabaseTripService {
     required LocationModel destination,
     DateTime? scheduledAt,
     List<String> participantIds = const [],
+    bool isPublic = true,
     List<StopModel> stops = const [],
   }) async {
     await _db.from('trips').update({
@@ -433,6 +436,7 @@ class SupabaseTripService {
       'destination_address': destination.address,
       'destination_label': destination.label,
       'scheduled_at': DbTime.toDb(scheduledAt),
+      'is_public': isPublic,
     }).eq('id', tripId).eq('creator_id', _uid);
 
     // Sincroniza participantes (mantém criador, adiciona novos, remove retirados)
@@ -712,6 +716,7 @@ class SupabaseTripService {
       estimatedDistance: (r['estimated_distance'] as num?)?.toDouble(),
       estimatedDuration: r['estimated_duration'] as String?,
       coverImage: r['cover_image'] as String?,
+      isPublic: r['is_public'] as bool? ?? true,
       createdAt: DbTime.parse(r['created_at']),
     );
   }

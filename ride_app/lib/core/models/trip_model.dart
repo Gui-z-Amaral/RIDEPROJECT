@@ -21,6 +21,11 @@ class TripModel {
   final double? estimatedDistance;
   final String? estimatedDuration;
   final String? coverImage;
+
+  /// Visibilidade da viagem, marcada na tela de criação (migration 034).
+  /// Privada é vista só pelo criador, pelos participantes e, se for de
+  /// motoclube, pelos membros.
+  final bool isPublic;
   final DateTime createdAt;
 
   const TripModel({
@@ -39,6 +44,7 @@ class TripModel {
     this.estimatedDistance,
     this.estimatedDuration,
     this.coverImage,
+    this.isPublic = true,
     required this.createdAt,
   });
 

@@ -13,6 +13,7 @@ import '../../../shared/widgets/app_avatar.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../viewmodels/event_viewmodel.dart';
+import '../../../shared/widgets/visibility_switch.dart';
 
 /// Tela de criação/edição de evento (perfil empresa). Form único com banner,
 /// título, descrição, local (mapa), data/hora, programação, patrocinadores e
@@ -38,6 +39,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   String? _bannerUrl;
   bool _uploadingBanner = false;
+  /// Visibilidade do evento. Antes era herdada do motoclube; desde a
+  /// migration 034 cada evento tem a sua.
+  bool _isPublic = true;
 
   LocationModel? _location;
   String? _stateUf;
@@ -367,6 +371,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         startsAt: _startsAt!,
         endsAt: _endsAt,
         clubId: widget.clubId,
+        isPublic: _isPublic,
         schedule: schedule,
         sponsors: sponsors,
         participantIds: participantIds,
@@ -536,6 +541,18 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             hint: 'Escolher data e hora',
             onTap: _pickEnd,
             onClear: _endsAt != null ? () => setState(() => _endsAt = null) : null,
+          ),
+          const SizedBox(height: 24),
+
+          // ── Visibilidade ─────────────────────────────────────
+          const _Label('QUEM PODE VER'),
+          VisibilitySwitch(
+            isPublic: _isPublic,
+            onChanged: (v) => setState(() => _isPublic = v),
+            publicHint: 'Aparece na busca e qualquer pessoa pode abrir o link',
+            privateHint: widget.clubId != null
+                ? 'Só membros do motoclube veem'
+                : 'Só você e quem receber o convite',
           ),
           const SizedBox(height: 24),
 

@@ -29,7 +29,6 @@ class _ClubSettingsScreenState extends State<ClubSettingsScreen> {
   String? _logoUrl;
   bool _uploadingBanner = false;
   bool _uploadingLogo = false;
-  bool _eventsPublic = false;
 
   @override
   void initState() {
@@ -41,7 +40,6 @@ class _ClubSettingsScreenState extends State<ClubSettingsScreen> {
     _descCtrl = TextEditingController(text: club?.description ?? '');
     _bannerUrl = club?.bannerUrl;
     _logoUrl = club?.avatarUrl;
-    _eventsPublic = club?.eventsPublic ?? false;
   }
 
   @override
@@ -112,7 +110,6 @@ class _ClubSettingsScreenState extends State<ClubSettingsScreen> {
       stateUf: _ufCtrl.text.trim().toUpperCase(),
       bannerUrl: _bannerUrl,
       avatarUrl: _logoUrl,
-      eventsPublic: _eventsPublic,
     );
     if (!mounted) return;
     if (ok) {
@@ -283,33 +280,9 @@ class _ClubSettingsScreenState extends State<ClubSettingsScreen> {
           ),
           const SizedBox(height: 24),
 
-          // ── Privacidade dos eventos ────────────────────────
-          const _Label('PRIVACIDADE'),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-            decoration: BoxDecoration(
-              color: AppColors.inputFill,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _eventsPublic,
-              onChanged: (v) => setState(() => _eventsPublic = v),
-              activeColor: AppColors.navy,
-              secondary: Icon(
-                  _eventsPublic ? Icons.public : Icons.lock_outline,
-                  color: AppColors.navy),
-              title: Text('Eventos públicos', style: AppTextStyles.bodyMedium),
-              subtitle: Text(
-                _eventsPublic
-                    ? 'Qualquer pessoa vê os eventos do clube'
-                    : 'Só membros veem os eventos do clube',
-                style:
-                    AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
+          // A visibilidade deixou de ser do clube inteiro: agora cada evento
+          // e cada viagem é marcada como pública ou privada na tela de
+          // criação (migration 034).
 
           // ── Gerenciar membros ──────────────────────────────
           const _Label('MEMBROS'),

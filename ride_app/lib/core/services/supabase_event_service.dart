@@ -33,6 +33,9 @@ class SupabaseEventService {
     required DateTime startsAt,
     DateTime? endsAt,
     String? clubId,
+    /// Marcado na tela de criação. Antes vinha do motoclube por trigger — o
+    /// trigger foi removido na 034, então o valor enviado aqui é o que vale.
+    bool isPublic = true,
     List<EventScheduleItem> schedule = const [],
     List<EventSponsor> sponsors = const [],
     List<String> participantIds = const [],
@@ -49,6 +52,7 @@ class SupabaseEventService {
       'state_uf': stateUf,
       'city': city,
       'club_id': clubId,
+      'is_public': isPublic,
       'starts_at': DbTime.toDb(startsAt),
       'ends_at': DbTime.toDb(endsAt),
     }).select('id').single();

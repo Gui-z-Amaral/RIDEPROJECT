@@ -607,31 +607,11 @@ class _ActivitiesTabState extends State<_ActivitiesTab> {
     final vm = context.watch<ClubViewModel>();
     final club = widget.club;
 
-    // Atividades: membros sempre veem; não-membros só se o clube for público.
-    if (!club.isActiveMember && !club.eventsPublic) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.lock_outline,
-                  size: 48, color: AppColors.navy.withOpacity(0.3)),
-              const SizedBox(height: 12),
-              Text('Atividades exclusivas dos membros',
-                  style: AppTextStyles.titleMedium
-                      .copyWith(color: AppColors.textSecondary),
-                  textAlign: TextAlign.center),
-              const SizedBox(height: 4),
-              Text('Entre no clube para ver as atividades',
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: AppColors.textMuted),
-                  textAlign: TextAlign.center),
-            ],
-          ),
-        ),
-      );
-    }
+    // Não há mais cadeado por clube: desde a migration 034 a visibilidade é de
+    // cada evento e de cada viagem. Quem não é membro vê a lista normalmente e
+    // recebe só o que for público — quem filtra é a RLS, no banco, não a tela.
+    // Manter o cadeado aqui deixaria a aba trancada para sempre, já que o
+    // interruptor do clube saiu da interface.
 
     // Une eventos e viagens numa lista só, ordenada por data (próximos primeiro).
     final items = <_Activity>[

@@ -4,6 +4,9 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
+import '../../../core/services/supabase_auth_service.dart';
+import '../../../core/utils/extensions.dart';
+import '../../auth/viewmodels/auth_viewmodel.dart';
 import '../viewmodels/profile_viewmodel.dart';
 
 /// Tela de Configurações do perfil. Por enquanto o item principal é o
@@ -11,6 +14,69 @@ import '../viewmodels/profile_viewmodel.dart';
 /// futuramente criar eventos com programação na tela inicial.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
+
+  /// Desativa a conta. Não apaga: a lei brasileira exige guardar os dados por
+  /// pelo menos 6 meses, então o perfil é desligado e os dados pessoais ficam
+  /// guardados fora do alcance de qualquer consulta (migration 034).
+  ///
+  /// Confirmação em duas etapas de propósito — é a ação mais destrutiva do app,
+  /// e o texto diz exatamente o que acontece, incluindo que dá para voltar.
+  Future<void> _confirmDeactivate(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Excluir meu perfil'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('O que acontece:'),
+            const SizedBox(height: 10),
+            const _Bullet('Seu nome vira "Usuário inativo" para todo mundo'),
+            const _Bullet('Foto, bio e fotos do perfil saem do ar'),
+            const _Bullet('Você some da busca por riders próximos'),
+            const _Bullet('Para de receber notificações'),
+            const SizedBox(height: 12),
+            Text(
+              'Suas viagens e mensagens continuam existindo para quem participou '
+              'delas, sem o seu nome.',
+              style: AppTextStyles.bodySmall
+                  .copyWith(color: AppColors.textMuted),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Se você entrar de novo, seu perfil volta como estava. Depois de 6 '
+              'meses a conta é apagada em definitivo.',
+              style: AppTextStyles.bodySmall
+                  .copyWith(color: AppColors.textMuted),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Excluir meu perfil',
+                style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+
+    try {
+      await SupabaseAuthService.deactivateAccount();
+      if (!context.mounted) return;
+      await context.read<AuthViewModel>().logout();
+      if (context.mounted) context.go('/login');
+    } catch (e) {
+      if (context.mounted) {
+        context.showSnack('Não foi possível excluir agora: $e', isError: true);
+      }
+    }
+  }
 
   Future<void> _changeAccountType(BuildContext context, String type) async {
     final vm = context.read<ProfileViewModel>();
@@ -235,6 +301,31 @@ class SettingsScreen extends StatelessWidget {
                       .copyWith(color: AppColors.textMuted)),
             ),
           ),
+
+          const SizedBox(height: 32),
+
+          // ── Conta ──────────────────────────────────────────────
+          const _SectionLabel('Conta'),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.inputFill,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.person_off_outlined,
+                  color: AppColors.error),
+              title: Text('Excluir meu perfil',
+                  style: AppTextStyles.bodyMedium
+                      .copyWith(color: AppColors.error)),
+              subtitle: Text('Seu perfil sai do ar e some das buscas',
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: AppColors.textMuted)),
+              onTap: () => _confirmDeactivate(context),
+            ),
+          ),
+
+          const SizedBox(height: 40),
         ],
       ),
     );
@@ -327,4 +418,22 @@ class _AccountTypeCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Item de lista do diálogo de exclusão de perfil.
+class _Bullet extends StatelessWidget {
+  final String text;
+  const _Bullet(this.text);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('•  '),
+            Expanded(child: Text(text, style: AppTextStyles.bodySmall)),
+          ],
+        ),
+      );
 }

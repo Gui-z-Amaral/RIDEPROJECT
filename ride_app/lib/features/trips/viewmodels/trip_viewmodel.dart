@@ -34,6 +34,13 @@ class TripViewModel extends ChangeNotifier {
   void setClubId(String? id) => _clubId = id;
   void setCoverImage(String? url) => _coverImage = url;
 
+  /// Visibilidade da viagem, marcada na tela de criação (migration 034).
+  /// Privada é vista só pelo criador, pelos participantes e, se for de
+  /// motoclube, pelos membros.
+  bool _isPublic = true;
+  bool get isPublic => _isPublic;
+  void setIsPublic(bool v) { _isPublic = v; notifyListeners(); }
+
   // ── Paradas do formulário ──────────────────────────────────
   List<StopModel> _stops = [];
   List<StopModel> get stops => List.unmodifiable(_stops);
@@ -144,6 +151,7 @@ class TripViewModel extends ChangeNotifier {
     _scheduledAt = null;
     _clubId = null;
     _coverImage = null;
+    _isPublic = true;
     _stops = [];
     notifyListeners();
   }
@@ -159,6 +167,9 @@ class TripViewModel extends ChangeNotifier {
     _participants =
         trip.participants.where((u) => u.id != trip.creator.id).toList();
     _scheduledAt = trip.scheduledAt;
+    // Sem isto, abrir uma viagem privada para editar mostraria "Público"
+    // no formulário e a tornaria pública ao salvar.
+    _isPublic = trip.isPublic;
     notifyListeners();
   }
 
@@ -189,6 +200,7 @@ class TripViewModel extends ChangeNotifier {
         scheduledAt: _scheduledAt,
         clubId: _clubId,
         coverImage: _coverImage,
+        isPublic: _isPublic,
         stops: _stops,
       );
       _trips = [trip, ..._trips];
@@ -218,6 +230,7 @@ class TripViewModel extends ChangeNotifier {
         participantIds: _participants.map((u) => u.id).toList(),
         stops: _stops,
         scheduledAt: _scheduledAt,
+        isPublic: _isPublic,
       );
       _trips = _trips.map((t) => t.id == tripId ? trip : t).toList();
       _selectedTrip = trip;
