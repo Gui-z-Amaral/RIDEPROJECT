@@ -17,6 +17,24 @@ import 'supabase_notification_service.dart';
 ///  - navega para a tela certa ao tocar (via [routeForNotification]).
 ///
 /// O ENVIO em si é feito pelo worker na VPS — aqui é só o lado do cliente.
+/// Resultado de [PushNotificationService.enableFromUserGesture].
+enum PushEnableResult {
+  /// Permissão concedida e token salvo.
+  ativado,
+
+  /// A pessoa (ou o navegador) recusou. No navegador, reverter exige mexer nas
+  /// configurações do site — o app não consegue pedir de novo.
+  recusado,
+
+  /// Pediu, mas não veio token. No iPhone é o caso típico de estar rodando numa
+  /// aba do Safari em vez do app instalado na tela de início: lá o push não
+  /// existe, e a tentativa falha sem erro visível.
+  semToken,
+
+  /// Configuração ausente (chave VAPID) — problema nosso, não do aparelho.
+  naoConfigurado,
+}
+
 class PushNotificationService {
   PushNotificationService._();
   static final PushNotificationService instance = PushNotificationService._();
@@ -120,6 +138,48 @@ class PushNotificationService {
       }
     } catch (e) {
       debugPrint('PushNotificationService.registerForCurrentUser: $e');
+    }
+  }
+
+  /// Pede a permissão de notificação **dentro do gesto do usuário** e devolve
+  /// o que aconteceu.
+  ///
+  /// Existe separado de [registerForCurrentUser] por causa do iOS: o Safari só
+  /// aceita `Notification.requestPermission()` durante a ativação por gesto, e
+  /// aquele método roda depois do `await` do login — quando o gesto já expirou.
+  /// O pedido era recusado em silêncio e o aparelho ficava sem token nenhum.
+  ///
+  /// Chame direto do `onPressed`, sem `await` antes.
+  Future<PushEnableResult> enableFromUserGesture() async {
+    if (kIsWeb && !FirebaseWebConfig.hasVapidKey) {
+      return PushEnableResult.naoConfigurado;
+    }
+    try {
+      final settings = await FirebaseMessaging.instance.requestPermission();
+      if (settings.authorizationStatus == AuthorizationStatus.denied) {
+        return PushEnableResult.recusado;
+      }
+      final token = await _currentToken();
+      if (token == null) return PushEnableResult.semToken;
+      await SupabaseNotificationService.saveDeviceToken(
+        token,
+        platform: kIsWeb ? 'web' : 'android',
+      );
+      return PushEnableResult.ativado;
+    } catch (e) {
+      debugPrint('PushNotificationService.enableFromUserGesture: $e');
+      return PushEnableResult.semToken;
+    }
+  }
+
+  /// Já existe permissão concedida neste aparelho?
+  Future<bool> isEnabled() async {
+    try {
+      final s = await FirebaseMessaging.instance.getNotificationSettings();
+      return s.authorizationStatus == AuthorizationStatus.authorized ||
+          s.authorizationStatus == AuthorizationStatus.provisional;
+    } catch (_) {
+      return false;
     }
   }
 

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
+import '../../../core/services/push_notification_service.dart';
 import '../../../core/services/supabase_auth_service.dart';
 import '../../../core/utils/extensions.dart';
 import '../../auth/viewmodels/auth_viewmodel.dart';
@@ -14,6 +15,33 @@ import '../viewmodels/profile_viewmodel.dart';
 /// futuramente criar eventos com programação na tela inicial.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
+
+  /// Pede a permissão de notificação. Chamado DIRETO do toque, sem await antes:
+  /// o Safari do iOS só aceita o pedido durante o gesto do usuário, e era por
+  /// isso que o iPhone ficava sem token nenhum (o pedido automático após o
+  /// login já vinha depois do await e era recusado em silêncio).
+  Future<void> _ativarNotificacoes(BuildContext context) async {
+    final r = await PushNotificationService.instance.enableFromUserGesture();
+    if (!context.mounted) return;
+    switch (r) {
+      case PushEnableResult.ativado:
+        context.showSnack('Notificações ativadas neste aparelho.');
+      case PushEnableResult.recusado:
+        context.showSnack(
+            'Notificações bloqueadas. Libere nas configurações do navegador '
+            'ou do aparelho e tente de novo.',
+            isError: true);
+      case PushEnableResult.semToken:
+        context.showSnack(
+            'Não deu para ativar aqui. No iPhone é preciso instalar o app na '
+            'tela de início (Compartilhar → Adicionar à Tela de Início) e abrir '
+            'por lá.',
+            isError: true);
+      case PushEnableResult.naoConfigurado:
+        context.showSnack('Notificações não estão configuradas nesta versão.',
+            isError: true);
+    }
+  }
 
   /// Desativa a conta. Não apaga: a lei brasileira exige guardar os dados por
   /// pelo menos 6 meses, então o perfil é desligado e os dados pessoais ficam
@@ -280,6 +308,31 @@ class SettingsScreen extends StatelessWidget {
               trailing: Icon(Icons.chevron_right,
                   color: AppColors.textMuted),
               onTap: () => context.push('/profile/history'),
+            ),
+          ),
+
+          const SizedBox(height: 32),
+
+          // ── Notificações ───────────────────────────────────────
+          const _SectionLabel('Notificações'),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.inputFill,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: ListTile(
+              leading:
+                  Icon(Icons.notifications_active_outlined, color: AppColors.navy),
+              title: Text('Ativar notificações neste aparelho',
+                  style: AppTextStyles.bodyMedium),
+              subtitle: Text(
+                  'Avisos de mensagens, convites e rolês. No iPhone, só funciona '
+                  'com o app instalado na tela de início.',
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: AppColors.textMuted)),
+              trailing: Icon(Icons.chevron_right, color: AppColors.textMuted),
+              onTap: () => _ativarNotificacoes(context),
             ),
           ),
 
