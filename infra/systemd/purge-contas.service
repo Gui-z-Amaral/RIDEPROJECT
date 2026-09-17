@@ -1,0 +1,8 @@
+[Unit]
+Description=Apaga contas desativadas ha mais de 6 meses (LGPD)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/purge-contas.sh

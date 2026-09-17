@@ -54,3 +54,7 @@ key.properties
 
 # Chave do Maps para web (não commitar)
 /web/env.js
+
+# Screenshots que o Flutter larga na raiz ao capturar a tela do dispositivo.
+# Ja entraram no repositorio por engano (flutter_01/02); nao servem ao build.
+flutter_*.png

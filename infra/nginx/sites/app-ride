@@ -1,0 +1,93 @@
+# Robos que montam a previa do link (WhatsApp, Telegram, etc.). Eles NAO
+# executam JavaScript, entao receberiam o index.html sem as tags do evento.
+map $http_user_agent $is_crawler {
+    default 0;
+    "~*(facebookexternalhit|WhatsApp|Twitterbot|Telegram|LinkedInBot|Discordbot|Slackbot|SkypeUriPreview|Pinterest|redditbot|Applebot|Googlebot|bingbot|vkShare|iframely|embedly)" 1;
+}
+
+server {
+    listen 80;
+    server_name app.ride.dev.br;
+    return 301 https://$host$request_uri;
+}
+server {
+    listen 443 ssl;
+    server_name app.ride.dev.br;
+    ssl_certificate     /etc/ssl/cloudflare/app-ride.pem;
+    ssl_certificate_key /etc/ssl/cloudflare/app-ride.key;
+    root /var/www/app-ride;
+    index index.html;
+
+    # O nginx.conf tem 'gzip on' mas com gzip_types comentado, entao so
+    # text/html era comprimido — o main.dart.js (1,5 MB) saia inteiro.
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_comp_level 6;
+    gzip_types text/plain text/css text/javascript
+               application/javascript application/json application/manifest+json
+               image/svg+xml font/otf font/ttf application/wasm;
+
+    # Seguranca: sem isto qualquer site pode embutir o app num iframe e
+    # induzir o usuario logado a clicar sem perceber (clickjacking).
+    add_header X-Frame-Options SAMEORIGIN;
+    add_header X-Content-Type-Options nosniff;
+    add_header Referrer-Policy strict-origin-when-cross-origin;
+    server_tokens off;
+
+    # Peso (fontes, imagens, icones): cache longo — e onde a velocidade
+    # aparece. SEM 'always': com ele, um 404 ficaria cacheado 30 dias.
+    location ~* ^/(assets|icons|canvaskit)/ {
+        add_header Cache-Control 'public, max-age=2592000';
+        add_header X-Content-Type-Options nosniff;
+    }
+    location ~* ^/(favicon\.png|og-image\.png)$ {
+        add_header Cache-Control 'public, max-age=2592000';
+        add_header X-Content-Type-Options nosniff;
+    }
+
+    # Codigo do app: guarda local, mas confere se mudou (304 e barato).
+    # Cache longo aqui seria usuario preso numa versao antiga do APP.
+    location ~* ^/(main\.dart\.js|flutter_bootstrap\.js|version\.json|flutter_service_worker\.js)$ {
+        add_header Cache-Control 'no-cache';
+        add_header X-Content-Type-Options nosniff;
+    }
+
+
+    # Links compartilhados. Pessoa recebe o app normal (try_files); robo vai
+    # para a Edge Function, que devolve o HTML com as tags Open Graph do
+    # registro. Assim a abertura do app nao depende da funcao: se ela cair,
+    # perde-se a miniatura do link, nao o app.
+    location ~ ^/(e|v|r)/([^/]+)$ {
+        set $share_kind $1;
+        set $share_id   $2;
+        if ($is_crawler) { rewrite ^ /__share last; }
+        add_header Cache-Control "no-cache";
+        try_files $uri /index.html;
+    }
+
+    location = /__share {
+        internal;
+        proxy_pass http://127.0.0.1:8000/functions/v1/share?kind=$share_kind&id=$share_id;
+        proxy_set_header Host $host;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 8s;
+    }
+
+    # Porta de entrada: sempre revalidar. E por aqui que o navegador
+    # descobre todo o resto; se ficar velha, nada mais atualiza.
+    # Desafio do Lets Encrypt para api.ride.dev.br. Precisa estar aqui
+    # tambem porque a Cloudflare fala com a origem em 443, e ate o certificado
+    # existir o pedido cai neste vhost (o padrao).
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type "text/plain";
+    }
+
+    location / {
+        add_header Cache-Control 'no-cache';
+        add_header X-Frame-Options SAMEORIGIN;
+        add_header X-Content-Type-Options nosniff;
+        add_header Referrer-Policy strict-origin-when-cross-origin;
+        try_files $uri $uri/ /index.html;
+    }
+}
