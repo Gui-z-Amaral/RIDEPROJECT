@@ -32,3 +32,6 @@ Runner/GeneratedPluginRegistrant.*
 !default.mode2v3
 !default.pbxuser
 !default.perspectivev3
+
+# Chave do Google Maps para iOS. Use o Maps.xcconfig.example como modelo.
+Flutter/Maps.xcconfig

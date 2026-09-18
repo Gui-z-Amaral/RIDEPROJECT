@@ -10,3 +10,7 @@ icons_extracted/
 # Arquivos de sistema
 .DS_Store
 Thumbs.db
+
+# Material de pitch: contem estrategia e numeros de negocio, e este
+# repositorio e PUBLICO.
+pitch/

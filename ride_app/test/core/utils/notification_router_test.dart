@@ -1,8 +1,10 @@
+import 'dart:convert';
 // Testes do mapeamento notificação → rota usado ao tocar num push.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ride_app/core/utils/notification_router.dart';
 
 void main() {
+  _testesDaRotaDePush();
   group('routeForNotification', () {
     test('message com fromUserId abre o chat daquela pessoa', () {
       expect(
@@ -129,6 +131,64 @@ void main() {
         ),
         isTrue,
       );
+    });
+  });
+}
+
+/// Formato da URL que o service worker monta ao tocar na notificação
+/// (`/n?t=<type>&p=<payload>`), e que a rota /n desmonta para chamar
+/// [routeForNotification].
+///
+/// O mapeamento vive só no Dart de propósito: tê-lo também em JavaScript
+/// garantiria que um dia os dois discordassem, e o sintoma seria o push abrir
+/// a tela errada — exatamente o que acontecia quando o worker abria sempre '/'.
+void _testesDaRotaDePush() {
+  group('ida e volta do payload do push', () {
+    /// Reproduz o que o service worker faz ao montar a URL.
+    String montarUrl(String type, String payloadJson) =>
+        '/n?t=${Uri.encodeQueryComponent(type)}'
+        '&p=${Uri.encodeQueryComponent(payloadJson)}';
+
+    /// Reproduz o que a rota /n faz ao receber.
+    String resolver(String url) {
+      final q = Uri.parse(url).queryParameters;
+      final raw = q['p'] ?? '{}';
+      Map<String, dynamic> payload = const {};
+      try {
+        final d = jsonDecode(raw);
+        if (d is Map) payload = Map<String, dynamic>.from(d);
+      } catch (_) {}
+      return routeForNotification(q['t'] ?? '', payload);
+    }
+
+    test('mensagem chega na conversa certa', () {
+      final url = montarUrl('message', '{"fromUserId":"u-123"}');
+      expect(resolver(url), '/friends/chat/u-123');
+    });
+
+    test('evento chega no evento certo', () {
+      final url = montarUrl('event_update', '{"eventId":"e-9"}');
+      expect(resolver(url), '/events/e-9');
+    });
+
+    test('convite chega na aba de convites', () {
+      expect(resolver(montarUrl('friend_request', '{}')), '/friends/invites');
+      expect(resolver(montarUrl('trip_invite', '{}')), '/friends/invites');
+    });
+
+    test('payload corrompido cai na lista, sem estourar', () {
+      // O que não pode acontecer é a tela ficar branca porque o JSON veio
+      // truncado na URL.
+      expect(resolver('/n?t=message&p=%7Bquebrado'), '/notifications');
+    });
+
+    test('sem type nenhum cai na lista', () {
+      expect(resolver('/n?t=&p=%7B%7D'), '/notifications');
+    });
+
+    test('caracteres especiais sobrevivem à ida e volta', () {
+      final url = montarUrl('event_update', '{"eventId":"a b&c=d"}');
+      expect(resolver(url), '/events/a b&c=d');
     });
   });
 }

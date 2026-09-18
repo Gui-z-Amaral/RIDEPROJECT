@@ -1,0 +1,4 @@
+// Copie para Maps.xcconfig (que é git-ignored) e ponha a chave de iOS,
+// criada no Google Cloud Console restrita por Bundle ID + só Maps SDK for iOS.
+// NUNCA versione o Maps.xcconfig.
+GOOGLE_MAPS_API_KEY=SUA_CHAVE_IOS_AQUI

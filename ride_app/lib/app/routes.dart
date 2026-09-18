@@ -50,6 +50,7 @@ import '../features/clubs/screens/attendance_screen.dart';
 import '../features/clubs/screens/trip_schedule_screen.dart';
 import 'shell_screen.dart';
 import '../features/clubs/screens/club_invite_screen.dart';
+import '../features/notifications/screens/notification_route_screen.dart';
 
 final router = GoRouter(
   initialLocation: '/splash',
@@ -86,6 +87,16 @@ final router = GoRouter(
     ),
 
     GoRoute(path: '/notifications', builder: (_, __) => const NotificationsScreen()),
+    // Chegada de um toque em notificacao push na web. O service worker manda
+    // o type e o payload crus; quem decide a rota e o Dart, para o mapeamento
+    // nao existir em dois lugares.
+    GoRoute(
+      path: '/n',
+      builder: (_, state) => NotificationRouteScreen(
+        type: state.uri.queryParameters['t'] ?? '',
+        payloadJson: state.uri.queryParameters['p'] ?? '{}',
+      ),
+    ),
     GoRoute(path: '/search', builder: (_, __) => const SearchScreen()),
     GoRoute(path: '/businesses', builder: (_, __) => const BusinessesScreen()),
     GoRoute(

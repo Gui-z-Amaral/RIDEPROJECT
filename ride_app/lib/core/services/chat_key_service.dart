@@ -27,7 +27,10 @@ class ChatKeyService {
   static const _storage = FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
   );
-  static const _privKeyStorageKey = 'chat_private_key_v1';
+  /// Nome NOVO de proposito. O antigo (`chat_private_key_v1`) guardava a
+  /// chave da era por-dispositivo; ler aquilo fazia o app achar que a conta
+  /// ja tinha chave e pular a publicacao do par no servidor.
+  static const _privKeyStorageKey = 'chat_account_key_v1';
 
   /// Marcador exibido quando a mensagem não pode ser aberta.
   static const lockedMarker = '🔒 Mensagem cifrada';
@@ -89,7 +92,26 @@ class ChatKeyService {
     final uid = _uid;
     if (uid == null) return;
     try {
-      if (await _myPrivateKey() != null) return;
+      // Pergunta ao SERVIDOR, nao ao cache: quem decide se a conta ja tem
+      // par de chaves e ele. Confiar no armazenamento local fazia um
+      // aparelho com chave antiga pular a publicacao — e as mensagens saiam
+      // cifradas para uma chave publica que nao existia.
+      final doServidor = await _db.rpc('chat_key_get') as String?;
+      if (doServidor != null) {
+        _privateKey = doServidor;
+        await _cacheLocally(doServidor);
+        // Repara o estado pela metade: com a privada no servidor e a
+        // publica ausente, ninguem consegue cifrar para esta pessoa e ela
+        // some do chat sem erro nenhum aparecer.
+        if (await _publicKeyOf(uid) == null) {
+          await _db.from('user_keys').upsert({
+            'user_id': uid,
+            'public_key': await ChatCrypto.publicFromPrivate(doServidor),
+          }, onConflict: 'user_id');
+          _publicCache.remove(uid);
+        }
+        return;
+      }
 
       final kp = await ChatCrypto.generateKeyPair();
       // Uma chamada so para as duas metades: se a publica entrasse e a privada
@@ -175,15 +197,21 @@ class ChatKeyService {
     };
 
     // Cópia para mim: sem ela eu não leria, em outro aparelho, o que enviei.
+    //
+    // Falha ALTO se a minha pública não estiver publicada. Antes isto era um
+    // `if (myPub != null)` silencioso, e o resultado era uma mensagem que nem
+    // eu nem o destinatário conseguíamos abrir — ela saía sem a minha cópia, e
+    // quem recebia não tinha como achar a minha pública para conferir.
     if (otherUserId != uid) {
       final myPub = await _publicKeyOf(uid);
-      if (myPub != null) {
-        envelopes[uid] = await ChatCrypto.encrypt(
-          myPrivateKey: priv,
-          peerPublicKey: myPub,
-          plaintext: plaintext,
-        );
+      if (myPub == null) {
+        throw StateError('Sua chave ainda não foi publicada — reabra o app.');
       }
+      envelopes[uid] = await ChatCrypto.encrypt(
+        myPrivateKey: priv,
+        peerPublicKey: myPub,
+        plaintext: plaintext,
+      );
     }
 
     return buildEnvelope(uid, envelopes);
