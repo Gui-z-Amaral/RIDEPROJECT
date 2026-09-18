@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/club_model.dart';
 import '../models/user_model.dart';
+import '../models/club_invite.dart';
 
 /// Acesso aos motoclubes: cadastro, membros/convites e descoberta.
 /// O dono é inserido como membro (owner/active) por trigger no banco.
@@ -243,5 +244,68 @@ class SupabaseClubService {
       map[id] = (map[id] ?? 0) + 1;
     }
     return map;
+  }
+
+  // ── Convites por link (migration 038) ──────────────────────
+  // Tudo passa por funcoes no banco: a tabela club_invites nao e acessivel
+  // pela API. Sem isso, qualquer pessoa logada listaria os tokens de todos os
+  // clubes e entraria em qualquer um.
+
+  /// Cria um convite e devolve o token. So administradores.
+  static Future<String> createInvite(
+      String clubId, ClubInviteKind kind) async {
+    final token = await _db.rpc('club_invite_create', params: {
+      'p_club_id': clubId,
+      'p_kind': kind.code,
+    });
+    return token as String;
+  }
+
+  /// O que mostrar para quem recebeu o link. Funciona sem estar logado — a
+  /// pessoa precisa ver de qual clube e o convite ANTES de criar conta.
+  static Future<ClubInvitePreview> previewInvite(String token) async {
+    try {
+      final rows = await _db.rpc('club_invite_preview', params: {
+        'p_token': token,
+      });
+      final list = rows as List;
+      if (list.isEmpty) return const ClubInvitePreview();
+      return ClubInvitePreview.fromMap(
+          Map<String, dynamic>.from(list.first as Map));
+    } catch (_) {
+      return const ClubInvitePreview();
+    }
+  }
+
+  /// Aceita o convite POR LINK. Nao confundir com [acceptInvite], que e do
+  /// convite direto (a pessoa ja aparece como 'invited' no clube).
+  ///
+  /// O servidor decide: 'entrou', 'ja_membro', 'usado', 'expirado',
+  /// 'revogado', 'invalido' ou 'sem_sessao'.
+  static Future<String> acceptInviteLink(String token) async {
+    try {
+      final r = await _db.rpc('club_invite_accept', params: {
+        'p_token': token,
+      });
+      return (r as String?) ?? 'invalido';
+    } catch (_) {
+      return 'invalido';
+    }
+  }
+
+  /// Convites ativos do clube. So administradores.
+  static Future<List<ClubInvite>> listInvites(String clubId) async {
+    final rows = await _db.rpc('club_invites_list', params: {
+      'p_club_id': clubId,
+    });
+    return (rows as List)
+        .map((r) => ClubInvite.fromMap(Map<String, dynamic>.from(r as Map)))
+        .toList();
+  }
+
+  /// Derruba um convite. Vale inclusive para o permanente — sem isso ele seria
+  /// uma porta que nunca fecha.
+  static Future<void> revokeInvite(String token) async {
+    await _db.rpc('club_invite_revoke', params: {'p_token': token});
   }
 }

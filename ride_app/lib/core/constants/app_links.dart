@@ -53,5 +53,9 @@ class AppLinks {
   static String trip(String id) => '$base/v/$id';
   static String ride(String id) => '$base/r/$id';
   static String club(String id) => '$base/c/$id';
+
+  /// Convite para entrar num motoclube. O token é a credencial: quem tem o
+  /// link entra, então ele nunca deve ser exposto fora do compartilhamento.
+  static String clubInvite(String token) => '$base/ci/$token';
   static String profile(String id) => '$base/u/$id';
 }

@@ -8,6 +8,10 @@ import '../../../core/utils/storage_utils.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../viewmodels/club_viewmodel.dart';
+import '../../../core/models/club_invite.dart';
+import '../../../core/constants/app_links.dart';
+import '../../../core/utils/share_utils.dart';
+import '../../../core/services/supabase_club_service.dart';
 
 /// Configurações do motoclube (dono/gerente): banner, nome, cidade/UF,
 /// descrição e atalho para gerenciar membros.
@@ -118,6 +122,20 @@ class _ClubSettingsScreenState extends State<ClubSettingsScreen> {
     } else {
       context.showSnack(vm.saveError ?? 'Erro ao salvar.', isError: true);
     }
+  }
+
+  /// Folha de convites: gera o link e compartilha. Fica aqui e nao numa
+  /// tela propria porque sao tres botoes — tela inteira seria peso a toa.
+  Future<void> _abrirConvites(BuildContext context) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => _ConvitesSheet(clubId: widget.clubId),
+    );
   }
 
   @override
@@ -292,6 +310,12 @@ class _ClubSettingsScreenState extends State<ClubSettingsScreen> {
             subtitle: 'Promover a gerente, expulsar membros',
             onTap: () => context.push('/clubs/${widget.clubId}/members/manage'),
           ),
+          _SettingsTile(
+            icon: Icons.link,
+            title: 'Convidar por link',
+            subtitle: 'Permanente, individual ou que expira em 1 hora',
+            onTap: () => _abrirConvites(context),
+          ),
           const SizedBox(height: 32),
 
           SizedBox(
@@ -416,6 +440,145 @@ class _SettingsTile extends StatelessWidget {
               ),
             ),
             Icon(Icons.chevron_right, color: AppColors.textMuted, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Folha de geração de convites por link.
+///
+/// O token é a credencial: quem tem o link entra. Por isso o botão principal é
+/// **compartilhar** (que joga direto no WhatsApp) e não "copiar" — reduz a
+/// chance de o link ficar perdido na área de transferência.
+class _ConvitesSheet extends StatefulWidget {
+  final String clubId;
+  const _ConvitesSheet({required this.clubId});
+
+  @override
+  State<_ConvitesSheet> createState() => _ConvitesSheetState();
+}
+
+class _ConvitesSheetState extends State<_ConvitesSheet> {
+  ClubInviteKind? _gerando;
+
+  Future<void> _gerar(ClubInviteKind kind) async {
+    setState(() => _gerando = kind);
+    try {
+      final token = await SupabaseClubService.createInvite(widget.clubId, kind);
+      if (!mounted) return;
+      await ShareUtils.shareLink(
+        title: 'Convite para o meu motoclube no RideApp',
+        url: AppLinks.clubInvite(token),
+        extra: kind == ClubInviteKind.temporary
+            ? 'Este convite vale por 1 hora.'
+            : null,
+      );
+    } catch (e) {
+      if (mounted) {
+        context.showSnack('Não foi possível gerar o convite: $e',
+            isError: true);
+      }
+    } finally {
+      if (mounted) setState(() => _gerando = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(20, 16, 20,
+            16 + MediaQuery.of(context).viewInsets.bottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Convidar por link',
+                style: AppTextStyles.titleLarge
+                    .copyWith(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            Text(
+              'Quem abrir o link vê o convite e entra como membro. '
+              'Você pode cancelar um convite a qualquer momento.',
+              style:
+                  AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+            ),
+            const SizedBox(height: 18),
+            for (final k in ClubInviteKind.values) ...[
+              _OpcaoConvite(
+                kind: k,
+                carregando: _gerando == k,
+                habilitado: _gerando == null,
+                onTap: () => _gerar(k),
+              ),
+              const SizedBox(height: 10),
+            ],
+            const SizedBox(height: 6),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OpcaoConvite extends StatelessWidget {
+  final ClubInviteKind kind;
+  final bool carregando;
+  final bool habilitado;
+  final VoidCallback onTap;
+
+  const _OpcaoConvite({
+    required this.kind,
+    required this.carregando,
+    required this.habilitado,
+    required this.onTap,
+  });
+
+  IconData get _icone => switch (kind) {
+        ClubInviteKind.permanent => Icons.public,
+        ClubInviteKind.single => Icons.person_add_alt_1,
+        ClubInviteKind.temporary => Icons.timer_outlined,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: habilitado ? onTap : null,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.inputFill,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(_icone, color: AppColors.navy),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(kind.label,
+                      style: AppTextStyles.bodyMedium
+                          .copyWith(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text(kind.hint,
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.textMuted)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (carregando)
+              const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+            else
+              Icon(Icons.ios_share, size: 20, color: AppColors.navy),
           ],
         ),
       ),

@@ -49,6 +49,7 @@ import '../features/clubs/screens/manage_members_screen.dart';
 import '../features/clubs/screens/attendance_screen.dart';
 import '../features/clubs/screens/trip_schedule_screen.dart';
 import 'shell_screen.dart';
+import '../features/clubs/screens/club_invite_screen.dart';
 
 final router = GoRouter(
   initialLocation: '/splash',
@@ -120,6 +121,15 @@ final router = GoRouter(
       path: '/r/:id',
       builder: (_, state) => SharedLinkScreen(
           kind: ShareKind.ride, id: state.pathParameters['id']!),
+    ),
+    // Convite de motoclube por link. O `aceitar=1` volta do login: quem ja
+    // tocou em entrar nao precisa tocar de novo.
+    GoRoute(
+      path: '/ci/:token',
+      builder: (_, state) => ClubInviteScreen(
+        token: state.pathParameters['token']!,
+        autoAccept: state.uri.queryParameters['aceitar'] == '1',
+      ),
     ),
     GoRoute(
       path: '/c/:id',
