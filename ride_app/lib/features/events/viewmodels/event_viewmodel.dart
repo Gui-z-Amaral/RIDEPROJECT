@@ -60,17 +60,44 @@ class EventViewModel extends ChangeNotifier {
   }
 
   // ── Detalhe ──────────────────────────────────────────────────
+  /// Presença do usuário no evento aberto: 'going' | 'maybe' | 'declined'.
+  String? _selectedRsvp;
+  String? get selectedRsvp => _selectedRsvp;
+
   Future<void> loadDetail(String id) async {
     _isLoadingDetail = true;
     _selected = null;
+    _selectedRsvp = null;
     notifyListeners();
     try {
       _selected = await SupabaseEventService.getEventById(id);
     } catch (_) {
       _selected = null;
     }
+    // Presença é best-effort: visitante deslogado não tem RSVP, e uma falha
+    // aqui não pode impedir o evento de abrir.
+    try {
+      _selectedRsvp = (await SupabaseEventService.getMyRsvps([id]))[id];
+    } catch (_) {
+      _selectedRsvp = null;
+    }
     _isLoadingDetail = false;
     notifyListeners();
+  }
+
+  // ── Presença no evento aberto ────────────────────────────────
+  /// Marca presença de forma otimista e reverte se o servidor recusar —
+  /// mesmo padrão do interesse, logo acima.
+  Future<void> setRsvp(String eventId, String rsvp) async {
+    final anterior = _selectedRsvp;
+    _selectedRsvp = rsvp;
+    notifyListeners();
+    try {
+      await SupabaseEventService.setMyRsvp(eventId, rsvp);
+    } catch (_) {
+      _selectedRsvp = anterior;
+      notifyListeners();
+    }
   }
 
   // ── Criar ────────────────────────────────────────────────────
@@ -256,6 +283,7 @@ class EventViewModel extends ChangeNotifier {
     _nearbyEvents = [];
     _myEvents = [];
     _selected = null;
+    _selectedRsvp = null;
     _loadedUf = null;
     _isLoadingNearby = false;
     _isLoadingMine = false;

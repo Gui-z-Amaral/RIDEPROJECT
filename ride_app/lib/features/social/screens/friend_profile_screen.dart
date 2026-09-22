@@ -12,6 +12,11 @@ import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/framed_avatar.dart';
 import '../../../shared/widgets/profile_banner.dart';
 import '../../../shared/widgets/photo_viewer.dart';
+import '../../../core/models/club_model.dart';
+import '../../../core/models/trip_model.dart';
+import '../../../core/services/supabase_club_service.dart';
+import '../../../core/services/supabase_trip_service.dart';
+import '../../../core/utils/extensions.dart';
 
 class FriendProfileScreen extends StatefulWidget {
   final UserModel user;
@@ -26,6 +31,16 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
   bool _loadingMutual = true;
   ProfileCustomization? _customization;
 
+  // Motoclubes e viagens concluídas — o que a pessoa mostra de si.
+  // Quem filtra as viagens é a RLS: só volta o que eu posso ver.
+  List<ClubModel> _clubs = [];
+  List<TripModel> _trips = [];
+  bool _loadingPublic = true;
+
+  /// Perfil recarregado do servidor. `widget.user` pode ter vindo de uma
+  /// lista que só trazia nome, @ e foto.
+  UserModel? _full;
+
   // Perfil privado: trava o conteúdo quando não sou amigo.
   bool _privateLocked = false;
   bool _sentRequest = false;
@@ -36,16 +51,40 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
     _checkPrivacy();
     _loadMutual();
     _loadCustomization();
+    _loadPublic();
   }
 
   Future<void> _checkPrivacy() async {
     try {
+      // Rebusca o perfil em vez de confiar no que veio na navegação: a lista
+      // de busca traz só o básico, e desde a migration 042 os campos íntimos
+      // vêm de `profile_details` — que a RLS entrega, ou não, conforme o
+      // interruptor de quem é dono do perfil.
       final full = await SupabaseAuthService.getProfileById(widget.user.id);
-      if (full == null || !full.isPrivate) return;
+      if (full == null) return;
+      if (mounted) setState(() => _full = full);
+      if (!full.isPrivate) return;
       final friends = await SupabaseSocialService.getFriends();
       final isFriend = friends.any((f) => f.id == widget.user.id);
       if (mounted && !isFriend) setState(() => _privateLocked = true);
     } catch (_) {}
+  }
+
+  Future<void> _loadPublic() async {
+    try {
+      final r = await Future.wait([
+        SupabaseClubService.getClubsOf(widget.user.id),
+        SupabaseTripService.getCompletedTripsOf(widget.user.id),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _clubs = r[0] as List<ClubModel>;
+        _trips = r[1] as List<TripModel>;
+        _loadingPublic = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingPublic = false);
+    }
   }
 
   Future<void> _addFriend() async {
@@ -171,7 +210,8 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = widget.user;
+    // O do servidor quando já chegou; o da navegação enquanto carrega.
+    final user = _full ?? widget.user;
     if (_privateLocked) return _buildLocked(user);
     final bottomPad = MediaQuery.of(context).padding.bottom;
     // Perfil limpo: cores sempre no padrão, só o banner é personalizável.
@@ -439,6 +479,51 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
                     const SizedBox(height: 20),
                   ],
 
+                  // ── Motoclubes ───────────────────────────────────────
+                  if (!_loadingPublic && _clubs.isNotEmpty) ...[
+                    _PerfilSecao(
+                      titulo: 'Motoclubes',
+                      contagem: _clubs.length,
+                      filhos: _clubs
+                          .map((c) => _LinhaPerfil(
+                                icone: Icons.groups_outlined,
+                                titulo: c.name,
+                                subtitulo: [
+                                  if ((c.city ?? '').isNotEmpty) c.city!,
+                                  if ((c.stateUf ?? '').isNotEmpty) c.stateUf!,
+                                ].join(' · '),
+                                onTap: () => context.push('/clubs/${c.id}'),
+                              ))
+                          .toList(),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // ── Viagens concluídas ───────────────────────────────
+                  if (!_loadingPublic && _trips.isNotEmpty) ...[
+                    _PerfilSecao(
+                      titulo: 'Viagens concluídas',
+                      contagem: _trips.length,
+                      filhos: _trips
+                          .map((t) => _LinhaPerfil(
+                                icone: Icons.route_outlined,
+                                titulo: t.title,
+                                subtitulo: [
+                                  t.destination.address
+                                          ?.split(',')
+                                          .first
+                                          .trim() ??
+                                      t.destination.label ??
+                                      '',
+                                  t.scheduledAt?.formattedDate ?? '',
+                                ].where((e) => e.isNotEmpty).join(' · '),
+                                onTap: () => context.push('/trips/${t.id}'),
+                              ))
+                          .toList(),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
                   // ── Amigos em comum ──────────────────────────────────
                   _MutualFriendsSection(
                     loading: _loadingMutual,
@@ -688,6 +773,114 @@ class _MutualFriendsSectionState extends State<_MutualFriendsSection> {
             ),
           const SizedBox(height: AppSpacing.md),
         ],
+      ),
+    );
+  }
+}
+
+
+// ─── Seções do perfil público (motoclubes, viagens) ─────────────────────────
+
+/// Bloco com título, contagem e uma lista de linhas. Os dois usos (motoclubes
+/// e viagens) têm a mesma forma — um widget só evita duas versões do mesmo
+/// cabeçalho que vão divergir na primeira mudança de design.
+class _PerfilSecao extends StatelessWidget {
+  final String titulo;
+  final int contagem;
+  final List<Widget> filhos;
+  const _PerfilSecao({
+    required this.titulo,
+    required this.contagem,
+    required this.filhos,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(titulo,
+                  style: AppTextStyles.headlineMedium
+                      .copyWith(fontWeight: FontWeight.w800)),
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.inputFill,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                ),
+                child: Text('$contagem',
+                    style: AppTextStyles.labelSmall
+                        .copyWith(color: AppColors.textMuted)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...filhos,
+        ],
+      ),
+    );
+  }
+}
+
+/// Uma linha clicável: ícone, título e uma legenda.
+class _LinhaPerfil extends StatelessWidget {
+  final IconData icone;
+  final String titulo;
+  final String subtitulo;
+  final VoidCallback onTap;
+  const _LinhaPerfil({
+    required this.icone,
+    required this.titulo,
+    required this.subtitulo,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: AppColors.inputFill,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icone, size: 19, color: AppColors.navy),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(titulo,
+                      style: AppTextStyles.bodyMedium
+                          .copyWith(fontWeight: FontWeight.w700),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  if (subtitulo.isNotEmpty)
+                    Text(subtitulo,
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.textMuted),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, size: 18, color: AppColors.textMuted),
+          ],
+        ),
       ),
     );
   }

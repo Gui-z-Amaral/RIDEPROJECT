@@ -11,6 +11,7 @@ import '../utils/image_utils.dart';
 import 'supabase_notification_service.dart';
 import 'supabase_social_service.dart';
 import '../utils/db_time.dart';
+import '../utils/participant_rows.dart';
 
 class SupabaseTripService {
   static SupabaseClient get _db => Supabase.instance.client;
@@ -110,6 +111,50 @@ class SupabaseTripService {
     }
   }
 
+  // ── Viagens concluídas de alguém (perfil público) ──────────
+  /// Viagens **concluídas** de [userId] — criadas por ele ou com participação
+  /// confirmada.
+  ///
+  /// Quem decide o que aparece é a RLS, não esta função: a `trips_select`
+  /// (migration 034) devolve só viagem pública, do meu motoclube, ou em que eu
+  /// mesmo estou. Uma viagem privada de terceiro simplesmente não volta na
+  /// consulta — não há filtro de visibilidade escrito aqui de propósito, para
+  /// não existir em dois lugares.
+  static Future<List<TripModel>> getCompletedTripsOf(String userId) async {
+    final criadas = await _db
+        .from('trips')
+        .select('id')
+        .eq('creator_id', userId)
+        .timeout(const Duration(seconds: 15));
+    final participou = await _db
+        .from('trip_participants')
+        .select('trip_id')
+        .eq('user_id', userId)
+        .eq('status', 'confirmed')
+        .timeout(const Duration(seconds: 15));
+
+    final ids = <String>{
+      ...(criadas as List).map((r) => r['id'] as String),
+      ...(participou as List).map((r) => r['trip_id'] as String),
+    };
+    if (ids.isEmpty) return [];
+
+    final rows = await _db
+        .from('trips')
+        .select()
+        .inFilter('id', ids.toList())
+        .eq('status', 'completed')
+        .order('scheduled_at', ascending: false)
+        .timeout(const Duration(seconds: 15));
+    if ((rows as List).isEmpty) return [];
+
+    // Só o criador: a lista de participantes não é mostrada no perfil, e
+    // buscá-la seria uma consulta a mais por viagem sem ninguém ver.
+    final profilesMap = await _fetchProfilesMap(
+        rows.map((r) => r['creator_id'] as String).toSet());
+    return rows.map((row) => _rowToTrip(row, profilesMap)).toList();
+  }
+
   // ── Buscar viagem por ID ───────────────────────────────────
   static Future<TripModel?> getTripById(String id) async {
     // Sem PostgREST join — evita hang causado por RLS em joins
@@ -204,7 +249,7 @@ class SupabaseTripService {
   static Future<List<Map<String, dynamic>>> getAttendance(String tripId) async {
     final rows = await _db
         .from('trip_participants')
-        .select('user_id, rsvp, checked_in, user:profiles(*)')
+        .select('user_id, rsvp, checked_in, user:profiles(*, profile_details(*))')
         .eq('trip_id', tripId)
         .not('rsvp', 'is', null);
     return (rows as List).cast<Map<String, dynamic>>();
@@ -305,7 +350,7 @@ class SupabaseTripService {
     if (ids.isEmpty) return {};
     final profiles = await _db
         .from('profiles')
-        .select()
+        .select(UserModel.dbColumns)
         .inFilter('id', ids.toList())
         .timeout(const Duration(seconds: 15));
     return {
@@ -352,19 +397,23 @@ class SupabaseTripService {
       await replaceSchedule(tripId, schedule);
     }
 
-    // Add creator as participant; try to batch-add others.
-    // If RLS prevents inserting rows for other users, fall back to
-    // inserting just the creator so the trip save always succeeds.
-    final allParticipants = [_uid, ...participantIds.where((id) => id != _uid)];
-    try {
-      await _db.from('trip_participants').insert(
-        allParticipants.map((id) => {'trip_id': tripId, 'user_id': id}).toList(),
-      );
-    } catch (_) {
-      // Batch failed (likely RLS restriction) — ensure at least creator is added
-      await _db.from('trip_participants').insert(
-        {'trip_id': tripId, 'user_id': _uid},
-      );
+    // Duas inserções, de propósito. O criador entra por 'auth.uid() = user_id';
+    // os convidados entram pela cláusula de criador da policy (migration 040).
+    // Antes era um lote só dentro de um try/catch: a RLS rejeitava o lote
+    // inteiro por causa das linhas de terceiro, o catch engolia, e o convite
+    // simplesmente não existia — sem nenhum erro aparecer.
+    await _db
+        .from('trip_participants')
+        .insert({'trip_id': tripId, 'user_id': _uid, 'status': 'confirmed'});
+
+    final invited = ParticipantRows.invitedRows(
+      fkColumn: 'trip_id',
+      parentId: tripId,
+      creatorId: _uid,
+      participantIds: participantIds,
+    );
+    if (invited.isNotEmpty) {
+      await _db.from('trip_participants').insert(invited);
     }
 
     // Update trips_count for creator (best-effort — RPC may not exist)
@@ -372,8 +421,10 @@ class SupabaseTripService {
       await _db.rpc('update_trips_count', params: {'p_user_id': _uid});
     } catch (_) {}
 
-    // Send trip_invite notifications to non-creator participants
-    final invitedIds = participantIds.where((id) => id != _uid).toList();
+    // Send trip_invite notifications to non-creator participants.
+    // Mesma lista que virou linha no banco: quem recebe convite e quem recebe
+    // notificação não podem divergir.
+    final invitedIds = ParticipantRows.invitedIds(_uid, participantIds);
     if (invitedIds.isNotEmpty) {
       try {
         final creatorRow = await _db
@@ -539,12 +590,17 @@ class SupabaseTripService {
   }
 
   // ── Confirmar / recusar participação ──────────────────────
+  /// Upsert, não update: um `update` que não encontra linha devolve 204 sem
+  /// erro nenhum — era exatamente assim que aceitar o convite não fazia nada e
+  /// a tela ainda dizia "Você aceitou o convite!". Com upsert, quem foi
+  /// convidado antes da migration 040 (e por isso nunca teve linha) entra ao
+  /// tocar em aceitar de novo, sem precisar de conserto no banco.
   static Future<void> confirmParticipation(String tripId) async {
-    await _db
-        .from('trip_participants')
-        .update({'status': 'confirmed'})
-        .eq('trip_id', tripId)
-        .eq('user_id', _uid);
+    await _db.from('trip_participants').upsert({
+      'trip_id': tripId,
+      'user_id': _uid,
+      'status': 'confirmed',
+    }, onConflict: 'trip_id,user_id');
   }
 
   static Future<void> declineParticipation(String tripId) async {

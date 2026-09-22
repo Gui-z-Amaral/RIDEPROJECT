@@ -157,20 +157,23 @@ class SupabaseAuthService {
   // ── Desativação de conta (LGPD) ────────────────────────────
   /// Desliga a conta do usuário logado, sem apagar nada.
   ///
-  /// A lei brasileira exige guardar os dados por pelo menos 6 meses. A função
-  /// no banco (migration 034) move os dados pessoais para uma tabela que
-  /// ninguém consegue ler pela API e deixa o perfil como "Usuário inativo":
-  /// sem foto, sem bio, fora da busca por proximidade e sem push.
+  /// Os dados ficam guardados pelo prazo de retenção: o perfil vira "Usuário
+  /// inativo" (migration 034) e as fotos vão para um bucket privado
+  /// (migration 043) — antes elas continuavam no endereço público, e quem
+  /// tivesse o link seguia abrindo.
+  ///
+  /// Passa pela Edge Function `quarentena`, não direto pela RPC: mover arquivo
+  /// entre buckets exige a service_role, que não pode ficar no aparelho.
   ///
   /// Chame [logout] logo depois — a sessão continua válida até sair.
   static Future<void> deactivateAccount() async {
-    await _db.rpc('deactivate_my_account');
+    await _db.functions.invoke('quarentena', body: {'acao': 'guardar'});
   }
 
-  /// Traz a conta de volta com os dados de antes. Chamada no login quando o
-  /// perfil está marcado como desativado.
+  /// Traz a conta de volta com os dados e as fotos de antes. Chamada no login
+  /// quando o perfil está marcado como desativado.
   static Future<void> reactivateAccount() async {
-    await _db.rpc('reactivate_my_account');
+    await _db.functions.invoke('quarentena', body: {'acao': 'restaurar'});
   }
 
   // ── Logout ─────────────────────────────────────────────────
@@ -202,7 +205,9 @@ class SupabaseAuthService {
     if (u == null) return null;
     final profile = await _fetchProfile(u.id);
     final updated = [...(profile?.photos ?? []), url];
-    await _db.from('profiles').update({'photos': updated}).eq('id', u.id);
+    await _db
+        .from('profile_details')
+        .upsert({'user_id': u.id, 'photos': updated}, onConflict: 'user_id');
     return _fetchProfile(u.id);
   }
 
@@ -265,8 +270,38 @@ class SupabaseAuthService {
     }
     if (updates.isEmpty) return getCurrentUser();
 
-    await _updateWithRetry(u.id, updates);
+    // A migration 042 partiu o perfil em duas tabelas. Separar aqui, e não na
+    // tela, é o que mantém `updateProfile` com uma assinatura só.
+    final detalhes = splitDetails(updates);
+    if (updates.isNotEmpty) await _updateWithRetry(u.id, updates);
+    if (detalhes.isNotEmpty) {
+      await _db.from('profile_details').upsert(
+        {'user_id': u.id, ...detalhes},
+        onConflict: 'user_id',
+      );
+    }
     return _fetchProfile(u.id);
+  }
+
+  /// Colunas que saíram de `profiles` na migration 042.
+  static const _colunasDeDetalhe = {
+    'bio', 'city', 'moto_model', 'moto_year', 'trip_style', 'photos',
+  };
+
+  /// Remove de [updates] as chaves que agora moram em `profile_details` e as
+  /// devolve. **Altera o mapa recebido** — é o ponto: quem chama fica com o que
+  /// vai para `profiles`.
+  ///
+  /// Existe porque `_updateWithRetry` descarta em silêncio coluna que o banco
+  /// não conhece: mandar `bio` para `profiles` depois da 042 salvaria sem erro
+  /// e perderia o texto.
+  @visibleForTesting
+  static Map<String, dynamic> splitDetails(Map<String, dynamic> updates) {
+    final out = <String, dynamic>{};
+    for (final k in _colunasDeDetalhe) {
+      if (updates.containsKey(k)) out[k] = updates.remove(k);
+    }
+    return out;
   }
 
   /// Tenta fazer o update; se o Supabase retornar "coluna não encontrada"
@@ -315,14 +350,14 @@ class SupabaseAuthService {
   static Future<UserModel?> _profileAfterAuth(String id) async {
     final profile = await _fetchProfile(id);
     if (profile == null || profile.deactivatedAt == null) return profile;
-    await _db.rpc('reactivate_my_account');
+    await reactivateAccount();
     return _fetchProfile(id);
   }
 
   static Future<UserModel?> _fetchProfile(String id) async {
     final row = await _db
         .from('profiles')
-        .select()
+        .select(UserModel.dbColumns)
         .eq('id', id)
         .maybeSingle();
     if (row == null) return null;

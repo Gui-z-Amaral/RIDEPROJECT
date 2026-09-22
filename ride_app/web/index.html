@@ -67,7 +67,15 @@
     chave não vai pro repositório — mesma ideia do android/local.properties.
     O carregador injeta o script do Maps só se a chave existir.
   -->
-  <script src="env.js"></script>
+  <!--
+    O ?v= e obrigatorio aqui. A Cache Rule da Cloudflare nao inclui o
+    env.js, entao ele leva o TTL padrao de 4 horas mesmo com a origem
+    mandando no-cache. Sem versionar, trocar a chave do Maps deixa
+    aparelhos usando a chave antiga por horas — foi o que aconteceu
+    quando a chave vazada foi revogada: mapa quebrado, sem erro claro.
+    INCREMENTE este numero toda vez que o env.js mudar.
+  -->
+  <script src="env.js?v=2"></script>
   <script>
     (function () {
       var key = window.GOOGLE_MAPS_API_KEY;

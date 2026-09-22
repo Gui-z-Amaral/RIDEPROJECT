@@ -1,9 +1,11 @@
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
 import '../models/friend_request_model.dart';
 import '../models/message_model.dart';
 import '../utils/image_utils.dart';
+import '../utils/storage_utils.dart';
 import 'chat_key_service.dart';
 import '../utils/db_time.dart';
 
@@ -86,7 +88,7 @@ class SupabaseSocialService {
 
     final profiles = await _db
         .from('profiles')
-        .select()
+        .select(UserModel.dbColumns)
         .inFilter('id', friendIds.toList())
         .timeout(const Duration(seconds: 10), onTimeout: () => []);
 
@@ -107,7 +109,7 @@ class SupabaseSocialService {
 
     final profiles = await _db
         .from('profiles')
-        .select()
+        .select(UserModel.dbColumns)
         .inFilter('id', mutualIds)
         .timeout(const Duration(seconds: 10), onTimeout: () => []);
     return (profiles as List).map((p) => UserModel.fromMap(p)).toList();
@@ -169,7 +171,7 @@ class SupabaseSocialService {
     final fromIds = rows.map((r) => r['from_user_id'] as String).toList();
     final profiles = await _db
         .from('profiles')
-        .select()
+        .select(UserModel.dbColumns)
         .inFilter('id', fromIds)
         .timeout(const Duration(seconds: 10), onTimeout: () => []);
 
@@ -202,7 +204,7 @@ class SupabaseSocialService {
     final toIds = rows.map((r) => r['to_user_id'] as String).toList();
     final profiles = await _db
         .from('profiles')
-        .select()
+        .select(UserModel.dbColumns)
         .inFilter('id', toIds)
         .timeout(const Duration(seconds: 10), onTimeout: () => []);
 
@@ -288,7 +290,7 @@ class SupabaseSocialService {
     if (query.isEmpty) return [];
     final rows = await _db
         .from('profiles')
-        .select()
+        .select(UserModel.dbColumns)
         .or('name.ilike.%$query%,username.ilike.%$query%')
         .neq('id', _uid)
         .limit(20);
@@ -414,12 +416,49 @@ class SupabaseSocialService {
           jpeg,
           fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: false),
         );
+    // Formato público de propósito, mesmo com o bucket privado: é o que fica
+    // gravado em `messages.image_url`, e [chatImageUrl] tira o caminho dele.
     final url = _db.storage.from('chat-images').getPublicUrl(path);
     // Pré-popula o cache local com os bytes que já temos, pra quem ENVIA não
     // precisar baixar de novo. Quem RECEBE cacheia ao visualizar (CachedNetworkImage).
     await ImageUtils.cacheBytes(url, jpeg);
     return url;
   }
+
+  // ── Imagem do chat: URL assinada (migration 043) ────────────
+  // O bucket `chat-images` deixou de ser público. A URL gravada na mensagem
+  // continua no formato público (nada a migrar no banco), e na hora de exibir
+  // ela vira uma URL assinada — que o Storage só emite para quem participa da
+  // conversa, pela policy `chat_images_storage_select`.
+
+  static const _validadeAssinatura = Duration(hours: 1);
+
+  /// Caminho → (URL assinada, quando expira). A lista de mensagens redesenha
+  /// muito; sem isto, cada rolagem pediria uma assinatura nova.
+  static final Map<String, ({String url, DateTime expira})> _assinadas = {};
+
+  /// URL que dá para exibir para a imagem [stored] de uma mensagem.
+  ///
+  /// Se [stored] não for do bucket do chat (mensagem antiga, outro endereço),
+  /// volta como veio.
+  static Future<String> chatImageUrl(String stored) async {
+    final path = StorageUtils.pathFromPublicUrl(stored, 'chat-images');
+    if (path == null) return stored;
+    final agora = DateTime.now();
+    final c = _assinadas[path];
+    if (c != null && signatureStillValid(c.expira, agora)) return c.url;
+    final url = await _db.storage
+        .from('chat-images')
+        .createSignedUrl(path, _validadeAssinatura.inSeconds);
+    _assinadas[path] = (url: url, expira: agora.add(_validadeAssinatura));
+    return url;
+  }
+
+  /// Assinatura ainda serve se sobra folga até vencer: uma URL entregue a um
+  /// segundo do fim quebraria a imagem no meio do download.
+  @visibleForTesting
+  static bool signatureStillValid(DateTime expira, DateTime agora) =>
+      agora.isBefore(expira.subtract(const Duration(minutes: 5)));
 
   static MessageModel _rowToMessage(Map<String, dynamic> r, String chatId,
       {String? contentOverride}) {

@@ -235,7 +235,13 @@ class AuthViewModel extends ChangeNotifier {
   String _friendlyError(String msg) {
     if (msg.contains('Invalid login credentials')) return 'Email ou senha incorretos';
     if (msg.contains('Email not confirmed')) return 'Confirme seu email antes de entrar';
-    if (msg.contains('User already registered')) return 'Este email já está cadastrado';
+    // Diz o que fazer, não só o que deu errado: o GoTrue vincula identidades
+    // pelo email, então quem já entrou com o Google tem conta SEM senha. Só
+    // "já está cadastrado" mandava a pessoa tentar uma senha que não existe.
+    if (msg.contains('User already registered')) {
+      return 'Este email já está cadastrado. Entre pelo login — se você criou '
+          'a conta com o Google, use o botão do Google.';
+    }
     if (msg.contains('Confirme seu email para entrar')) {
       return 'Confirme seu email para entrar. Cheque sua caixa de entrada.';
     }

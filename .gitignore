@@ -14,3 +14,7 @@ Thumbs.db
 # Material de pitch: contem estrategia e numeros de negocio, e este
 # repositorio e PUBLICO.
 pitch/
+
+# Auditoria de LGPD: mapeia dados pessoais, falhas abertas e onde elas ficam
+# no codigo. E um mapa de ataque enquanto nao estiver corrigido.
+privacidade/

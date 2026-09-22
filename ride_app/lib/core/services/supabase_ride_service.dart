@@ -4,6 +4,7 @@ import '../models/location_model.dart';
 import '../models/user_model.dart';
 import '../models/session_invite.dart';
 import '../utils/db_time.dart';
+import '../utils/participant_rows.dart';
 
 class SupabaseRideService {
   static SupabaseClient get _db => Supabase.instance.client;
@@ -35,8 +36,8 @@ class SupabaseRideService {
         .from('rides')
         .select('''
           *,
-          creator:profiles!rides_creator_id_fkey(*),
-          participants:ride_participants(user:profiles(*), left_at, status, user_id)
+          creator:profiles!rides_creator_id_fkey(*, profile_details(*)),
+          participants:ride_participants(user:profiles(*, profile_details(*)), left_at, status, user_id)
         ''')
         .inFilter('id', myRideIds.toList())
         .order('created_at', ascending: false);
@@ -50,8 +51,8 @@ class SupabaseRideService {
         .from('rides')
         .select('''
           *,
-          creator:profiles!rides_creator_id_fkey(*),
-          participants:ride_participants(user:profiles(*), left_at, status, user_id)
+          creator:profiles!rides_creator_id_fkey(*, profile_details(*)),
+          participants:ride_participants(user:profiles(*, profile_details(*)), left_at, status, user_id)
         ''')
         .eq('id', id)
         .maybeSingle();
@@ -113,17 +114,20 @@ class SupabaseRideService {
 
     final rideId = rideRow['id'] as String;
 
-    // Add creator + invited participants.
-    // If batch insert fails (RLS restriction), fall back to creator-only.
-    final allParticipants = [_uid, ...participantIds.where((id) => id != _uid)];
-    try {
-      await _db.from('ride_participants').insert(
-        allParticipants.map((id) => {'ride_id': rideId, 'user_id': id}).toList(),
-      );
-    } catch (_) {
-      await _db.from('ride_participants').insert(
-        {'ride_id': rideId, 'user_id': _uid},
-      );
+    // Duas inserções — mesmo motivo da viagem (migration 040): a RLS rejeitava
+    // o lote inteiro por causa das linhas de terceiro, e o catch escondia.
+    await _db
+        .from('ride_participants')
+        .insert({'ride_id': rideId, 'user_id': _uid, 'status': 'confirmed'});
+
+    final invited = ParticipantRows.invitedRows(
+      fkColumn: 'ride_id',
+      parentId: rideId,
+      creatorId: _uid,
+      participantIds: participantIds,
+    );
+    if (invited.isNotEmpty) {
+      await _db.from('ride_participants').insert(invited);
     }
 
     // Atualiza rides_count do criador (best-effort — RPC pode não existir)
@@ -229,12 +233,16 @@ class SupabaseRideService {
   }
 
   // ── Confirmar / recusar participação ──────────────────────
+  /// Upsert, não update: um `update` que não encontra linha devolve 204 sem
+  /// erro, e era assim que aceitar um convite não fazia nada e ainda mostrava
+  /// "Você aceitou!". Com upsert, quem tem convite antigo sem linha (todo
+  /// convite criado antes da migration 040) entra ao tocar em aceitar de novo.
   static Future<void> confirmParticipation(String rideId) async {
-    await _db
-        .from('ride_participants')
-        .update({'status': 'confirmed'})
-        .eq('ride_id', rideId)
-        .eq('user_id', _uid);
+    await _db.from('ride_participants').upsert({
+      'ride_id': rideId,
+      'user_id': _uid,
+      'status': 'confirmed',
+    }, onConflict: 'ride_id,user_id');
   }
 
   static Future<void> declineParticipation(String rideId) async {

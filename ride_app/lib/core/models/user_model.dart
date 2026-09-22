@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import '../utils/db_time.dart';
 
 class UserModel {
@@ -169,7 +170,32 @@ class UserModel {
         'is_private': isPrivate,
       };
 
-  factory UserModel.fromMap(Map<String, dynamic> map) {
+  /// Colunas a pedir ao PostgREST quando se quer o perfil COMPLETO.
+  ///
+  /// Desde a migration 042 os campos íntimos (bio, cidade, moto, estilo,
+  /// fotos) moram em `profile_details`, com RLS própria. Um perfil privado de
+  /// quem não é seu amigo volta com o embed vazio — e é isso que faz o
+  /// interruptor "Perfil privado" existir no servidor, não só na tela.
+  static const dbColumns = '*, profile_details(*)';
+
+  /// Traz os campos de `profile_details` para a raiz do mapa.
+  ///
+  /// O PostgREST devolve o embed como objeto (relação um-para-um), mas versões
+  /// diferentes já devolveram lista — os dois casos são tratados. Sem detalhe
+  /// (perfil privado de não-amigo), o mapa volta como veio e os campos ficam
+  /// nulos, que é exatamente o comportamento desejado.
+  @visibleForTesting
+  static Map<String, dynamic> flattenRow(Map<String, dynamic> map) {
+    final raw = map['profile_details'];
+    final det = raw is List
+        ? (raw.isEmpty ? null : raw.first as Map<String, dynamic>?)
+        : raw as Map<String, dynamic>?;
+    if (det == null) return map;
+    return {...map, ...det}..remove('profile_details');
+  }
+
+  factory UserModel.fromMap(Map<String, dynamic> raw) {
+    final map = flattenRow(raw);
     final rawCreatedAt = map['created_at'];
     return UserModel(
       id: map['id'] as String? ?? '',

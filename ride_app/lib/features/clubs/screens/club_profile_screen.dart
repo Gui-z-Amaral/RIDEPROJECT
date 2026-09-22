@@ -9,6 +9,8 @@ import '../../../core/utils/extensions.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../viewmodels/club_viewmodel.dart';
+import '../../../shared/widgets/rsvp_bar.dart';
+import '../../../core/models/trip_model.dart';
 
 /// Perfil do motoclube com abas internas: Sobre · Membros · Eventos · Viagens.
 class ClubProfileScreen extends StatefulWidget {
@@ -613,10 +615,12 @@ class _ActivitiesTabState extends State<_ActivitiesTab> {
     // Manter o cadeado aqui deixaria a aba trancada para sempre, já que o
     // interruptor do clube saiu da interface.
 
-    // Une eventos e viagens numa lista só, ordenada por data (próximos primeiro).
+    // Une eventos e viagens numa lista só, ordenada por data (próximos
+    // primeiro). Concluídas saem daqui e vão para o histórico, no fim.
     final items = <_Activity>[
       ...vm.clubEvents.map((e) => _Activity(
             date: e.startsAt,
+            done: e.isCompleted,
             card: _MuralCard(
               icon: Icons.event,
               title: e.title,
@@ -635,6 +639,12 @@ class _ActivitiesTabState extends State<_ActivitiesTab> {
                   canCheckIn: club.isAdmin),
               showAttendance: club.isActiveMember,
               showRsvp: club.isActiveMember,
+              isCompleted: e.isCompleted,
+              // Só gerente e dono concluem. A RLS garante o mesmo no banco —
+              // isto aqui é só para não oferecer um botão que vai recusar.
+              onToggleCompleted: club.isAdmin
+                  ? () => _concluir(context, e.id, e.title, e.isCompleted)
+                  : null,
             ),
           )),
       ...vm.clubTrips.map((t) {
@@ -643,6 +653,9 @@ class _ActivitiesTabState extends State<_ActivitiesTab> {
             '';
         return _Activity(
           date: t.scheduledAt,
+          // Viagem já nasce com status desde a 001 — reaproveitado aqui em vez
+          // de inventar uma segunda forma de dizer a mesma coisa.
+          done: t.status == TripStatus.completed,
           card: _MuralCard(
             icon: Icons.route,
             title: t.title,
@@ -660,17 +673,23 @@ class _ActivitiesTabState extends State<_ActivitiesTab> {
                 isTrip: true, id: t.id, title: t.title, canCheckIn: club.isAdmin),
             showAttendance: club.isActiveMember,
             showRsvp: club.isActiveMember,
+            isCompleted: t.status == TripStatus.completed,
           ),
         );
       }),
     ];
     // Ordena por data; itens sem data vão para o fim.
-    items.sort((a, b) {
+    int porData(_Activity a, _Activity b) {
       if (a.date == null && b.date == null) return 0;
       if (a.date == null) return 1;
       if (b.date == null) return -1;
       return a.date!.compareTo(b.date!);
-    });
+    }
+
+    final ativas = items.where((a) => !a.done).toList()..sort(porData);
+    // Histórico ao contrário: a última que aconteceu vem primeiro.
+    final concluidas = items.where((a) => a.done).toList()
+      ..sort((a, b) => porData(b, a));
 
     final loading = vm.isLoadingEvents || vm.isLoadingTrips;
     return _MuralScaffold(
@@ -684,7 +703,28 @@ class _ActivitiesTabState extends State<_ActivitiesTab> {
       isEmpty: items.isEmpty,
       emptyLabel: 'Nenhuma atividade do clube ainda',
       onRefresh: _reload,
-      children: items.map((a) => a.card).toList(),
+      children: [
+        ...ativas.map((a) => a.card),
+        if (concluidas.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(2, 10, 2, 12),
+            child: Row(
+              children: [
+                Text('Concluídas',
+                    style: AppTextStyles.labelMedium
+                        .copyWith(color: AppColors.textMuted)),
+                const SizedBox(width: 8),
+                Text('${concluidas.length}',
+                    style: AppTextStyles.labelSmall
+                        .copyWith(color: AppColors.textMuted)),
+                const SizedBox(width: 10),
+                Expanded(child: Divider(color: AppColors.divider, height: 1)),
+              ],
+            ),
+          ),
+          ...concluidas.map((a) => a.card),
+        ],
+      ],
     );
   }
 }
@@ -692,7 +732,26 @@ class _ActivitiesTabState extends State<_ActivitiesTab> {
 class _Activity {
   final DateTime? date;
   final Widget card;
-  const _Activity({required this.date, required this.card});
+
+  /// Já aconteceu: evento com `completed_at` (migration 041) ou viagem com
+  /// `status = completed`. Separa o histórico do que ainda vem.
+  final bool done;
+  const _Activity({required this.date, required this.card, this.done = false});
+}
+
+/// Conclui ou reabre um evento do clube, avisando se o servidor recusar.
+Future<void> _concluir(
+    BuildContext context, String eventId, String titulo, bool concluido) async {
+  final vm = context.read<ClubViewModel>();
+  final ok = await vm.setEventCompleted(eventId, !concluido);
+  if (!context.mounted) return;
+  if (ok) {
+    context.showSnack(concluido
+        ? '"$titulo" voltou para as ativas.'
+        : '"$titulo" foi para o histórico.');
+  } else {
+    context.showSnack('Não foi possível alterar o evento.', isError: true);
+  }
 }
 
 /// Escolhe o tipo de atividade (evento ou viagem) antes de criar.
@@ -904,6 +963,13 @@ class _MuralCard extends StatelessWidget {
   final bool showAttendance;
   final bool showRsvp;
 
+  /// Atividade encerrada — vai para a seção de histórico e fica atenuada.
+  final bool isCompleted;
+
+  /// Concluir/reabrir. `null` esconde a ação: só gerente e dono a têm, e
+  /// viagem não tem (ela já se conclui pelo próprio fluxo de rolê).
+  final Future<void> Function()? onToggleCompleted;
+
   const _MuralCard({
     required this.icon,
     required this.title,
@@ -915,11 +981,17 @@ class _MuralCard extends StatelessWidget {
     required this.showAttendance,
     this.showRsvp = true,
     this.onRoteiro,
+    this.isCompleted = false,
+    this.onToggleCompleted,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    // Concluída fica atenuada: continua legível e clicável, mas não disputa
+    // atenção com o que ainda vai acontecer.
+    return Opacity(
+      opacity: isCompleted ? 0.65 : 1,
+      child: Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: AppColors.card,
@@ -967,32 +1039,21 @@ class _MuralCard extends StatelessWidget {
               ),
             ),
           ),
-          if (showRsvp || showAttendance || onRoteiro != null) ...[
+          if (showRsvp || showAttendance || onRoteiro != null ||
+              onToggleCompleted != null) ...[
           Divider(height: 1, color: AppColors.divider),
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
             child: Row(
               children: [
-                if (showRsvp) ...[
-                  _RsvpChip(
-                      label: 'Vou',
-                      value: 'going',
-                      selected: myRsvp == 'going',
-                      color: AppColors.success,
-                      onTap: () => onRsvp('going')),
-                  _RsvpChip(
-                      label: 'Talvez',
-                      value: 'maybe',
-                      selected: myRsvp == 'maybe',
-                      color: AppColors.warning,
-                      onTap: () => onRsvp('maybe')),
-                  _RsvpChip(
-                      label: 'Não',
-                      value: 'declined',
-                      selected: myRsvp == 'declined',
-                      color: AppColors.error,
-                      onTap: () => onRsvp('declined')),
-                ],
+                // Presença some depois de concluída: responder "vou" a algo
+                // que já aconteceu não quer dizer nada.
+                if (showRsvp && !isCompleted)
+                  RsvpBar(myRsvp: myRsvp, onRsvp: onRsvp),
+                if (isCompleted)
+                  Text('Concluída',
+                      style: AppTextStyles.labelSmall
+                          .copyWith(color: AppColors.textMuted)),
                 const Spacer(),
                 if (onRoteiro != null)
                   IconButton(
@@ -1008,55 +1069,28 @@ class _MuralCard extends StatelessWidget {
                     tooltip: 'Lista de presença',
                     onPressed: onAttendance,
                   ),
+                if (onToggleCompleted != null)
+                  IconButton(
+                    icon: Icon(
+                        isCompleted
+                            ? Icons.replay_outlined
+                            : Icons.task_alt_outlined,
+                        color: AppColors.textMuted,
+                        size: 20),
+                    tooltip: isCompleted ? 'Reabrir' : 'Marcar como concluída',
+                    onPressed: () => onToggleCompleted!(),
+                  ),
               ],
             ),
           ),
           ],
         ],
       ),
-    );
-  }
-}
-
-class _RsvpChip extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool selected;
-  final Color color;
-  final VoidCallback onTap;
-  const _RsvpChip({
-    required this.label,
-    required this.value,
-    required this.selected,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: selected ? color.withOpacity(0.15) : Colors.transparent,
-            border: Border.all(
-                color: selected ? color : AppColors.divider,
-                width: selected ? 1.5 : 1),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(label,
-              style: AppTextStyles.labelSmall.copyWith(
-                color: selected ? color : AppColors.textMuted,
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-              )),
-        ),
       ),
     );
   }
 }
+
 
 // ─── Menu (admin/dono) ───────────────────────────────────────────────────────
 

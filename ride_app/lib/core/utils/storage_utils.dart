@@ -44,7 +44,10 @@ class StorageUtils {
   /// Supabase para o [bucket] informado. Retorna `null` se a URL não pertencer
   /// a esse bucket (ex.: veio de outro lugar ou está vazia). Ignora a query
   /// (`?t=...`) usada como cache-buster.
-  @visibleForTesting
+  ///
+  /// Também é o que lê a imagem do chat: `messages.image_url` guarda a URL no
+  /// formato público, e desde a migration 043 o bucket é privado — o caminho
+  /// sai daqui para pedir a URL assinada.
   static String? pathFromPublicUrl(String url, String bucket) {
     final marker = '/object/public/$bucket/';
     final i = url.indexOf(marker);

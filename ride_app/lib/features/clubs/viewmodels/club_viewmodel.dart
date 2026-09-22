@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import '../../../core/models/club_model.dart';
 import '../../../core/models/event_model.dart';
 import '../../../core/models/trip_model.dart';
@@ -99,7 +100,8 @@ class ClubViewModel extends ChangeNotifier {
       _members.where((m) => m.isAdmin).toList();
 
   // ── Editar clube (configurações) ─────────────────────────────
-  Future<bool> updateClub({
+  Future<bool> updateClub(
+    String clubId, {
     String? name,
     String? description,
     String? city,
@@ -108,14 +110,12 @@ class ClubViewModel extends ChangeNotifier {
     String? avatarUrl,
     bool? eventsPublic,
   }) async {
-    final id = _selected?.id;
-    if (id == null) return false;
     _isSaving = true;
     _saveError = null;
     notifyListeners();
     try {
-      final updated = await SupabaseClubService.updateClub(
-        id,
+      await SupabaseClubService.updateClub(
+        clubId,
         name: name,
         description: description,
         city: city,
@@ -124,20 +124,49 @@ class ClubViewModel extends ChangeNotifier {
         avatarUrl: avatarUrl,
         eventsPublic: eventsPublic,
       );
-      if (updated != null) {
-        _selected = updated;
-        _myClubs = _myClubs.map((c) => c.id == id ? updated : c).toList();
-      }
-      _isSaving = false;
-      notifyListeners();
-      return updated != null;
     } catch (e) {
       debugPrint('❌ ClubViewModel.updateClub: $e');
-      _saveError = 'Não foi possível salvar. Tente novamente.';
+      _saveError = mensagemDeErro(e);
       _isSaving = false;
       notifyListeners();
       return false;
     }
+
+    // Daqui pra baixo o salvamento JÁ aconteceu no servidor. Reler é só para
+    // a tela refletir o novo estado — se falhar (rede caindo, timeout), não é
+    // erro de salvar, e dizer que foi seria mentira. Era esse o motivo de
+    // aparecer "Não foi possível salvar" logo depois de salvar de verdade.
+    try {
+      final updated = await SupabaseClubService.getClubById(clubId);
+      if (updated != null) {
+        _selected = updated;
+        _myClubs = _myClubs.map((c) => c.id == clubId ? updated : c).toList();
+      }
+    } catch (e) {
+      debugPrint('⚠️ ClubViewModel.updateClub (releitura): $e');
+    }
+
+    _isSaving = false;
+    notifyListeners();
+    return true;
+  }
+
+  /// Mensagem amigável, com o código do Postgres junto.
+  ///
+  /// O código vai para a tela de propósito: sem ele, toda falha vira o mesmo
+  /// "tente novamente" e não há como saber se foi permissão (42501), conflito
+  /// ou rede. A mensagem crua do banco não vai — ela descreve tabela e coluna.
+  @visibleForTesting
+  static String mensagemDeErro(Object e) {
+    if (e is PostgrestException) {
+      final code = e.code;
+      if (code == '42501') {
+        return 'Você não tem permissão para alterar este motoclube.';
+      }
+      return 'Não foi possível salvar.'
+          '${code == null ? '' : ' (código $code)'}';
+    }
+    return 'Não foi possível salvar. Verifique sua conexão e tente de novo.';
   }
 
   // ── Gerenciar membros ────────────────────────────────────────
@@ -196,6 +225,35 @@ class ClubViewModel extends ChangeNotifier {
     }
     _isLoadingTrips = false;
     notifyListeners();
+  }
+
+  /// Conclui ou reabre um evento do clube (migration 041).
+  ///
+  /// Otimista como o RSVP: troca na lista e reverte se o servidor recusar —
+  /// quem recusa é a RLS, quando quem tocou não é gerente nem criador.
+  Future<bool> setEventCompleted(String eventId, bool concluido) async {
+    final antes = _clubEvents;
+    _clubEvents = _clubEvents
+        .map((e) => e.id == eventId
+            ? e.copyWith(completedAt: concluido ? DateTime.now() : null)
+            : e)
+        .toList();
+    notifyListeners();
+    try {
+      final quando =
+          await SupabaseEventService.setCompleted(eventId, concluido);
+      // Regrava com a data que o servidor devolveu, em vez do relógio local.
+      _clubEvents = _clubEvents
+          .map((e) => e.id == eventId ? e.copyWith(completedAt: quando) : e)
+          .toList();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('❌ ClubViewModel.setEventCompleted: $e');
+      _clubEvents = antes;
+      notifyListeners();
+      return false;
+    }
   }
 
   Future<void> setEventRsvp(String eventId, String rsvp) async {

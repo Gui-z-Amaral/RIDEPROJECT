@@ -86,6 +86,14 @@ class EventModel {
   final bool isPublic;
   final DateTime startsAt;
   final DateTime? endsAt;
+
+  /// Quando o evento foi dado por encerrado (migration 041). `null` = em
+  /// aberto. Quem marca é o criador ou o gerente do motoclube; serve para o
+  /// mural separar o histórico do que ainda vai acontecer.
+  final DateTime? completedAt;
+
+  /// Atalho de leitura — evita `completedAt != null` espalhado pelas telas.
+  bool get isCompleted => completedAt != null;
   final int interestsCount;
   final List<EventScheduleItem> schedule;
   final List<EventSponsor> sponsors;
@@ -112,6 +120,7 @@ class EventModel {
     this.isPublic = true,
     required this.startsAt,
     this.endsAt,
+    this.completedAt,
     this.interestsCount = 0,
     this.schedule = const [],
     this.sponsors = const [],
@@ -129,6 +138,10 @@ class EventModel {
     return 'https://www.google.com/maps/search/?api=1&query=$q';
   }
 
+  /// [completedAt] usa `_naoMexer` como sentinela porque `null` é um valor
+  /// legítimo aqui: reabrir um evento é justamente gravar null.
+  static const _naoMexer = Object();
+
   EventModel copyWith({
     int? interestsCount,
     bool? isInterested,
@@ -136,6 +149,7 @@ class EventModel {
     List<EventSponsor>? sponsors,
     List<UserModel>? participants,
     UserModel? creator,
+    Object? completedAt = _naoMexer,
   }) {
     return EventModel(
       id: id,
@@ -150,8 +164,16 @@ class EventModel {
       locationLabel: locationLabel,
       stateUf: stateUf,
       city: city,
+      // clubId e isPublic ficavam de fora: todo copyWith (marcar interesse,
+      // por exemplo) transformava evento de motoclube em evento solto e
+      // privado em público, só na memória do app.
+      clubId: clubId,
+      isPublic: isPublic,
       startsAt: startsAt,
       endsAt: endsAt,
+      completedAt: identical(completedAt, _naoMexer)
+          ? this.completedAt
+          : completedAt as DateTime?,
       interestsCount: interestsCount ?? this.interestsCount,
       schedule: schedule ?? this.schedule,
       sponsors: sponsors ?? this.sponsors,
@@ -207,6 +229,7 @@ class EventModel {
       endsAt: map['ends_at'] != null
           ? DbTime.tryParse(map['ends_at'])
           : null,
+      completedAt: DbTime.tryParse(map['completed_at']),
       interestsCount: (map['interests_count'] as num?)?.toInt() ?? 0,
       schedule: items,
       sponsors: sponsorList,

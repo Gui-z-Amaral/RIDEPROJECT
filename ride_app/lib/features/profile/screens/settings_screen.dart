@@ -101,7 +101,11 @@ class SettingsScreen extends StatelessWidget {
       if (context.mounted) context.go('/login');
     } catch (e) {
       if (context.mounted) {
-        context.showSnack('Não foi possível excluir agora: $e', isError: true);
+        // A falha pode ter acontecido no meio da mudança das fotos; a função
+        // é idempotente, então tentar de novo termina o que faltou.
+        debugPrint('❌ deactivateAccount: $e');
+        context.showSnack('Não foi possível excluir agora. Tente de novo.',
+            isError: true);
       }
     }
   }

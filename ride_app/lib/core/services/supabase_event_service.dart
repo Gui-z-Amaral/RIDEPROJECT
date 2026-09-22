@@ -13,10 +13,10 @@ class SupabaseEventService {
   // participantes (com perfil).
   static const _select = '''
         *,
-        creator:profiles!events_creator_id_fkey(*),
+        creator:profiles!events_creator_id_fkey(*, profile_details(*)),
         schedule:event_schedule_items(*),
         sponsors:event_sponsors(*),
-        participants:event_participants(user:profiles(*))
+        participants:event_participants(user:profiles(*, profile_details(*)))
       ''';
 
   // ── Criar evento ───────────────────────────────────────────
@@ -247,6 +247,22 @@ class SupabaseEventService {
     return _attachInterest((rows as List).cast<Map<String, dynamic>>());
   }
 
+  // ── Concluir / reabrir (migration 041) ─────────────────────
+  /// Marca o evento como concluído ([concluido] true) ou o reabre.
+  ///
+  /// Quem pode é decidido pela RLS (`events_update`): criador do evento ou
+  /// gerente do motoclube. A tela só esconde o botão — não é ela que protege.
+  /// Devolve a data gravada (null ao reabrir), para a UI não ter que adivinhar
+  /// o relógio do servidor.
+  static Future<DateTime?> setCompleted(String eventId, bool concluido) async {
+    final quando = concluido ? DateTime.now().toUtc() : null;
+    await _db
+        .from('events')
+        .update({'completed_at': quando == null ? null : DbTime.toDb(quando)})
+        .eq('id', eventId);
+    return quando;
+  }
+
   // ── Presença (RSVP + check-in) ─────────────────────────────
   /// Define a presença do usuário logado ('going'|'maybe'|'declined').
   static Future<void> setMyRsvp(String eventId, String rsvp) async {
@@ -277,7 +293,7 @@ class SupabaseEventService {
   static Future<List<Map<String, dynamic>>> getAttendance(String eventId) async {
     final rows = await _db
         .from('event_participants')
-        .select('user_id, rsvp, checked_in, user:profiles(*)')
+        .select('user_id, rsvp, checked_in, user:profiles(*, profile_details(*))')
         .eq('event_id', eventId)
         .not('rsvp', 'is', null);
     return (rows as List).cast<Map<String, dynamic>>();
@@ -352,7 +368,7 @@ class SupabaseEventService {
   static Future<List<UserModel>> getInterestedUsers(String eventId) async {
     final rows = await _db
         .from('event_interests')
-        .select('user:profiles(*)')
+        .select('user:profiles(*, profile_details(*))')
         .eq('event_id', eventId);
     return (rows as List)
         .map((r) => r['user'] as Map<String, dynamic>?)
@@ -392,7 +408,7 @@ class SupabaseEventService {
     if (q.isEmpty) return [];
     final rows = await _db
         .from('profiles')
-        .select()
+        .select(UserModel.dbColumns)
         .or('name.ilike.%$q%,username.ilike.%$q%')
         .neq('id', _uid)
         .limit(15);

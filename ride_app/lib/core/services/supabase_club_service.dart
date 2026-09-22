@@ -32,11 +32,18 @@ class SupabaseClubService {
   }
 
   // ── Meus clubes (membro ativo) ─────────────────────────────
-  static Future<List<ClubModel>> getMyClubs() async {
+  static Future<List<ClubModel>> getMyClubs() => getClubsOf(_uid);
+
+  /// Motoclubes de [userId] — usado no perfil de outra pessoa.
+  ///
+  /// Mesmo caminho do [getMyClubs]: `club_members` já é legível por qualquer
+  /// usuário (policy `club_members_select`), então listar o clube de alguém
+  /// não abre nada que já não estivesse aberto.
+  static Future<List<ClubModel>> getClubsOf(String userId) async {
     final memberRows = await _db
         .from('club_members')
         .select('club_id, role')
-        .eq('user_id', _uid)
+        .eq('user_id', userId)
         .eq('status', 'active');
     final list = (memberRows as List).cast<Map<String, dynamic>>();
     if (list.isEmpty) return [];
@@ -121,7 +128,7 @@ class SupabaseClubService {
   static Future<List<ClubMemberModel>> getMembers(String clubId) async {
     final rows = await _db
         .from('club_members')
-        .select('club_id, user_id, role, status, joined_at, user:profiles!user_id(*)')
+        .select('club_id, user_id, role, status, joined_at, user:profiles!user_id(*, profile_details(*))')
         .eq('club_id', clubId)
         .eq('status', 'active');
     return (rows as List)
@@ -189,7 +196,11 @@ class SupabaseClubService {
   }
 
   // ── Editar / apagar ────────────────────────────────────────
-  static Future<ClubModel?> updateClub(
+  /// Salva as alterações. NÃO relê o clube de propósito: juntar as duas coisas
+  /// fazia uma falha de leitura virar "não foi possível salvar" numa tela em
+  /// que o dado já tinha sido gravado. Quem precisa do modelo novo chama
+  /// [getClubById] em seguida.
+  static Future<void> updateClub(
     String id, {
     String? name,
     String? description,
@@ -207,10 +218,8 @@ class SupabaseClubService {
     if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
     if (bannerUrl != null) updates['banner_url'] = bannerUrl;
     if (eventsPublic != null) updates['events_public'] = eventsPublic;
-    if (updates.isNotEmpty) {
-      await _db.from('clubs').update(updates).eq('id', id);
-    }
-    return getClubById(id);
+    if (updates.isEmpty) return;
+    await _db.from('clubs').update(updates).eq('id', id);
   }
 
   static Future<void> deleteClub(String id) async {
@@ -223,7 +232,7 @@ class SupabaseClubService {
     if (q.isEmpty) return [];
     final rows = await _db
         .from('profiles')
-        .select()
+        .select(UserModel.dbColumns)
         .or('name.ilike.%$q%,username.ilike.%$q%')
         .neq('id', _uid)
         .limit(15);

@@ -107,7 +107,10 @@ class _ClubSettingsScreenState extends State<ClubSettingsScreen> {
 
   Future<void> _save() async {
     final vm = context.read<ClubViewModel>();
+    // O id vem da tela, não do `selected` do ViewModel: eram duas fontes de
+    // verdade para a mesma coisa.
     final ok = await vm.updateClub(
+      widget.clubId,
       name: _nameCtrl.text.trim().isEmpty ? null : _nameCtrl.text.trim(),
       description: _descCtrl.text.trim(),
       city: _cityCtrl.text.trim(),

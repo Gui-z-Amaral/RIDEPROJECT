@@ -12,6 +12,7 @@ import '../../../shared/widgets/app_avatar.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../viewmodels/event_viewmodel.dart';
+import '../../../shared/widgets/rsvp_bar.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final String eventId;
@@ -349,7 +350,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           ? null
           : _InterestBar(
               event: e,
+              myRsvp: vm.selectedRsvp,
               onTap: () => context.read<EventViewModel>().toggleInterest(e.id),
+              onRsvp: (r) => context.read<EventViewModel>().setRsvp(e.id, r),
             ),
     );
   }
@@ -383,7 +386,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 class _InterestBar extends StatelessWidget {
   final EventModel event;
   final VoidCallback onTap;
-  const _InterestBar({required this.event, required this.onTap});
+
+  /// Presença atual (null = sem resposta) e o que fazer ao tocar numa opção.
+  /// Vêm de fora porque quem guarda o estado é o ViewModel.
+  final String? myRsvp;
+  final ValueChanged<String> onRsvp;
+
+  const _InterestBar({
+    required this.event,
+    required this.onTap,
+    required this.myRsvp,
+    required this.onRsvp,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -400,25 +414,53 @@ class _InterestBar extends StatelessWidget {
         color: AppColors.background,
         border: Border(top: BorderSide(color: AppColors.divider)),
       ),
-      child: SizedBox(
-        height: 52,
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          onPressed: onTap,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: interested ? AppColors.teal : AppColors.navy,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8)),
-            elevation: 0,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Presença acima do interesse: são coisas diferentes — interesse é
+          // público e conta na vitrine, presença é a lista de quem vai.
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              children: [
+                Text('Você vai?',
+                    style: AppTextStyles.labelMedium
+                        .copyWith(color: AppColors.textMuted)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: RsvpBar(
+                      myRsvp: myRsvp,
+                      onRsvp: onRsvp,
+                      declinedLabel: 'Não vou',
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          icon: Icon(
-              interested ? Icons.check_circle : Icons.star_border, size: 20),
-          label: Text(
-            interested ? 'TENHO INTERESSE ✓' : 'TENHO INTERESSE',
-            style: AppTextStyles.labelLarge,
+          SizedBox(
+            height: 52,
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onTap,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: interested ? AppColors.teal : AppColors.navy,
+                foregroundColor: Colors.white,
+                shape:
+                    RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                elevation: 0,
+              ),
+              icon: Icon(
+                  interested ? Icons.check_circle : Icons.star_border, size: 20),
+              label: Text(
+                interested ? 'TENHO INTERESSE ✓' : 'TENHO INTERESSE',
+                style: AppTextStyles.labelLarge,
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

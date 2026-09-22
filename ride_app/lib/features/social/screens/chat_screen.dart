@@ -14,6 +14,7 @@ import '../../../core/services/push_notification_service.dart';
 import '../../../core/services/supabase_notification_service.dart';
 import '../viewmodels/social_viewmodel.dart';
 import '../../../core/utils/extensions.dart';
+import '../../../core/services/supabase_social_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String userId;
@@ -331,9 +332,18 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  void _showFullImage(BuildContext context, String imageUrl) {
-    // Visualizador compartilhado (mesmo do perfil).
-    showPhotoViewer(context, urls: [imageUrl]);
+  Future<void> _showFullImage(BuildContext context, String imageUrl) async {
+    // O bucket do chat é privado (migration 043): o visualizador recebe a URL
+    // assinada, não a gravada na mensagem.
+    try {
+      final url = await SupabaseSocialService.chatImageUrl(imageUrl);
+      if (!context.mounted) return;
+      showPhotoViewer(context, urls: [url]);
+    } catch (_) {
+      if (context.mounted) {
+        context.showSnack('Não foi possível abrir a imagem.', isError: true);
+      }
+    }
   }
 }
 
@@ -379,25 +389,8 @@ class _ChatBubble extends StatelessWidget {
                 onTap: onImageTap,
                 child: Stack(
                   children: [
-                    CachedNetworkImage(
-                      imageUrl: msg.imageUrl!,
-                      width: double.infinity,
-                      height: 180,
-                      fit: BoxFit.cover,
-                      placeholder: (_, __) => Container(
-                        height: 180,
-                        color: AppColors.inputFill,
-                        child: Center(
-                            child: CircularProgressIndicator(
-                                color: AppColors.navy, strokeWidth: 2)),
-                      ),
-                      errorWidget: (_, __, ___) => Container(
-                        height: 100,
-                        color: AppColors.inputFill,
-                        child: Center(
-                            child: Icon(Icons.broken_image,
-                                color: AppColors.textMuted)),
-                      ),
+                    _ChatImage(
+                      stored: msg.imageUrl!,
                     ),
                     // Ícone de lupa para indicar que expande
                     Positioned(
@@ -445,6 +438,77 @@ class _ChatBubble extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+
+// ── Imagem do chat ────────────────────────────────────────────────────────────
+/// Imagem de uma mensagem. Pede a URL assinada antes de desenhar: desde a
+/// migration 043 o bucket do chat é privado, e a URL gravada na mensagem já não
+/// abre sozinha.
+///
+/// O `cacheKey` é a URL gravada, não a assinada: a assinatura muda a cada
+/// hora, e sem isso a mesma foto seria baixada de novo toda vez. Também é o
+/// que faz o cache que quem ENVIOU já preencheu (ImageUtils.cacheBytes) valer.
+class _ChatImage extends StatefulWidget {
+  final String stored;
+  const _ChatImage({required this.stored});
+
+  @override
+  State<_ChatImage> createState() => _ChatImageState();
+}
+
+class _ChatImageState extends State<_ChatImage> {
+  late Future<String> _url;
+
+  @override
+  void initState() {
+    super.initState();
+    _url = SupabaseSocialService.chatImageUrl(widget.stored);
+  }
+
+  @override
+  void didUpdateWidget(_ChatImage old) {
+    super.didUpdateWidget(old);
+    if (old.stored != widget.stored) {
+      _url = SupabaseSocialService.chatImageUrl(widget.stored);
+    }
+  }
+
+  Widget _placeholder() => Container(
+        height: 180,
+        color: AppColors.inputFill,
+        child: Center(
+            child: CircularProgressIndicator(
+                color: AppColors.navy, strokeWidth: 2)),
+      );
+
+  Widget _erro() => Container(
+        height: 100,
+        color: AppColors.inputFill,
+        child: Center(
+            child: Icon(Icons.broken_image, color: AppColors.textMuted)),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String>(
+      future: _url,
+      builder: (context, snap) {
+        if (snap.hasError) return _erro();
+        final url = snap.data;
+        if (url == null) return _placeholder();
+        return CachedNetworkImage(
+          imageUrl: url,
+          cacheKey: widget.stored,
+          width: double.infinity,
+          height: 180,
+          fit: BoxFit.cover,
+          placeholder: (_, __) => _placeholder(),
+          errorWidget: (_, __, ___) => _erro(),
+        );
+      },
     );
   }
 }

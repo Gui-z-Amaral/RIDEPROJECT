@@ -214,4 +214,56 @@ void main() {
       expect(sp.name, 'Marca');
     });
   });
+
+  group('EventModel — conclusão (migration 041)', () {
+    Map<String, dynamic> linha(Map<String, dynamic> extra) => {
+          'id': 'e1',
+          'creator_id': 'u1',
+          'title': 'Encontro',
+          'starts_at': '2026-09-20T16:30:00Z',
+          ...extra,
+        };
+
+    test('sem completed_at o evento está em aberto', () {
+      final e = EventModel.fromMap(linha({}));
+      expect(e.completedAt, isNull);
+      expect(e.isCompleted, isFalse);
+    });
+
+    test('completed_at preenchido marca como concluído', () {
+      final e =
+          EventModel.fromMap(linha({'completed_at': '2026-09-21T10:00:00Z'}));
+      expect(e.isCompleted, isTrue);
+      expect(e.completedAt!.toUtc().hour, 10);
+    });
+
+    test('completed_at inválido não estoura nem conclui', () {
+      final e = EventModel.fromMap(linha({'completed_at': 'nao-e-data'}));
+      expect(e.isCompleted, isFalse);
+    });
+
+    test('copyWith conclui e reabre', () {
+      final aberto = EventModel.fromMap(linha({}));
+      final fechado = aberto.copyWith(completedAt: DateTime.utc(2026, 9, 21));
+      expect(fechado.isCompleted, isTrue);
+      // Reabrir é gravar null — por isso copyWith usa sentinela, e não `??`.
+      expect(fechado.copyWith(completedAt: null).isCompleted, isFalse);
+    });
+
+    test('copyWith sem tocar no campo preserva a conclusão', () {
+      final fechado =
+          EventModel.fromMap(linha({'completed_at': '2026-09-21T10:00:00Z'}));
+      expect(fechado.copyWith(isInterested: true).isCompleted, isTrue);
+    });
+
+    test('copyWith preserva clubId e isPublic', () {
+      // Eles ficavam de fora: marcar interesse num evento de motoclube
+      // privado o transformava, na memória, em evento solto e público.
+      final e = EventModel.fromMap(
+          linha({'club_id': 'c1', 'is_public': false}));
+      final depois = e.copyWith(isInterested: true);
+      expect(depois.clubId, 'c1');
+      expect(depois.isPublic, isFalse);
+    });
+  });
 }
