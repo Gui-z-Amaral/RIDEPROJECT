@@ -18,3 +18,7 @@ pitch/
 # Auditoria de LGPD: mapeia dados pessoais, falhas abertas e onde elas ficam
 # no codigo. E um mapa de ataque enquanto nao estiver corrigido.
 privacidade/
+
+# Backup da pausa, chaves e material do pitch. Contém dados pessoais de
+# usuários, a pgsodium_root.key e o .env com a service_role: NUNCA versionar.
+BACKUPS/
