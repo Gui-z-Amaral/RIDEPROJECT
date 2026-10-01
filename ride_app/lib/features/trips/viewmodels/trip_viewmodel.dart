@@ -4,6 +4,7 @@ import '../../../core/models/location_model.dart';
 import '../../../core/models/stop_model.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/services/supabase_trip_service.dart';
+import '../../../core/utils/db_errors.dart';
 
 class TripViewModel extends ChangeNotifier {
   List<TripModel> _trips = [];
@@ -31,7 +32,13 @@ class TripViewModel extends ChangeNotifier {
   String? _coverImage; // foto do destino (banner do Google Places)
 
   String? get clubId => _clubId;
-  void setClubId(String? id) => _clubId = id;
+  /// Viagem criada dentro do motoclube nasce privada — mesmo motivo do
+  /// evento: nascer pública publicava fora do clube sem a pessoa perceber.
+  /// Na edição, o valor da própria viagem é carregado depois e prevalece.
+  void setClubId(String? id) {
+    _clubId = id;
+    if (id != null) _isPublic = false;
+  }
   void setCoverImage(String? url) => _coverImage = url;
 
   /// Visibilidade da viagem, marcada na tela de criação (migration 034).
@@ -170,6 +177,7 @@ class TripViewModel extends ChangeNotifier {
     // Sem isto, abrir uma viagem privada para editar mostraria "Público"
     // no formulário e a tornaria pública ao salvar.
     _isPublic = trip.isPublic;
+    _clubId = trip.clubId;
     notifyListeners();
   }
 
@@ -209,7 +217,10 @@ class TripViewModel extends ChangeNotifier {
       notifyListeners();
       return trip;
     } catch (e) {
-      _saveError = e.toString();
+      // Antes era `e.toString()` direto na tela: expunha tabela e coluna.
+      debugPrint('❌ TripViewModel: $e');
+      _saveError = DbErrors.mensagem(e,
+          fallback: 'Não foi possível salvar a viagem. Tente novamente.');
       _isSaving = false;
       notifyListeners();
       return null;
@@ -239,7 +250,10 @@ class TripViewModel extends ChangeNotifier {
       notifyListeners();
       return trip;
     } catch (e) {
-      _saveError = e.toString();
+      // Antes era `e.toString()` direto na tela: expunha tabela e coluna.
+      debugPrint('❌ TripViewModel: $e');
+      _saveError = DbErrors.mensagem(e,
+          fallback: 'Não foi possível salvar a viagem. Tente novamente.');
       _isSaving = false;
       notifyListeners();
       return null;

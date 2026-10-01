@@ -8,6 +8,7 @@ import '../utils/image_utils.dart';
 import '../utils/storage_utils.dart';
 import 'chat_key_service.dart';
 import '../utils/db_time.dart';
+import '../utils/extensions.dart';
 
 class FriendTripStory {
   final UserModel friend;
@@ -122,40 +123,9 @@ class SupabaseSocialService {
       'to_user_id': toUserId,
       'status': 'pending',
     }, onConflict: 'from_user_id,to_user_id');
-
-    // Busca o ID do pedido que acabou de ser criado/atualizado
-    final row = await _db
-        .from('friend_requests')
-        .select('id')
-        .eq('from_user_id', _uid)
-        .eq('to_user_id', toUserId)
-        .maybeSingle();
-    final requestId = row?['id'] as String?;
-
-    // Busca o nome de quem enviou
-    final sender = await _db
-        .from('profiles')
-        .select('name')
-        .eq('id', _uid)
-        .maybeSingle();
-    final senderName = sender?['name'] as String? ?? 'Alguém';
-
-    // Cria notificação para o destinatário (best-effort)
-    if (requestId != null) {
-      try {
-        await _db.from('notifications').insert({
-          'user_id': toUserId,
-          'type': 'friend_request',
-          'title': 'Novo pedido de amizade',
-          'body': '$senderName quer se conectar com você',
-          'data': {
-            'requestId': requestId,
-            'fromUserId': _uid,
-            'fromName': senderName,
-          },
-        });
-      } catch (_) {}
-    }
+    // O aviso para o destinatário sai do banco (trigger da migration 044), e
+    // só quando o pedido PASSA a ficar pendente — repetir o toque não gera um
+    // push novo a cada vez.
   }
 
   static Future<List<FriendRequestModel>> getReceivedRequests() async {
@@ -286,7 +256,8 @@ class SupabaseSocialService {
   }
 
   // ── Search users ───────────────────────────────────────────
-  static Future<List<UserModel>> searchUsers(String query) async {
+  static Future<List<UserModel>> searchUsers(String raw) async {
+    final query = raw.paraBusca;
     if (query.isEmpty) return [];
     final rows = await _db
         .from('profiles')
@@ -382,23 +353,8 @@ class SupabaseSocialService {
       if (imageUrl != null) 'image_url': imageUrl,
     }).select('*, sender:profiles!messages_sender_id_fkey(name, avatar_url)').single();
 
-    // Notifica o destinatário (best-effort). Sem o texto — o servidor não pode
-    // ler o conteúdo (E2EE), então a notificação é genérica.
-    try {
-      final sender = await _db
-          .from('profiles')
-          .select('name')
-          .eq('id', _uid)
-          .maybeSingle();
-      final senderName = sender?['name'] as String? ?? 'Alguém';
-      await _db.from('notifications').insert({
-        'user_id': otherUserId,
-        'type': 'message',
-        'title': senderName,
-        'body': imageUrl != null ? '📷 Imagem' : '📩 Nova mensagem',
-        'data': {'fromUserId': _uid, 'fromName': senderName},
-      });
-    } catch (_) {}
+    // O aviso ao destinatário sai do banco (trigger da migration 044). É
+    // genérico de propósito: a mensagem é cifrada, e o texto não vai no push.
 
     // Devolve o modelo com o TEXTO em claro (o que o usuário digitou), pra UI.
     return _rowToMessage(row, chatId, contentOverride: content);

@@ -3,6 +3,7 @@ import '../../../core/models/ride_model.dart';
 import '../../../core/models/location_model.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/services/supabase_ride_service.dart';
+import '../../../core/utils/db_errors.dart';
 
 class RideViewModel extends ChangeNotifier {
   List<RideModel> _rides = [];
@@ -102,7 +103,10 @@ class RideViewModel extends ChangeNotifier {
       notifyListeners();
       return ride;
     } catch (e) {
-      _saveError = e.toString();
+      // Antes era `e.toString()` direto na tela: expunha tabela e coluna.
+      debugPrint('❌ RideViewModel.saveRide: $e');
+      _saveError = DbErrors.mensagem(e,
+          fallback: 'Não foi possível criar o rolê. Tente novamente.');
       _isSaving = false;
       notifyListeners();
       return null;

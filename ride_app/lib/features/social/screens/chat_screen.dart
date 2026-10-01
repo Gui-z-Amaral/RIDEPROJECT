@@ -15,6 +15,7 @@ import '../../../core/services/supabase_notification_service.dart';
 import '../viewmodels/social_viewmodel.dart';
 import '../../../core/utils/extensions.dart';
 import '../../../core/services/supabase_social_service.dart';
+import '../../../core/constants/text_limits.dart';
 
 class ChatScreen extends StatefulWidget {
   final String userId;
@@ -293,6 +294,14 @@ class _ChatScreenState extends State<ChatScreen> {
                   Expanded(
                     child: TextField(
                       controller: _msgCtrl,
+                      // O banco limita o envelope cifrado; este é o limite do
+                      // texto, com folga para caber no envelope.
+                      maxLength: TextLimits.mensagem,
+                      buildCounter: (_,
+                              {required currentLength,
+                              required isFocused,
+                              maxLength}) =>
+                          null,
                       style: AppTextStyles.bodyLarge,
                       onSubmitted: (_) => _sendMessage(),
                       decoration: InputDecoration(

@@ -2650,3 +2650,667 @@ DELETE FROM ride_locations rl
  USING rides r
  WHERE r.id = rl.ride_id AND r.status IN ('completed', 'cancelled');
 DELETE FROM ride_locations WHERE updated_at < NOW() - INTERVAL '12 hours';
+
+
+-- ============================================================
+-- 044_notificacoes_pelo_servidor.sql
+-- ============================================================
+
+-- 044 — Notificação passa a ser criada pelo SERVIDOR
+--
+-- A policy `notif_insert` era `WITH CHECK (auth.uid() IS NOT NULL)`, e o
+-- `rideapp-push-worker` manda para o celular toda linha nova desta tabela. Na
+-- prática, qualquer conta enviava push com qualquer texto para qualquer
+-- pessoa: golpe ("sua conta será bloqueada, toque aqui"), xingamento, ou um
+-- `data` montado para o toque abrir qualquer tela do app.
+--
+-- Agora quem escreve em `notifications` é só o banco, a partir de um fato que
+-- aconteceu de verdade (um convite, uma mensagem, um pedido de amizade), com
+-- o texto montado a partir de dado real. O app não grava mais nada aqui.
+--
+-- Os textos e as chaves de `data` são exatamente os que o app gravava, para o
+-- roteador de toque (`notification_router.dart`) continuar igual.
+--
+-- `auth.uid()` continua valendo dentro de trigger e de SECURITY DEFINER (vem
+-- do JWT da requisição), e é o que separa "alguém me convidou" de "eu mesmo
+-- me inscrevi": só notifica quando quem fez a ação é OUTRA pessoa.
+
+-- ── Helper: nome de exibição ────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.nome_de(p_uid UUID)
+RETURNS TEXT LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT COALESCE(NULLIF(trim(name), ''), 'Alguém') FROM profiles WHERE id = p_uid;
+$$;
+REVOKE ALL ON FUNCTION public.nome_de(UUID) FROM PUBLIC, anon, authenticated;
+
+-- ── Convite de viagem ───────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.notifica_convite_viagem()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE t RECORD;
+BEGIN
+  IF NEW.status <> 'waiting' OR auth.uid() IS NULL OR NEW.user_id = auth.uid() THEN
+    RETURN NEW;
+  END IF;
+  SELECT title, creator_id, origin_address, destination_address, destination_label
+    INTO t FROM trips WHERE id = NEW.trip_id;
+  IF NOT FOUND OR NEW.user_id = t.creator_id THEN RETURN NEW; END IF;
+
+  INSERT INTO notifications (user_id, type, title, body, data) VALUES (
+    NEW.user_id,
+    'trip_invite',
+    public.nome_de(auth.uid()) || ' te convidou para uma viagem',
+    t.title || ' · ' || COALESCE(t.destination_address, t.destination_label, 'Destino'),
+    jsonb_build_object(
+      'tripId', NEW.trip_id,
+      'tripTitle', t.title,
+      'originAddress', COALESCE(t.origin_address, ''),
+      'destinationAddress', COALESCE(t.destination_address, ''))
+  );
+  RETURN NEW;
+END; $$;
+DROP TRIGGER IF EXISTS trg_notifica_convite_viagem ON trip_participants;
+CREATE TRIGGER trg_notifica_convite_viagem AFTER INSERT ON trip_participants
+  FOR EACH ROW EXECUTE FUNCTION public.notifica_convite_viagem();
+
+-- ── Convite de rolê ─────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.notifica_convite_role()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE r RECORD;
+BEGIN
+  IF NEW.status <> 'waiting' OR auth.uid() IS NULL OR NEW.user_id = auth.uid() THEN
+    RETURN NEW;
+  END IF;
+  SELECT title, creator_id, meeting_address, meeting_lat, meeting_lng
+    INTO r FROM rides WHERE id = NEW.ride_id;
+  IF NOT FOUND OR NEW.user_id = r.creator_id THEN RETURN NEW; END IF;
+
+  INSERT INTO notifications (user_id, type, title, body, data) VALUES (
+    NEW.user_id,
+    'ride_invite',
+    'Convite para rolê',
+    public.nome_de(auth.uid()) || ' te convidou para um rolê em "' || r.title || '"',
+    jsonb_build_object(
+      'rideId', NEW.ride_id,
+      'place', r.title,
+      'address', r.meeting_address,
+      'lat', r.meeting_lat,
+      'lng', r.meeting_lng)
+  );
+  RETURN NEW;
+END; $$;
+DROP TRIGGER IF EXISTS trg_notifica_convite_role ON ride_participants;
+CREATE TRIGGER trg_notifica_convite_role AFTER INSERT ON ride_participants
+  FOR EACH ROW EXECUTE FUNCTION public.notifica_convite_role();
+
+-- ── Convite de motoclube ────────────────────────────────────────────────────
+-- Entrar por link (migration 038) grava `active` direto: não gera aviso.
+CREATE OR REPLACE FUNCTION public.notifica_convite_clube()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE nome TEXT;
+BEGIN
+  IF NEW.status <> 'invited' OR auth.uid() IS NULL OR NEW.user_id = auth.uid() THEN
+    RETURN NEW;
+  END IF;
+  SELECT name INTO nome FROM clubs WHERE id = NEW.club_id;
+  IF NOT FOUND THEN RETURN NEW; END IF;
+
+  INSERT INTO notifications (user_id, type, title, body, data) VALUES (
+    NEW.user_id,
+    'club_invite',
+    'Convite de motoclube',
+    'Você foi convidado para o motoclube "' || nome || '".',
+    jsonb_build_object('clubId', NEW.club_id)
+  );
+  RETURN NEW;
+END; $$;
+DROP TRIGGER IF EXISTS trg_notifica_convite_clube ON club_members;
+CREATE TRIGGER trg_notifica_convite_clube AFTER INSERT ON club_members
+  FOR EACH ROW EXECUTE FUNCTION public.notifica_convite_clube();
+
+-- ── Pedido de amizade ───────────────────────────────────────────────────────
+-- O app faz upsert. Só avisa quando o pedido PASSA a ficar pendente: repetir o
+-- pedido que já está pendente não gera um push novo a cada toque.
+CREATE OR REPLACE FUNCTION public.notifica_pedido_amizade()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE remetente TEXT;
+BEGIN
+  IF NEW.status <> 'pending' THEN RETURN NEW; END IF;
+  IF TG_OP = 'UPDATE' AND OLD.status = 'pending' THEN RETURN NEW; END IF;
+  remetente := public.nome_de(NEW.from_user_id);
+
+  INSERT INTO notifications (user_id, type, title, body, data) VALUES (
+    NEW.to_user_id,
+    'friend_request',
+    'Novo pedido de amizade',
+    remetente || ' quer se conectar com você',
+    jsonb_build_object(
+      'requestId', NEW.id,
+      'fromUserId', NEW.from_user_id,
+      'fromName', remetente)
+  );
+  RETURN NEW;
+END; $$;
+DROP TRIGGER IF EXISTS trg_notifica_pedido_amizade ON friend_requests;
+CREATE TRIGGER trg_notifica_pedido_amizade
+  AFTER INSERT OR UPDATE OF status ON friend_requests
+  FOR EACH ROW EXECUTE FUNCTION public.notifica_pedido_amizade();
+
+-- ── Mensagem ────────────────────────────────────────────────────────────────
+-- Sem o texto: a mensagem é cifrada, e o aviso é genérico de propósito.
+-- O destinatário é a outra metade do chat_id ("<uidA>_<uidB>").
+CREATE OR REPLACE FUNCTION public.notifica_mensagem()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE a TEXT := split_part(NEW.chat_id, '_', 1);
+        b TEXT := split_part(NEW.chat_id, '_', 2);
+        dest UUID;
+        remetente TEXT;
+BEGIN
+  dest := CASE WHEN a = NEW.sender_id::text THEN b ELSE a END::uuid;
+  IF dest IS NULL OR dest = NEW.sender_id THEN RETURN NEW; END IF;
+  remetente := public.nome_de(NEW.sender_id);
+
+  INSERT INTO notifications (user_id, type, title, body, data) VALUES (
+    dest,
+    'message',
+    remetente,
+    CASE WHEN NEW.image_url IS NOT NULL THEN '📷 Imagem' ELSE '📩 Nova mensagem' END,
+    jsonb_build_object('fromUserId', NEW.sender_id, 'fromName', remetente)
+  );
+  RETURN NEW;
+EXCEPTION WHEN invalid_text_representation THEN
+  -- chat_id fora do formato: a mensagem entra, só não gera aviso.
+  RETURN NEW;
+END; $$;
+DROP TRIGGER IF EXISTS trg_notifica_mensagem ON messages;
+CREATE TRIGGER trg_notifica_mensagem AFTER INSERT ON messages
+  FOR EACH ROW EXECUTE FUNCTION public.notifica_mensagem();
+
+-- ── Evento atualizado ───────────────────────────────────────────────────────
+-- Aqui não dá para ser trigger: a tela de edição tem a escolha "avisar quem
+-- tem interesse". Vira uma função que confere se quem chama pode editar o
+-- evento (mesma regra da `events_update`) e monta o texto a partir do banco.
+CREATE OR REPLACE FUNCTION public.notificar_interessados_evento(p_event UUID)
+RETURNS INT LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE e RECORD; n INT;
+BEGIN
+  SELECT id, title, creator_id, club_id INTO e FROM events WHERE id = p_event;
+  IF NOT FOUND THEN RETURN 0; END IF;
+  IF NOT (e.creator_id = auth.uid()
+          OR (e.club_id IS NOT NULL AND public.is_club_admin(e.club_id, auth.uid()))) THEN
+    RAISE EXCEPTION 'Sem permissão para avisar sobre este evento'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  INSERT INTO notifications (user_id, type, title, body, data)
+  SELECT ei.user_id, 'event_update', 'Evento atualizado',
+         'O evento "' || e.title || '" que você tem interesse foi atualizado.',
+         jsonb_build_object('eventId', e.id)
+    FROM event_interests ei
+   WHERE ei.event_id = e.id AND ei.user_id <> auth.uid();
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n;
+END; $$;
+REVOKE ALL ON FUNCTION public.notificar_interessados_evento(UUID) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.notificar_interessados_evento(UUID) TO authenticated;
+
+-- ── Fecha a porta ───────────────────────────────────────────────────────────
+-- Sem policy de INSERT, o app não grava mais notificação. As funções acima são
+-- SECURITY DEFINER e continuam gravando.
+DROP POLICY IF EXISTS "notif_insert" ON notifications;
+
+
+-- ============================================================
+-- 045_regras_de_texto.sql
+-- ============================================================
+
+-- 045 — Regras de texto no SERVIDOR: @ único, tamanhos e palavras bloqueadas
+--
+-- Até aqui nenhuma tabela tinha regra de texto. Toda validação estava só no
+-- app, e quem chamasse a API direto gravava qualquer coisa: título de 1 MB,
+-- nome só com espaços, palavrão no nome do motoclube — e esse texto aparecia
+-- no perfil, na busca, na prévia do link compartilhado e no PUSH.
+--
+-- Três partes:
+--   1. @ gerado sem colisão: "João Silva" e "João Silva" não travam mais o
+--      segundo cadastro (o @ é UNIQUE e era só o nome em minúsculas).
+--   2. Tamanho mínimo e máximo por campo.
+--   3. Palavras bloqueadas, comparadas por PALAVRA INTEIRA depois de
+--      normalizar (sem acento, "p0rr4" → "porra", "p o r r a" → "porra").
+--      Por trecho seria inviável aqui: "rola" pegaria "Rolê" e "rolando",
+--      "cu" pegaria "curva", "pau" pegaria "São Paulo".
+--
+-- As regras valem só quando o campo MUDA. Dado antigo fora da regra continua
+-- lá e não trava a edição de outro campo da mesma linha.
+--
+-- Chat fica de fora do filtro: conversa privada; ali a ferramenta certa é
+-- bloquear e denunciar, não censurar. Só ganha limite de tamanho.
+
+-- ══ Normalização ═════════════════════════════════════════════════════════════
+
+-- Tira caracteres invisíveis e de controle — espaço de largura zero e
+-- inversão de direção (U+202E) servem para imitar o nome de outra pessoa.
+CREATE OR REPLACE FUNCTION public.limpa_invisiveis(t TEXT)
+RETURNS TEXT LANGUAGE sql IMMUTABLE AS $$
+  SELECT regexp_replace(COALESCE(t, ''),
+    '[\x01-\x1F\x7F\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]', '', 'g');
+$$;
+
+-- Para comparar com a lista: minúsculas, sem acento, "leet" desfeito e letra
+-- repetida colapsada ("porraaa" → "pora"). A lista passa pela MESMA função,
+-- então "porra" também vira "pora" e as duas batem.
+CREATE OR REPLACE FUNCTION public.normaliza_texto(t TEXT)
+RETURNS TEXT LANGUAGE sql IMMUTABLE AS $$
+  SELECT regexp_replace(
+    translate(lower(public.limpa_invisiveis(t)),
+      'áàâãäéèêëíìîïóòôõöúùûüçñ4@310!$57',
+      'aaaaaeeeeiiiiooooouuuucnaaeioisst'),
+    '(.)\1+', '\1', 'g');
+$$;
+
+-- ══ Palavras bloqueadas ══════════════════════════════════════════════════════
+-- Editável no Studio, sem publicar nada. RLS ligada e sem policy: o app não lê
+-- a lista (não há por que entregá-la), só as funções abaixo.
+CREATE TABLE IF NOT EXISTS palavras_bloqueadas (
+  palavra TEXT PRIMARY KEY
+);
+ALTER TABLE palavras_bloqueadas ENABLE ROW LEVEL SECURITY;
+
+-- Lista inicial conservadora: só termos sem sentido inocente comum. Ficaram de
+-- fora de propósito, por serem palavras normais também: pau, pinto, saco,
+-- rola, piranha, veado, macaco, bicha, puto (= bravo), kkk (= risada).
+INSERT INTO palavras_bloqueadas (palavra) VALUES
+  ('caralho'), ('krl'), ('porra'), ('puta'), ('putaria'), ('foda'), ('foder'),
+  ('fodido'), ('fodida'), ('fdp'), ('pqp'), ('vsf'), ('vtnc'), ('tnc'),
+  ('buceta'), ('boceta'), ('xoxota'), ('xereca'), ('piroca'), ('punheta'),
+  ('cu'), ('cuzao'), ('arrombado'), ('arrombada'), ('merda'), ('bosta'),
+  ('viado'), ('sapatao'), ('traveco'), ('retardado'), ('retardada'),
+  ('vagabunda'), ('escroto'), ('escrota'), ('porno'),
+  ('nazi'), ('nazista'), ('hitler')
+ON CONFLICT (palavra) DO NOTHING;
+
+-- Devolve a palavra encontrada, ou NULL. Também junta letras soltas em
+-- sequência ("p o r r a", "p.o.r.r.a") antes de comparar.
+CREATE OR REPLACE FUNCTION public.texto_improprio(t TEXT)
+RETURNS TEXT LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  tok TEXT;
+  soltas TEXT := '';
+  achou TEXT;
+  candidatos TEXT[] := '{}';
+BEGIN
+  IF t IS NULL OR btrim(t) = '' THEN RETURN NULL; END IF;
+
+  FOREACH tok IN ARRAY regexp_split_to_array(public.normaliza_texto(t), '[^a-z]+') LOOP
+    IF tok = '' THEN CONTINUE; END IF;
+    IF length(tok) = 1 THEN
+      soltas := soltas || tok;
+      CONTINUE;
+    END IF;
+    IF length(soltas) >= 2 THEN candidatos := candidatos || soltas; END IF;
+    soltas := '';
+    candidatos := candidatos || tok;
+  END LOOP;
+  IF length(soltas) >= 2 THEN candidatos := candidatos || soltas; END IF;
+
+  -- O `soltas` passa pela normalização de novo: juntar "p o r r a" dá
+  -- "porra", que ainda precisa colapsar para "pora".
+  SELECT b.palavra INTO achou
+    FROM palavras_bloqueadas b
+   WHERE public.normaliza_texto(b.palavra) = ANY (
+           SELECT public.normaliza_texto(c) FROM unnest(candidatos) c)
+   LIMIT 1;
+  RETURN achou;
+END; $$;
+REVOKE ALL ON FUNCTION public.texto_improprio(TEXT) FROM PUBLIC, anon, authenticated;
+
+-- ══ Regras por campo — o único lugar onde os números moram ══════════════════
+-- O app espelha estes limites em `TextLimits` só para avisar antes de salvar.
+CREATE OR REPLACE FUNCTION public.regra_do_campo(p_campo TEXT,
+  OUT minimo INT, OUT maximo INT, OUT filtrar BOOLEAN)
+LANGUAGE sql IMMUTABLE AS $$
+  SELECT r.mi, r.ma, r.fi FROM (VALUES
+    ('nome',            2,    60, true),
+    ('username',        3,    30, true),
+    ('bio',             0,   500, true),
+    ('cidade',          0,    80, false),
+    ('moto',            0,    60, true),
+    ('estilo',          0,    40, true),
+    ('negocio',         0,    80, true),
+    ('negocio_desc',    0,  1000, true),
+    ('clube',           3,    60, true),
+    ('clube_desc',      0,  1000, true),
+    ('evento',          3,   100, true),
+    ('evento_desc',     0,  3000, true),
+    ('local',           0,   120, true),
+    ('viagem',          3,   100, true),
+    ('viagem_desc',     0,  3000, true),
+    ('role',            3,   100, true),
+    ('mensagem',        0, 40000, false)  -- envelope cifrado, não o texto
+  ) AS r(campo, mi, ma, fi)
+  WHERE r.campo = p_campo;
+$$;
+
+-- NULL = ok; senão o motivo: vazio | curto | longo | formato | improprio.
+CREATE OR REPLACE FUNCTION public.problema_no_texto(p_campo TEXT, p_valor TEXT)
+RETURNS TEXT LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+DECLARE r RECORD; v TEXT;
+BEGIN
+  SELECT * INTO r FROM public.regra_do_campo(p_campo);
+  IF r.maximo IS NULL THEN RETURN NULL; END IF;  -- campo sem regra
+  v := btrim(public.limpa_invisiveis(p_valor));
+
+  IF r.minimo > 0 AND v = '' THEN RETURN 'vazio'; END IF;
+  IF v <> '' AND char_length(v) < r.minimo THEN RETURN 'curto'; END IF;
+  IF char_length(v) > r.maximo THEN RETURN 'longo'; END IF;
+  IF p_campo = 'username' AND v !~ '^[a-z0-9_]+$' THEN RETURN 'formato'; END IF;
+  IF r.filtrar AND public.texto_improprio(v) IS NOT NULL THEN RETURN 'improprio'; END IF;
+  RETURN NULL;
+END; $$;
+REVOKE ALL ON FUNCTION public.problema_no_texto(TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+
+-- Para o app avisar ANTES de salvar — e no cadastro, onde o GoTrue esconde o
+-- erro do trigger atrás de "Database error saving new user". Aberta ao anônimo
+-- por isso; só diz se o texto passa, não expõe a lista nem dado de ninguém.
+CREATE OR REPLACE FUNCTION public.checar_texto(p_campo TEXT, p_valor TEXT)
+RETURNS TEXT LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT public.problema_no_texto(p_campo, left(p_valor, 50000));
+$$;
+REVOKE ALL ON FUNCTION public.checar_texto(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.checar_texto(TEXT, TEXT) TO anon, authenticated;
+
+-- Levanta o erro num formato que o app sabe ler: "texto_invalido:<motivo>:<campo>".
+CREATE OR REPLACE FUNCTION public.exige_texto(p_campo TEXT, p_valor TEXT)
+RETURNS VOID LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+DECLARE p TEXT := public.problema_no_texto(p_campo, p_valor);
+BEGIN
+  IF p IS NOT NULL THEN
+    RAISE EXCEPTION 'texto_invalido:%:%', p, p_campo USING ERRCODE = 'check_violation';
+  END IF;
+END; $$;
+REVOKE ALL ON FUNCTION public.exige_texto(TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+
+-- ══ Aplicação nas tabelas ════════════════════════════════════════════════════
+-- Duas travas para não quebrar o que já existe:
+--  - só checa o campo que MUDOU: linha antiga fora da regra não trava a edição
+--    de outro campo;
+--  - só checa escrita vinda da API (`authenticated`/`anon`). As funções
+--    internas rodam como dono do banco e ficam de fora — importante para a
+--    REATIVAÇÃO, que grava de volta nome, @ e bio de antes das regras (um @
+--    antigo como "joão_silva" seria barrado e a pessoa não conseguiria entrar).
+--    Por isso estes triggers NÃO são SECURITY DEFINER: `current_user` precisa
+--    ser quem escreveu. A leitura da lista acontece dentro de `exige_texto`,
+--    que é.
+
+CREATE OR REPLACE FUNCTION public.valida_texto_profiles()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public AS $$
+BEGIN
+  IF current_user NOT IN ('authenticated', 'anon') THEN RETURN NEW; END IF;
+  IF TG_OP = 'INSERT' OR NEW.name IS DISTINCT FROM OLD.name THEN
+    NEW.name := btrim(public.limpa_invisiveis(NEW.name));
+    PERFORM public.exige_texto('nome', NEW.name);
+  END IF;
+  IF TG_OP = 'INSERT' OR NEW.username IS DISTINCT FROM OLD.username THEN
+    PERFORM public.exige_texto('username', NEW.username);
+  END IF;
+  IF TG_OP = 'INSERT' OR NEW.business_name IS DISTINCT FROM OLD.business_name THEN
+    PERFORM public.exige_texto('negocio', NEW.business_name);
+  END IF;
+  IF TG_OP = 'INSERT' OR NEW.business_description IS DISTINCT FROM OLD.business_description THEN
+    PERFORM public.exige_texto('negocio_desc', NEW.business_description);
+  END IF;
+  RETURN NEW;
+END; $$;
+DROP TRIGGER IF EXISTS trg_valida_texto_profiles ON profiles;
+CREATE TRIGGER trg_valida_texto_profiles BEFORE INSERT OR UPDATE ON profiles
+  FOR EACH ROW EXECUTE FUNCTION public.valida_texto_profiles();
+
+CREATE OR REPLACE FUNCTION public.valida_texto_profile_details()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public AS $$
+BEGIN
+  IF current_user NOT IN ('authenticated', 'anon') THEN RETURN NEW; END IF;
+  IF TG_OP = 'INSERT' OR NEW.bio IS DISTINCT FROM OLD.bio THEN
+    PERFORM public.exige_texto('bio', NEW.bio);
+  END IF;
+  IF TG_OP = 'INSERT' OR NEW.city IS DISTINCT FROM OLD.city THEN
+    PERFORM public.exige_texto('cidade', NEW.city);
+  END IF;
+  IF TG_OP = 'INSERT' OR NEW.moto_model IS DISTINCT FROM OLD.moto_model THEN
+    PERFORM public.exige_texto('moto', NEW.moto_model);
+  END IF;
+  IF TG_OP = 'INSERT' OR NEW.trip_style IS DISTINCT FROM OLD.trip_style THEN
+    PERFORM public.exige_texto('estilo', NEW.trip_style);
+  END IF;
+  RETURN NEW;
+END; $$;
+DROP TRIGGER IF EXISTS trg_valida_texto_profile_details ON profile_details;
+CREATE TRIGGER trg_valida_texto_profile_details BEFORE INSERT OR UPDATE ON profile_details
+  FOR EACH ROW EXECUTE FUNCTION public.valida_texto_profile_details();
+
+CREATE OR REPLACE FUNCTION public.valida_texto_clubs()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public AS $$
+BEGIN
+  IF current_user NOT IN ('authenticated', 'anon') THEN RETURN NEW; END IF;
+  IF TG_OP = 'INSERT' OR NEW.name IS DISTINCT FROM OLD.name THEN
+    NEW.name := btrim(public.limpa_invisiveis(NEW.name));
+    PERFORM public.exige_texto('clube', NEW.name);
+  END IF;
+  IF TG_OP = 'INSERT' OR NEW.description IS DISTINCT FROM OLD.description THEN
+    PERFORM public.exige_texto('clube_desc', NEW.description);
+  END IF;
+  IF TG_OP = 'INSERT' OR NEW.city IS DISTINCT FROM OLD.city THEN
+    PERFORM public.exige_texto('cidade', NEW.city);
+  END IF;
+  RETURN NEW;
+END; $$;
+DROP TRIGGER IF EXISTS trg_valida_texto_clubs ON clubs;
+CREATE TRIGGER trg_valida_texto_clubs BEFORE INSERT OR UPDATE ON clubs
+  FOR EACH ROW EXECUTE FUNCTION public.valida_texto_clubs();
+
+CREATE OR REPLACE FUNCTION public.valida_texto_events()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public AS $$
+BEGIN
+  IF current_user NOT IN ('authenticated', 'anon') THEN RETURN NEW; END IF;
+  IF TG_OP = 'INSERT' OR NEW.title IS DISTINCT FROM OLD.title THEN
+    NEW.title := btrim(public.limpa_invisiveis(NEW.title));
+    PERFORM public.exige_texto('evento', NEW.title);
+  END IF;
+  IF TG_OP = 'INSERT' OR NEW.description IS DISTINCT FROM OLD.description THEN
+    PERFORM public.exige_texto('evento_desc', NEW.description);
+  END IF;
+  IF TG_OP = 'INSERT' OR NEW.location_label IS DISTINCT FROM OLD.location_label THEN
+    PERFORM public.exige_texto('local', NEW.location_label);
+  END IF;
+  RETURN NEW;
+END; $$;
+DROP TRIGGER IF EXISTS trg_valida_texto_events ON events;
+CREATE TRIGGER trg_valida_texto_events BEFORE INSERT OR UPDATE ON events
+  FOR EACH ROW EXECUTE FUNCTION public.valida_texto_events();
+
+CREATE OR REPLACE FUNCTION public.valida_texto_trips()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public AS $$
+BEGIN
+  IF current_user NOT IN ('authenticated', 'anon') THEN RETURN NEW; END IF;
+  IF TG_OP = 'INSERT' OR NEW.title IS DISTINCT FROM OLD.title THEN
+    NEW.title := btrim(public.limpa_invisiveis(NEW.title));
+    PERFORM public.exige_texto('viagem', NEW.title);
+  END IF;
+  IF TG_OP = 'INSERT' OR NEW.description IS DISTINCT FROM OLD.description THEN
+    PERFORM public.exige_texto('viagem_desc', NEW.description);
+  END IF;
+  RETURN NEW;
+END; $$;
+DROP TRIGGER IF EXISTS trg_valida_texto_trips ON trips;
+CREATE TRIGGER trg_valida_texto_trips BEFORE INSERT OR UPDATE ON trips
+  FOR EACH ROW EXECUTE FUNCTION public.valida_texto_trips();
+
+CREATE OR REPLACE FUNCTION public.valida_texto_rides()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public AS $$
+BEGIN
+  IF current_user NOT IN ('authenticated', 'anon') THEN RETURN NEW; END IF;
+  IF TG_OP = 'INSERT' OR NEW.title IS DISTINCT FROM OLD.title THEN
+    NEW.title := btrim(public.limpa_invisiveis(NEW.title));
+    PERFORM public.exige_texto('role', NEW.title);
+  END IF;
+  RETURN NEW;
+END; $$;
+DROP TRIGGER IF EXISTS trg_valida_texto_rides ON rides;
+CREATE TRIGGER trg_valida_texto_rides BEFORE INSERT OR UPDATE ON rides
+  FOR EACH ROW EXECUTE FUNCTION public.valida_texto_rides();
+
+CREATE OR REPLACE FUNCTION public.valida_texto_messages()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public AS $$
+BEGIN
+  IF current_user NOT IN ('authenticated', 'anon') THEN RETURN NEW; END IF;
+  PERFORM public.exige_texto('mensagem', NEW.content);
+  RETURN NEW;
+END; $$;
+DROP TRIGGER IF EXISTS trg_valida_texto_messages ON messages;
+CREATE TRIGGER trg_valida_texto_messages BEFORE INSERT ON messages
+  FOR EACH ROW EXECUTE FUNCTION public.valida_texto_messages();
+
+-- ══ @ único no cadastro ══════════════════════════════════════════════════════
+-- Base do @: minúsculas, sem acento, só a-z 0-9 _, até 20 caracteres.
+CREATE OR REPLACE FUNCTION public.slug_username(t TEXT)
+RETURNS TEXT LANGUAGE sql IMMUTABLE AS $$
+  SELECT left(btrim(regexp_replace(
+           translate(lower(public.limpa_invisiveis(t)),
+             'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn'),
+           '[^a-z0-9]+', '_', 'g'), '_'), 20);
+$$;
+
+-- Antes: o @ era o nome em minúsculas, UNIQUE, sem tratar repetição — a
+-- segunda "João Silva" não conseguia criar conta nem entrar com o Google.
+-- Agora, se já existe, ganha um sufixo; nunca falha por nome repetido.
+-- Nome impróprio vindo do Google não barra o login: vira "Rider" e a pessoa
+-- troca depois (barrar ali daria só o erro genérico do GoTrue).
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  nome TEXT;
+  base TEXT;
+  cand TEXT;
+  tentativas INT := 0;
+BEGIN
+  nome := left(btrim(public.limpa_invisiveis(COALESCE(
+            NULLIF(btrim(NEW.raw_user_meta_data->>'name'), ''),
+            NULLIF(btrim(NEW.raw_user_meta_data->>'full_name'), ''),
+            split_part(NEW.email, '@', 1)))), 60);
+  IF char_length(nome) < 2 OR public.texto_improprio(nome) IS NOT NULL THEN
+    nome := 'Rider';
+  END IF;
+
+  base := public.slug_username(COALESCE(
+            NULLIF(NEW.raw_user_meta_data->>'username', ''), nome));
+  IF char_length(base) < 3 OR public.texto_improprio(base) IS NOT NULL THEN
+    base := 'rider';
+  END IF;
+
+  cand := base;
+  WHILE EXISTS (SELECT 1 FROM profiles WHERE username = cand) LOOP
+    tentativas := tentativas + 1;
+    cand := base || '_' || CASE
+      WHEN tentativas <= 20 THEN lpad(floor(random() * 10000)::int::text, 4, '0')
+      ELSE substr(md5(random()::text), 1, 8) END;
+  END LOOP;
+
+  INSERT INTO public.profiles (id, username, name, avatar_url)
+  VALUES (NEW.id, cand, nome, NEW.raw_user_meta_data->>'avatar_url')
+  ON CONFLICT (id) DO NOTHING;
+  RETURN NEW;
+END; $$;
+
+
+-- ============================================================
+-- 046_saida_do_evento.sql
+-- ============================================================
+
+-- 046 — Saída do evento: ponto de encontro e horário como campos próprios
+--
+-- Um usuário organizou o rolê até o MR. FOX e escreveu na DESCRIÇÃO:
+--   * Saída: 13:30h
+--   * Ponto de encontro: Posto Simon Passo de Torres (BR 101)
+-- Não foi preguiça: o app não tinha onde guardar isso. O evento tem um local
+-- só (o destino), e o item do cronograma tem horário e título, mas não lugar.
+--
+-- Texto solto na descrição não aparece no mapa, não permite lembrete de saída
+-- e, quando muda, só gera um "evento atualizado" genérico — justamente o
+-- "sempre tem alguém que não foi avisado" que o app promete resolver.
+--
+-- Só colunas novas e opcionais: nenhum evento existente muda. A tela só
+-- mostra estes campos em evento de motoclube (empresa não tem "saída").
+
+ALTER TABLE events
+  ADD COLUMN IF NOT EXISTS departure_at    TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS meeting_label   TEXT,
+  ADD COLUMN IF NOT EXISTS meeting_address TEXT,
+  ADD COLUMN IF NOT EXISTS meeting_lat     DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS meeting_lng     DOUBLE PRECISION;
+
+-- O nome do ponto de encontro segue a mesma regra do nome do local (045).
+CREATE OR REPLACE FUNCTION public.valida_texto_events()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public AS $$
+BEGIN
+  IF current_user NOT IN ('authenticated', 'anon') THEN RETURN NEW; END IF;
+  IF TG_OP = 'INSERT' OR NEW.title IS DISTINCT FROM OLD.title THEN
+    NEW.title := btrim(public.limpa_invisiveis(NEW.title));
+    PERFORM public.exige_texto('evento', NEW.title);
+  END IF;
+  IF TG_OP = 'INSERT' OR NEW.description IS DISTINCT FROM OLD.description THEN
+    PERFORM public.exige_texto('evento_desc', NEW.description);
+  END IF;
+  IF TG_OP = 'INSERT' OR NEW.location_label IS DISTINCT FROM OLD.location_label THEN
+    PERFORM public.exige_texto('local', NEW.location_label);
+  END IF;
+  IF TG_OP = 'INSERT' OR NEW.meeting_label IS DISTINCT FROM OLD.meeting_label THEN
+    PERFORM public.exige_texto('local', NEW.meeting_label);
+  END IF;
+  RETURN NEW;
+END; $$;
+
+-- ── "A saída mudou" ─────────────────────────────────────────────────────────
+-- Aviso específico, para quem marcou interesse ou respondeu Vou/Talvez.
+-- Sem o horário no texto de propósito: o banco está em UTC e o push não sabe o
+-- fuso de quem recebe (quem está no Acre veria a hora errada). O toque abre o
+-- evento, que mostra o horário no fuso do aparelho.
+CREATE OR REPLACE FUNCTION public.notifica_saida_alterada()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  titulo TEXT;
+  corpo TEXT;
+BEGIN
+  IF NEW.departure_at IS NOT DISTINCT FROM OLD.departure_at
+     AND NEW.meeting_label IS NOT DISTINCT FROM OLD.meeting_label
+     AND NEW.meeting_address IS NOT DISTINCT FROM OLD.meeting_address THEN
+    RETURN NEW;
+  END IF;
+  -- Tirar a saída do evento não é notícia que valha um push.
+  IF NEW.departure_at IS NULL AND NEW.meeting_label IS NULL
+     AND NEW.meeting_address IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  titulo := CASE
+    WHEN OLD.departure_at IS NULL AND OLD.meeting_label IS NULL
+         AND OLD.meeting_address IS NULL
+    THEN 'Saída definida' ELSE 'Saída alterada' END;
+  corpo := '"' || NEW.title || '": '
+    || CASE WHEN COALESCE(NEW.meeting_label, NEW.meeting_address) IS NOT NULL
+            THEN 'encontro em ' || COALESCE(NEW.meeting_label, NEW.meeting_address) || '. '
+            ELSE '' END
+    || 'Toque para ver o horário.';
+
+  INSERT INTO notifications (user_id, type, title, body, data)
+  SELECT u.user_id, 'event_update', titulo, corpo, jsonb_build_object('eventId', NEW.id)
+    FROM (
+      SELECT user_id FROM event_interests WHERE event_id = NEW.id
+      UNION
+      SELECT user_id FROM event_participants
+       WHERE event_id = NEW.id AND rsvp IN ('going', 'maybe')
+    ) u
+   WHERE u.user_id IS DISTINCT FROM auth.uid();
+  RETURN NEW;
+END; $$;
+
+DROP TRIGGER IF EXISTS trg_notifica_saida_alterada ON events;
+CREATE TRIGGER trg_notifica_saida_alterada
+  AFTER UPDATE OF departure_at, meeting_label, meeting_address ON events
+  FOR EACH ROW EXECUTE FUNCTION public.notifica_saida_alterada();

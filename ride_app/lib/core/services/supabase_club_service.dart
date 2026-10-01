@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/club_model.dart';
 import '../models/user_model.dart';
 import '../models/club_invite.dart';
+import '../utils/extensions.dart';
 
 /// Acesso aos motoclubes: cadastro, membros/convites e descoberta.
 /// O dono é inserido como membro (owner/active) por trigger no banco.
@@ -146,17 +147,9 @@ class SupabaseClubService {
       'status': 'invited',
       'invited_by': _uid,
     });
-    try {
-      await _db.from('notifications').insert({
-        'user_id': userId,
-        'type': 'club_invite',
-        'title': 'Convite de motoclube',
-        'body': 'Você foi convidado para o motoclube "$clubName".',
-        'data': {'clubId': clubId},
-      });
-    } catch (_) {
-      // best-effort: convite continua válido mesmo se a notificação falhar
-    }
+    // O aviso sai do banco (trigger da migration 044), não daqui: o app não
+    // pode mais gravar notificação, senão qualquer conta mandaria push com
+    // qualquer texto para qualquer pessoa.
   }
 
   static Future<void> acceptInvite(String clubId) async {
@@ -228,7 +221,7 @@ class SupabaseClubService {
 
   // ── Buscar usuários pra convidar ───────────────────────────
   static Future<List<UserModel>> searchUsers(String query) async {
-    final q = query.trim();
+    final q = query.paraBusca;
     if (q.isEmpty) return [];
     final rows = await _db
         .from('profiles')

@@ -4,6 +4,7 @@ import '../../../core/models/user_model.dart';
 import '../../../core/services/supabase_auth_service.dart';
 import '../../../core/services/push_notification_service.dart';
 import '../../../core/services/chat_key_service.dart';
+import '../../../core/utils/db_errors.dart';
 
 enum AuthState { initial, loading, authenticated, unauthenticated, error }
 
@@ -95,6 +96,21 @@ class AuthViewModel extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
+      // Confere o nome antes de criar a conta: se o trigger recusar, o GoTrue
+      // só devolve "Database error saving new user" e a pessoa não saberia o
+      // que corrigir. Falha de rede aqui não bloqueia — a regra continua
+      // valendo no banco.
+      String? problema;
+      try {
+        problema = await SupabaseAuthService.checkText('nome', name);
+      } catch (_) {}
+      if (problema != null) {
+        _error = DbErrors.textoMensagem(problema, 'nome');
+        _state = AuthState.error;
+        notifyListeners();
+        return RegisterOutcome.failed;
+      }
+
       final res = await SupabaseAuthService.register(name, email, password);
       if (res.needsConfirmation) {
         // Código enviado por email — tela de cadastro navega pra verificação.
@@ -233,6 +249,8 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   String _friendlyError(String msg) {
+    final texto = DbErrors.textoInvalido(msg);
+    if (texto != null) return texto;
     if (msg.contains('Invalid login credentials')) return 'Email ou senha incorretos';
     if (msg.contains('Email not confirmed')) return 'Confirme seu email antes de entrar';
     // Diz o que fazer, não só o que deu errado: o GoTrue vincula identidades
@@ -251,7 +269,9 @@ class AuthViewModel extends ChangeNotifier {
       return 'Cadastro por email está desativado no servidor.';
     }
     if (msg.contains('Database error saving new user')) {
-      return 'Erro no banco ao criar conta. Verifique o trigger handle_new_user.';
+      // Antes a tela dizia "verifique o trigger handle_new_user" — mensagem de
+      // desenvolvedor para quem só quer criar conta.
+      return 'Não foi possível criar a conta agora. Tente de novo em instantes.';
     }
     if (msg.contains('Error sending confirmation email')) {
       return 'Servidor não consegue enviar o email de confirmação. '

@@ -5,6 +5,7 @@ import '../../../core/utils/extensions.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../viewmodels/club_viewmodel.dart';
+import '../../../core/constants/text_limits.dart';
 
 /// Cadastro de motoclube (qualquer usuário pode criar e vira dono).
 class CreateClubScreen extends StatefulWidget {
@@ -78,13 +79,17 @@ class _CreateClubScreenState extends State<CreateClubScreen> {
         padding: EdgeInsets.fromLTRB(24, 8, 24, bottomPad + 24),
         children: [
           const _Label('NOME DO CLUBE'),
-          _Input(controller: _nameCtrl, hint: 'Ex: Águias da Estrada'),
+          _Input(
+              controller: _nameCtrl,
+              hint: 'Ex: Águias da Estrada',
+              maxLength: TextLimits.clube),
           const SizedBox(height: 20),
           const _Label('DESCRIÇÃO'),
           _Input(
             controller: _descCtrl,
             hint: 'Sobre o clube, valores, região de atuação...',
             maxLines: 4,
+            maxLength: TextLimits.clubeDesc,
           ),
           const SizedBox(height: 20),
           Row(
@@ -96,7 +101,10 @@ class _CreateClubScreenState extends State<CreateClubScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const _Label('CIDADE'),
-                    _Input(controller: _cityCtrl, hint: 'Cidade'),
+                    _Input(
+                        controller: _cityCtrl,
+                        hint: 'Cidade',
+                        maxLength: TextLimits.cidade),
                   ],
                 ),
               ),
@@ -162,11 +170,13 @@ class _Label extends StatelessWidget {
 class _Input extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
+  final int? maxLength;
   final int maxLines;
   final bool textCapsUpper;
   const _Input({
     required this.controller,
     required this.hint,
+    this.maxLength,
     this.maxLines = 1,
     this.textCapsUpper = false,
   });
@@ -174,6 +184,11 @@ class _Input extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TextField(
+        maxLength: maxLength,
+        buildCounter: maxLines > 1
+            ? null
+            : (_, {required currentLength, required isFocused, maxLength}) =>
+                null,
       controller: controller,
       maxLines: maxLines,
       textCapitalization: textCapsUpper

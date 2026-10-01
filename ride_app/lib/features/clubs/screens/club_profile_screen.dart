@@ -11,6 +11,7 @@ import '../../../theme/app_text_styles.dart';
 import '../viewmodels/club_viewmodel.dart';
 import '../../../shared/widgets/rsvp_bar.dart';
 import '../../../core/models/trip_model.dart';
+import '../../../shared/widgets/formatted_text.dart';
 
 /// Perfil do motoclube com abas internas: Sobre · Membros · Eventos · Viagens.
 class ClubProfileScreen extends StatefulWidget {
@@ -229,7 +230,7 @@ class _AboutTab extends StatelessWidget {
             style: AppTextStyles.titleMedium
                 .copyWith(fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
-        Text(
+        FormattedText(
           (club.description ?? '').isNotEmpty
               ? club.description!
               : 'Este motoclube ainda não tem uma descrição.',

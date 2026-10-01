@@ -102,4 +102,29 @@ void main() {
       expect(url, contains('Blumenau'));
     });
   });
+
+  group('TripModel.copyWith — visibilidade e clube', () {
+    test('preserva isPublic e clubId', () {
+      // Ficavam de fora: um copyWith transformava viagem privada de clube em
+      // pública e pessoal.
+      final t = TripModel(
+        id: 't-1',
+        title: 'Serra',
+        origin: const LocationModel(lat: 0, lng: 0),
+        destination: const LocationModel(lat: 1, lng: 1),
+        creator: const UserModel(id: 'u-1', name: 'x', username: 'x'),
+        isPublic: false,
+        clubId: 'c-1',
+        createdAt: DateTime(2026, 9, 1),
+      );
+      final depois = t.copyWith(title: 'Serra do Rio do Rastro');
+      expect(depois.isPublic, isFalse);
+      expect(depois.clubId, 'c-1');
+      expect(depois.title, 'Serra do Rio do Rastro');
+    });
+
+    test('viagem pessoal continua sem clube', () {
+      expect(_makeTrip().copyWith(title: 'x').clubId, isNull);
+    });
+  });
 }

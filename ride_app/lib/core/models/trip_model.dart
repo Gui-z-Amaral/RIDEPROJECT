@@ -26,6 +26,10 @@ class TripModel {
   /// Privada é vista só pelo criador, pelos participantes e, se for de
   /// motoclube, pelos membros.
   final bool isPublic;
+
+  /// Motoclube dono da viagem (`null` = viagem pessoal). Viagem de clube só
+  /// aparece na página do clube.
+  final String? clubId;
   final DateTime createdAt;
 
   const TripModel({
@@ -45,6 +49,7 @@ class TripModel {
     this.estimatedDuration,
     this.coverImage,
     this.isPublic = true,
+    this.clubId,
     required this.createdAt,
   });
 
@@ -140,6 +145,10 @@ class TripModel {
       estimatedDistance: estimatedDistance ?? this.estimatedDistance,
       estimatedDuration: estimatedDuration ?? this.estimatedDuration,
       coverImage: coverImage ?? this.coverImage,
+      // Ficavam de fora: qualquer copyWith transformava uma viagem privada de
+      // clube em pública e pessoal, e a edição salvaria assim.
+      isPublic: isPublic,
+      clubId: clubId,
       createdAt: createdAt,
     );
   }

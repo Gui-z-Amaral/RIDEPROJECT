@@ -12,6 +12,7 @@ import '../../../core/models/club_invite.dart';
 import '../../../core/constants/app_links.dart';
 import '../../../core/utils/share_utils.dart';
 import '../../../core/services/supabase_club_service.dart';
+import '../../../core/constants/text_limits.dart';
 
 /// Configurações do motoclube (dono/gerente): banner, nome, cidade/UF,
 /// descrição e atalho para gerenciar membros.
@@ -261,7 +262,10 @@ class _ClubSettingsScreenState extends State<ClubSettingsScreen> {
           const SizedBox(height: 20),
 
           const _Label('NOME DO MOTOCLUBE'),
-          _Input(controller: _nameCtrl, hint: 'Nome do clube'),
+          _Input(
+              controller: _nameCtrl,
+              hint: 'Nome do clube',
+              maxLength: TextLimits.clube),
           const SizedBox(height: 20),
 
           Row(
@@ -273,7 +277,10 @@ class _ClubSettingsScreenState extends State<ClubSettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const _Label('CIDADE'),
-                    _Input(controller: _cityCtrl, hint: 'Cidade'),
+                    _Input(
+                        controller: _cityCtrl,
+                        hint: 'Cidade',
+                        maxLength: TextLimits.cidade),
                   ],
                 ),
               ),
@@ -298,6 +305,7 @@ class _ClubSettingsScreenState extends State<ClubSettingsScreen> {
             controller: _descCtrl,
             hint: 'Sobre o clube, valores, região...',
             maxLines: 4,
+            maxLength: TextLimits.clubeDesc,
           ),
           const SizedBox(height: 24),
 
@@ -366,11 +374,13 @@ class _Label extends StatelessWidget {
 class _Input extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
+  final int? maxLength;
   final int maxLines;
   final bool textCapsUpper;
   const _Input({
     required this.controller,
     required this.hint,
+    this.maxLength,
     this.maxLines = 1,
     this.textCapsUpper = false,
   });
@@ -378,6 +388,11 @@ class _Input extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TextField(
+        maxLength: maxLength,
+        buildCounter: maxLines > 1
+            ? null
+            : (_, {required currentLength, required isFocused, maxLength}) =>
+                null,
       controller: controller,
       maxLines: maxLines,
       textCapitalization: textCapsUpper

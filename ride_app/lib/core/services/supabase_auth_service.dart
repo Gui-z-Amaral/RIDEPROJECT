@@ -31,11 +31,13 @@ class SupabaseAuthService {
   /// `needsConfirmation: true` (e user null).
   static Future<({UserModel? user, bool needsConfirmation})> register(
       String name, String email, String password, {String? username}) async {
-    final u = username ?? _usernameFrom(name);
+    // O @ é gerado no servidor (handle_new_user, migration 045): ele sabe se
+    // já existe e acrescenta um sufixo. Gerar aqui fazia a segunda "João
+    // Silva" bater no UNIQUE e não conseguir criar conta.
     final res = await _db.auth.signUp(
       email: email.trim(),
       password: password,
-      data: {'name': name, 'username': u},
+      data: {'name': name.trim(), if (username != null) 'username': username},
     );
     if (res.user == null) return (user: null, needsConfirmation: false);
 
@@ -49,16 +51,30 @@ class SupabaseAuthService {
     // O upsert abaixo é só defesa em profundidade caso o trigger não tenha
     // rodado por algum motivo; se falhar não vamos quebrar o cadastro inteiro.
     try {
+      // Sem `username`: quem define é o servidor, e regravar o @ aqui
+      // desfaria o sufixo que ele acrescentou.
       await _db.from('profiles').upsert({
         'id': res.user!.id,
-        'name': name,
-        'username': u,
+        'name': name.trim(),
       });
     } catch (e) {
       debugPrint('register: upsert profile fallback falhou (ok se o trigger criou): $e');
     }
 
     return (user: await _fetchProfile(res.user!.id), needsConfirmation: false);
+  }
+
+  /// Pergunta ao servidor se [valor] passa na regra do [campo] (migration
+  /// 045). Devolve o motivo (vazio | curto | longo | formato | improprio) ou
+  /// `null` se estiver ok.
+  ///
+  /// Existe por causa do cadastro: lá o GoTrue troca o erro do trigger por um
+  /// genérico "Database error saving new user", e a pessoa não saberia o que
+  /// corrigir. A regra continua valendo no banco — isto só avisa antes.
+  static Future<String?> checkText(String campo, String valor) async {
+    final r = await _db.rpc('checar_texto',
+        params: {'p_campo': campo, 'p_valor': valor});
+    return r as String?;
   }
 
   // ── Confirmação de email por código (OTP) ──────────────────
@@ -139,17 +155,9 @@ class SupabaseAuthService {
     );
     if (res.user == null) return null;
 
-    // Garante que o perfil existe (cria se ainda não foi criado pelo trigger)
-    final existing = await _fetchProfile(res.user!.id);
-    if (existing == null) {
-      final name = googleUser.displayName ?? googleUser.email.split('@').first;
-      await _db.from('profiles').upsert({
-        'id': res.user!.id,
-        'name': name,
-        'username': _usernameFrom(name),
-        'avatar_url': googleUser.photoUrl,
-      });
-    }
+    // O perfil é criado pelo trigger handle_new_user, na mesma transação que
+    // cria a conta: se ele falhasse, o login já teria falhado antes daqui.
+    // O antigo plano B daqui gravava um @ sem checar repetição.
 
     return _profileAfterAuth(res.user!.id);
   }
@@ -367,6 +375,4 @@ class SupabaseAuthService {
   /// Busca o perfil completo de [id] (dados atuais, incl. flags de privacidade).
   static Future<UserModel?> getProfileById(String id) => _fetchProfile(id);
 
-  static String _usernameFrom(String name) =>
-      name.toLowerCase().replaceAll(RegExp(r'\s+'), '_');
 }

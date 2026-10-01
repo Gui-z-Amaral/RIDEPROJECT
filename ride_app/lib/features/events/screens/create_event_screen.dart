@@ -14,6 +14,8 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../viewmodels/event_viewmodel.dart';
 import '../../../shared/widgets/visibility_switch.dart';
+import '../../../core/constants/text_limits.dart';
+import '../../../core/utils/whatsapp_text.dart';
 
 /// Tela de criação/edição de evento (perfil empresa). Form único com banner,
 /// título, descrição, local (mapa), data/hora, programação, patrocinadores e
@@ -41,7 +43,30 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   bool _uploadingBanner = false;
   /// Visibilidade do evento. Antes era herdada do motoclube; desde a
   /// migration 034 cada evento tem a sua.
-  bool _isPublic = true;
+  /// Definido no initState: evento criado DENTRO do motoclube nasce privado.
+  /// Antes nascia público em todo caso, e quem criava pelo mural sem mexer no
+  /// interruptor publicava na aba Eventos geral sem perceber.
+  late bool _isPublic;
+
+  /// Clube do evento: vem da rota ao criar, e do próprio evento ao editar (a
+  /// rota de edição não traz o clube).
+  String? _clubId;
+
+  // ── Saída do rolê (migration 046, só evento de motoclube) ──
+  DateTime? _departureAt;
+  LocationModel? _meetingPoint;
+
+  /// Como estava salvo, para saber na edição se a saída mudou: quando muda, o
+  /// banco manda um aviso próprio ("Saída alterada") e o genérico "evento
+  /// atualizado" viraria um segundo push sobre a mesma coisa.
+  DateTime? _departureSalva;
+  LocationModel? _meetingSalvo;
+
+  /// Sugestão tirada da descrição colada do WhatsApp. Só sugere: quem
+  /// confirma o horário e o lugar é a pessoa.
+  ({int hora, int minuto})? _sugHora;
+  String? _sugPonto;
+  bool _sugDispensada = false;
 
   LocationModel? _location;
   String? _stateUf;
@@ -64,6 +89,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   @override
   void initState() {
     super.initState();
+    _clubId = widget.clubId;
+    _isPublic = widget.clubId == null;
+    _descCtrl.addListener(_lerSugestao);
     if (_isEditing) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadAndPrefill());
     } else {
@@ -79,6 +107,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     if (e != null && e.id == widget.eventId) {
       _titleCtrl.text = e.title;
       _descCtrl.text = e.description ?? '';
+      // Antes a edição abria sempre em "Público", mesmo com o evento privado.
+      _isPublic = e.isPublic;
+      _clubId = e.clubId;
+      _departureAt = e.departureAt;
+      _meetingPoint = e.meetingPoint;
+      _departureSalva = e.departureAt;
+      _meetingSalvo = e.meetingPoint;
       _bannerUrl = e.bannerUrl;
       _stateUf = e.stateUf;
       _city = e.city;
@@ -185,6 +220,68 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     return parts.isNotEmpty ? parts.first : null;
   }
 
+  // ── Saída do rolê ────────────────────────────────────────────
+  void _lerSugestao() {
+    if (_clubId == null || _sugDispensada) return;
+    final t = _descCtrl.text;
+    final h = _departureAt == null ? WhatsAppText.horarioDeSaida(t) : null;
+    final p = _meetingPoint == null ? WhatsAppText.pontoDeEncontro(t) : null;
+    if (h != _sugHora || p != _sugPonto) {
+      setState(() {
+        _sugHora = h;
+        _sugPonto = p;
+      });
+    }
+  }
+
+  /// Aplica a sugestão, sempre pedindo confirmação: o horário abre no seletor
+  /// já preenchido (a data vem do início do evento), e o ponto de encontro
+  /// abre a busca do mapa já com o nome digitado.
+  Future<void> _usarSugestao() async {
+    final h = _sugHora;
+    final p = _sugPonto;
+    setState(() => _sugDispensada = true);
+    if (h != null) {
+      final dia = _startsAt ?? DateTime.now().add(const Duration(days: 1));
+      final dt = await _pickDateTime(
+          DateTime(dia.year, dia.month, dia.day, h.hora, h.minuto));
+      if (dt != null && mounted) setState(() => _departureAt = dt);
+    }
+    if (p != null && mounted) await _pickMeetingPoint(busca: p);
+  }
+
+  Future<void> _pickDeparture() async {
+    final base = _departureAt ??
+        (_startsAt ?? DateTime.now().add(const Duration(days: 1)))
+            .subtract(const Duration(hours: 1));
+    final dt = await _pickDateTime(base);
+    if (dt != null) setState(() => _departureAt = dt);
+  }
+
+  Future<void> _pickMeetingPoint({String? busca}) async {
+    final result = await context.push<dynamic>('/map/select', extra: {
+      'title': 'Ponto de encontro',
+      'onSelected': null,
+      if (busca != null) 'initialQuery': busca,
+    });
+    if (result == null || !mounted) return;
+    final loc = result is Map
+        ? result['location'] as LocationModel?
+        : result as LocationModel?;
+    if (loc != null) setState(() => _meetingPoint = loc);
+  }
+
+  bool get _saidaMudou {
+    final a = _departureAt, b = _departureSalva;
+    final horaMudou =
+        (a == null) != (b == null) || (a != null && !a.isAtSameMomentAs(b!));
+    final m = _meetingPoint, n = _meetingSalvo;
+    final pontoMudou = (m == null) != (n == null) ||
+        (m != null &&
+            (m.lat != n!.lat || m.lng != n.lng || m.label != n.label));
+    return horaMudou || pontoMudou;
+  }
+
   // ── Data/hora ────────────────────────────────────────────────
   Future<void> _pickStart() async {
     final dt = await _pickDateTime(_startsAt ??
@@ -200,6 +297,12 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   }
 
   Future<DateTime?> _pickDateTime(DateTime initial) async {
+    // Evento antigo em edição: o seletor não aceita abrir antes de hoje.
+    final agora = DateTime.now();
+    if (initial.isBefore(agora)) {
+      initial = DateTime(agora.year, agora.month, agora.day, initial.hour,
+          initial.minute);
+    }
     final date = await showDatePicker(
       context: context,
       initialDate: initial,
@@ -352,10 +455,15 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         city: _city,
         startsAt: _startsAt,
         endsAt: _endsAt,
+        isPublic: _isPublic,
+        saida: _clubId == null
+            ? null
+            : EventDeparture(at: _departureAt, meetingPoint: _meetingPoint),
         schedule: schedule,
         sponsors: sponsors,
         participantIds: participantIds,
-        notifyInterested: true,
+        // Se a saída mudou, o banco já avisa com "Saída alterada".
+        notifyInterested: !(_clubId != null && _saidaMudou),
       );
     } else {
       event = await vm.createEvent(
@@ -372,6 +480,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         endsAt: _endsAt,
         clubId: widget.clubId,
         isPublic: _isPublic,
+        saida: _clubId == null
+            ? null
+            : EventDeparture(at: _departureAt, meetingPoint: _meetingPoint),
         schedule: schedule,
         sponsors: sponsors,
         participantIds: participantIds,
@@ -458,14 +569,49 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           _Input(
             controller: _titleCtrl,
             hint: 'Ex: Encontro de Motociclistas 2026',
+            maxLength: TextLimits.evento,
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 20),
 
           // ── Descrição ────────────────────────────────────────
           const _Label('DESCRIÇÃO'),
-          _Input(controller: _descCtrl, hint: 'Conte sobre o evento...', maxLines: 4),
+          _Input(
+              controller: _descCtrl,
+              hint: 'Conte sobre o evento...',
+              maxLines: 4,
+              maxLength: TextLimits.eventoDesc),
+          if (_clubId != null &&
+              !_sugDispensada &&
+              (_sugHora != null || _sugPonto != null)) ...[
+            const SizedBox(height: 10),
+            _SugestaoSaida(
+              hora: _sugHora,
+              ponto: _sugPonto,
+              onUsar: _usarSugestao,
+              onIgnorar: () => setState(() => _sugDispensada = true),
+            ),
+          ],
           const SizedBox(height: 20),
+
+          // ── Cronograma ───────────────────────────────────────
+          // Logo abaixo da descrição: no fim da tela, depois de "quem pode
+          // ver", ninguém achava, e o horário ia parar na descrição.
+          _SectionRow(label: 'CRONOGRAMA', onAdd: _addScheduleItem),
+          const SizedBox(height: 4),
+          if (_schedule.isEmpty)
+            Text('Adicione os horários e atividades do evento (opcional).',
+                style: AppTextStyles.bodySmall
+                    .copyWith(color: AppColors.textMuted)),
+          ..._schedule.asMap().entries.map((e) => Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: _ScheduleItemEditor(
+                  draft: e.value,
+                  onRemove: () => _removeScheduleItem(e.key),
+                ),
+              )),
+          const SizedBox(height: 24),
+
 
           // ── Local ────────────────────────────────────────────
           const _Label('LOCAL'),
@@ -544,32 +690,43 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           ),
           const SizedBox(height: 24),
 
+          // ── Saída do rolê (só motoclube) ─────────────────────
+          // Empresa não tem "saída"; o rolê do clube até o evento tem.
+          if (_clubId != null) ...[
+            const _Label('SAÍDA DO ROLÊ (OPCIONAL)'),
+            _DateTimeBox(
+              value: _departureAt,
+              hint: 'Horário de saída',
+              onTap: _pickDeparture,
+              onClear: _departureAt != null
+                  ? () => setState(() => _departureAt = null)
+                  : null,
+            ),
+            const SizedBox(height: 12),
+            _PontoDeEncontroBox(
+              ponto: _meetingPoint,
+              onTap: _pickMeetingPoint,
+              onClear: _meetingPoint != null
+                  ? () => setState(() => _meetingPoint = null)
+                  : null,
+            ),
+            const SizedBox(height: 24),
+          ],
+
           // ── Visibilidade ─────────────────────────────────────
           const _Label('QUEM PODE VER'),
           VisibilitySwitch(
             isPublic: _isPublic,
             onChanged: (v) => setState(() => _isPublic = v),
-            publicHint: 'Aparece na busca e qualquer pessoa pode abrir o link',
-            privateHint: widget.clubId != null
+            // Evento de clube nunca vai para a aba Eventos: público, ele só
+            // fica visível para quem visita a página do clube.
+            publicHint: _clubId != null
+                ? 'Quem visitar o motoclube vê, mesmo sem ser membro'
+                : 'Aparece na aba Eventos e qualquer pessoa pode abrir o link',
+            privateHint: _clubId != null
                 ? 'Só membros do motoclube veem'
                 : 'Só você e quem receber o convite',
           ),
-          const SizedBox(height: 24),
-
-          // ── Programação ──────────────────────────────────────
-          _SectionRow(label: 'PROGRAMAÇÃO', onAdd: _addScheduleItem),
-          const SizedBox(height: 4),
-          if (_schedule.isEmpty)
-            Text('Adicione os horários e atividades do evento (opcional).',
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.textMuted)),
-          ..._schedule.asMap().entries.map((e) => Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: _ScheduleItemEditor(
-                  draft: e.value,
-                  onRemove: () => _removeScheduleItem(e.key),
-                ),
-              )),
           const SizedBox(height: 24),
 
           // ── Patrocinadores ───────────────────────────────────
@@ -912,11 +1069,13 @@ class _Label extends StatelessWidget {
 class _Input extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
+  final int? maxLength;
   final int maxLines;
   final void Function(String)? onChanged;
   const _Input({
     required this.controller,
     required this.hint,
+    this.maxLength,
     this.maxLines = 1,
     this.onChanged,
   });
@@ -929,6 +1088,11 @@ class _Input extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: TextField(
+        maxLength: maxLength,
+        buildCounter: maxLines > 1
+            ? null
+            : (_, {required currentLength, required isFocused, maxLength}) =>
+                null,
         controller: controller,
         maxLines: maxLines,
         onChanged: onChanged,
@@ -995,6 +1159,152 @@ class _DateTimeBox extends StatelessWidget {
               GestureDetector(
                 onTap: onClear,
                 child: const Icon(Icons.close, color: Colors.white70, size: 18),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Sugestão tirada da descrição ────────────────────────────────────────────
+
+/// "Achamos no texto: saída às 13:30 · encontro em Posto Simon."
+/// Aparece quando a descrição traz a saída e os campos próprios estão vazios.
+class _SugestaoSaida extends StatelessWidget {
+  final ({int hora, int minuto})? hora;
+  final String? ponto;
+  final VoidCallback onUsar;
+  final VoidCallback onIgnorar;
+  const _SugestaoSaida({
+    required this.hora,
+    required this.ponto,
+    required this.onUsar,
+    required this.onIgnorar,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final h = hora;
+    final partes = [
+      if (h != null)
+        'saída às ${h.hora.toString().padLeft(2, '0')}:'
+            '${h.minuto.toString().padLeft(2, '0')}',
+      if (ponto != null) 'encontro em $ponto',
+    ];
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 4),
+      decoration: BoxDecoration(
+        color: AppColors.navy.withValues(alpha: 0.06),
+        border: Border.all(color: AppColors.navy.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.auto_awesome_outlined,
+                  size: 18, color: AppColors.navy),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Achamos no texto: ${partes.join(' · ')}. '
+                  'Nos campos de saída, o ponto aparece no mapa e quem vai '
+                  'é avisado se mudar.',
+                  style: AppTextStyles.bodySmall,
+                ),
+              ),
+            ],
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(onPressed: onIgnorar, child: const Text('Agora não')),
+              TextButton(
+                onPressed: onUsar,
+                child: Text('Usar',
+                    style: TextStyle(
+                        color: AppColors.navy, fontWeight: FontWeight.w800)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Ponto de encontro ───────────────────────────────────────────────────────
+
+class _PontoDeEncontroBox extends StatelessWidget {
+  final LocationModel? ponto;
+  final VoidCallback onTap;
+  final VoidCallback? onClear;
+  const _PontoDeEncontroBox({
+    required this.ponto,
+    required this.onTap,
+    this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = ponto;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+        constraints: const BoxConstraints(minHeight: 52),
+        decoration: BoxDecoration(
+          color: p != null
+              ? AppColors.navy.withValues(alpha: 0.06)
+              : AppColors.inputFill,
+          border:
+              Border.all(color: p != null ? AppColors.navy : AppColors.divider),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.flag_outlined,
+                color: p != null ? AppColors.navy : AppColors.textMuted),
+            const SizedBox(width: 10),
+            Expanded(
+              child: p == null
+                  ? Text('Ponto de encontro',
+                      style: AppTextStyles.bodyMedium
+                          .copyWith(color: AppColors.textMuted))
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                            p.label?.isNotEmpty == true
+                                ? p.label!
+                                : 'Ponto de encontro',
+                            style: AppTextStyles.titleSmall
+                                .copyWith(fontWeight: FontWeight.w700),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                        if ((p.address ?? '').isNotEmpty)
+                          Text(p.address!,
+                              style: AppTextStyles.bodySmall
+                                  .copyWith(color: AppColors.textMuted),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
+                      ],
+                    ),
+            ),
+            if (onClear != null)
+              IconButton(
+                icon: Icon(Icons.close, size: 18, color: AppColors.textMuted),
+                tooltip: 'Tirar ponto de encontro',
+                onPressed: onClear,
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Icon(Icons.chevron_right, color: AppColors.textMuted),
               ),
           ],
         ),

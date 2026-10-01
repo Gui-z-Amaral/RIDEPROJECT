@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/event_model.dart';
 import '../../../core/services/supabase_event_service.dart';
+import '../../../core/utils/db_errors.dart';
 
 class EventViewModel extends ChangeNotifier {
   // Eventos da UF atual (home)
@@ -115,6 +116,7 @@ class EventViewModel extends ChangeNotifier {
     DateTime? endsAt,
     String? clubId,
     bool isPublic = true,
+    EventDeparture? saida,
     List<EventScheduleItem> schedule = const [],
     List<EventSponsor> sponsors = const [],
     List<String> participantIds = const [],
@@ -137,6 +139,7 @@ class EventViewModel extends ChangeNotifier {
         endsAt: endsAt,
         clubId: clubId,
         isPublic: isPublic,
+        saida: saida,
         schedule: schedule,
         sponsors: sponsors,
         participantIds: participantIds,
@@ -147,7 +150,8 @@ class EventViewModel extends ChangeNotifier {
       return event;
     } catch (e) {
       debugPrint('❌ EventViewModel.createEvent: $e');
-      _saveError = 'Não foi possível criar o evento. Tente novamente.';
+      _saveError = DbErrors.mensagem(e,
+          fallback: 'Não foi possível criar o evento. Tente novamente.');
       _isSaving = false;
       notifyListeners();
       return null;
@@ -168,6 +172,8 @@ class EventViewModel extends ChangeNotifier {
     String? city,
     DateTime? startsAt,
     DateTime? endsAt,
+    bool? isPublic,
+    EventDeparture? saida,
     List<EventScheduleItem>? schedule,
     List<EventSponsor>? sponsors,
     List<String>? participantIds,
@@ -190,6 +196,8 @@ class EventViewModel extends ChangeNotifier {
         city: city,
         startsAt: startsAt,
         endsAt: endsAt,
+        isPublic: isPublic,
+        saida: saida,
         schedule: schedule,
         sponsors: sponsors,
         participantIds: participantIds,
@@ -207,7 +215,8 @@ class EventViewModel extends ChangeNotifier {
       return event;
     } catch (e) {
       debugPrint('❌ EventViewModel.updateEvent: $e');
-      _saveError = 'Não foi possível salvar as alterações. Tente novamente.';
+      _saveError = DbErrors.mensagem(e,
+          fallback: 'Não foi possível salvar as alterações. Tente novamente.');
       _isSaving = false;
       notifyListeners();
       return null;

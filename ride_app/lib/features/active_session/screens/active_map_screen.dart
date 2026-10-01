@@ -12,8 +12,7 @@ import '../../../shared/widgets/app_avatar.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/utils/extensions.dart';
 import '../../../core/services/supabase_ride_service.dart';
-import '../../../core/services/supabase_notification_service.dart';
-import '../../auth/viewmodels/auth_viewmodel.dart';
+import '../../../core/services/supabase_trip_service.dart';
 import '../../social/viewmodels/social_viewmodel.dart';
 import '../viewmodels/active_session_viewmodel.dart';
 
@@ -337,25 +336,17 @@ class _ActiveMapScreenState extends State<ActiveMapScreen> {
   ) async {
     if (users.isEmpty) return;
     final messenger = ScaffoldMessenger.of(context);
-    final creatorName =
-        context.read<AuthViewModel>().user?.name ?? 'Alguém';
+    final ids = users.map((u) => u.id).toList();
 
     try {
+      // Grava o convite; o aviso a cada pessoa sai do banco (migration 044).
+      // Viagem antes só mandava a notificação, sem criar a participação — o
+      // convidado tocava em aceitar e não havia convite para aceitar.
       if (vm.isRide) {
-        await SupabaseRideService.inviteParticipants(
-            vm.sessionId, users.map((u) => u.id).toList());
+        await SupabaseRideService.inviteParticipants(vm.sessionId, ids);
+      } else {
+        await SupabaseTripService.inviteParticipants(vm.sessionId, ids);
       }
-      await SupabaseNotificationService.sendInviteNotifications(
-        userIds: users.map((u) => u.id).toList(),
-        type: vm.isRide ? 'ride_invite' : 'trip_invite',
-        title: vm.isRide ? 'Convite para rolê' : 'Convite para viagem',
-        body: '$creatorName te convidou para "${vm.sessionTitle}"',
-        data: {
-          'rideId': vm.isRide ? vm.sessionId : null,
-          'tripId': vm.isRide ? null : vm.sessionId,
-          'place': vm.sessionTitle,
-        },
-      );
       vm.addInvitedParticipants(users);
       messenger.showSnackBar(
         SnackBar(

@@ -95,27 +95,11 @@ class SupabaseNotificationService {
     await _db.from('notifications').delete().eq('id', id).eq('user_id', _uid);
   }
 
-  // ── Enviar convite para uma lista de usuários ──────────────
-  static Future<void> sendInviteNotifications({
-    required List<String> userIds,
-    required String type,   // 'ride_invite' | 'trip_invite'
-    required String title,
-    required String body,
-    Map<String, dynamic> data = const {},
-  }) async {
-    if (userIds.isEmpty) return;
-    await _db.from('notifications').insert(
-      userIds
-          .map((uid) => {
-                'user_id': uid,
-                'type': type,
-                'title': title,
-                'body': body,
-                'data': data,
-              })
-          .toList(),
-    );
-  }
+  // Não existe mais "enviar notificação" no app. Desde a migration 044 quem
+  // grava em `notifications` é só o banco, a partir de um convite, mensagem ou
+  // pedido de amizade que aconteceu de verdade. Antes a policy deixava
+  // qualquer conta gravar, e o worker mandava push de tudo: qualquer um
+  // enviava qualquer texto para o celular de qualquer pessoa.
 
   // ── Push: registro de token FCM do aparelho ────────────────
   /// Salva (ou move) o token FCM do aparelho para o usuário logado.

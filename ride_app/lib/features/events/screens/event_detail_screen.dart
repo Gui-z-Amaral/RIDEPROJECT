@@ -13,6 +13,7 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../viewmodels/event_viewmodel.dart';
 import '../../../shared/widgets/rsvp_bar.dart';
+import '../../../shared/widgets/formatted_text.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final String eventId;
@@ -55,6 +56,15 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final hh = d.hour.toString().padLeft(2, '0');
     final mi = d.minute.toString().padLeft(2, '0');
     return '${d.day} de ${_months[d.month]} de ${d.year} · $hh:$mi';
+  }
+
+  Future<void> _openMeetingMaps(EventModel e) async {
+    final url = e.meetingMapsUrl;
+    if (url == null) return;
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   Future<void> _openMaps(EventModel e) async {
@@ -264,6 +274,35 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             ),
                           ),
 
+                        // Saída do rolê (migration 046). Antes isto ia
+                        // parar na descrição, como texto solto.
+                        if (e.hasDeparture) ...[
+                          const SizedBox(height: 12),
+                          GestureDetector(
+                            onTap: e.meetingPoint != null
+                                ? () => _openMeetingMaps(e)
+                                : null,
+                            child: _InfoRow(
+                              icon: Icons.flag_outlined,
+                              title: e.departureAt != null
+                                  ? 'Saída: ${_fmtDateTime(e.departureAt!)}'
+                                  : 'Ponto de encontro',
+                              subtitle: e.meetingPoint == null
+                                  ? null
+                                  : [
+                                      e.meetingPoint!.label,
+                                      e.meetingPoint!.address,
+                                    ]
+                                      .whereType<String>()
+                                      .where((t) => t.isNotEmpty)
+                                      .join(' · '),
+                              trailing: e.meetingPoint != null
+                                  ? 'Ver no mapa →'
+                                  : null,
+                            ),
+                          ),
+                        ],
+
                         // Descrição
                         if ((e.description ?? '').isNotEmpty) ...[
                           const SizedBox(height: 24),
@@ -271,16 +310,17 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               style: AppTextStyles.headlineMedium
                                   .copyWith(fontWeight: FontWeight.w800)),
                           const SizedBox(height: 8),
-                          Text(e.description!,
+                          FormattedText(e.description!,
                               style: AppTextStyles.bodyMedium.copyWith(
                                   color: AppColors.textSecondary,
                                   height: 1.5)),
                         ],
 
-                        // Programação
+                        // Cronograma — mesmo nome que o motociclista usa e
+                        // que a tela de criação passou a usar.
                         if (e.schedule.isNotEmpty) ...[
                           const SizedBox(height: 24),
-                          Text('Programação',
+                          Text('Cronograma',
                               style: AppTextStyles.headlineMedium
                                   .copyWith(fontWeight: FontWeight.w800)),
                           const SizedBox(height: 12),

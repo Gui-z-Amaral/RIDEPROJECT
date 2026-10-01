@@ -6,6 +6,7 @@ import '../../../theme/app_text_styles.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../../../core/utils/extensions.dart';
 import '../../../core/constants/app_links.dart';
+import '../../../core/constants/text_limits.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -103,8 +104,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 _Field(
                   controller: _nameCtrl,
                   hint: 'Nome de usuário',
-                  validator: (v) =>
-                      v == null || v.isEmpty ? 'Informe seu nome' : null,
+                  maxLength: TextLimits.nome,
+                  // trim: antes "   " passava e virava o @ "_".
+                  validator: (v) {
+                    final t = v?.trim() ?? '';
+                    if (t.isEmpty) return 'Informe seu nome';
+                    if (t.length < 2) return 'Nome muito curto';
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 12),
 
@@ -229,6 +236,7 @@ class _Field extends StatelessWidget {
   final TextInputType? keyboardType;
   final Widget? suffix;
   final String? Function(String?)? validator;
+  final int? maxLength;
 
   const _Field({
     required this.controller,
@@ -237,11 +245,15 @@ class _Field extends StatelessWidget {
     this.keyboardType,
     this.suffix,
     this.validator,
+    this.maxLength,
   });
 
   @override
   Widget build(BuildContext context) {
     return TextFormField(
+      maxLength: maxLength,
+      buildCounter: (_, {required currentLength, required isFocused, maxLength}) =>
+          null,
       controller: controller,
       obscureText: obscure,
       keyboardType: keyboardType,

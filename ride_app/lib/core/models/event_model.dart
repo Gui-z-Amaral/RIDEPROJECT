@@ -1,3 +1,4 @@
+import 'location_model.dart';
 import 'user_model.dart';
 import '../utils/db_time.dart';
 
@@ -94,6 +95,22 @@ class EventModel {
 
   /// Atalho de leitura — evita `completedAt != null` espalhado pelas telas.
   bool get isCompleted => completedAt != null;
+
+  /// Horário de saída do rolê até o evento (migration 046). Só evento de
+  /// motoclube usa: empresa não tem "saída".
+  final DateTime? departureAt;
+
+  /// Ponto de encontro, diferente do [lat]/[lng] do evento (que é o destino).
+  final LocationModel? meetingPoint;
+
+  bool get hasDeparture => departureAt != null || meetingPoint != null;
+
+  /// Link do Google Maps para o ponto de encontro.
+  String? get meetingMapsUrl {
+    final m = meetingPoint;
+    if (m == null) return null;
+    return 'https://www.google.com/maps/search/?api=1&query=${m.lat},${m.lng}';
+  }
   final int interestsCount;
   final List<EventScheduleItem> schedule;
   final List<EventSponsor> sponsors;
@@ -121,6 +138,8 @@ class EventModel {
     required this.startsAt,
     this.endsAt,
     this.completedAt,
+    this.departureAt,
+    this.meetingPoint,
     this.interestsCount = 0,
     this.schedule = const [],
     this.sponsors = const [],
@@ -174,11 +193,28 @@ class EventModel {
       completedAt: identical(completedAt, _naoMexer)
           ? this.completedAt
           : completedAt as DateTime?,
+      // Levados de propósito: o copyWith já perdeu clubId e isPublic uma vez.
+      departureAt: departureAt,
+      meetingPoint: meetingPoint,
       interestsCount: interestsCount ?? this.interestsCount,
       schedule: schedule ?? this.schedule,
       sponsors: sponsors ?? this.sponsors,
       participants: participants ?? this.participants,
       isInterested: isInterested ?? this.isInterested,
+    );
+  }
+
+  /// Ponto de encontro a partir das colunas `meeting_*`. Sem coordenada não
+  /// há ponto: um nome sem lugar no mapa não serve para "ver no mapa".
+  static LocationModel? meetingFromMap(Map<String, dynamic> map) {
+    final lat = (map['meeting_lat'] as num?)?.toDouble();
+    final lng = (map['meeting_lng'] as num?)?.toDouble();
+    if (lat == null || lng == null) return null;
+    return LocationModel(
+      lat: lat,
+      lng: lng,
+      label: map['meeting_label'] as String?,
+      address: map['meeting_address'] as String?,
     );
   }
 
@@ -230,6 +266,8 @@ class EventModel {
           ? DbTime.tryParse(map['ends_at'])
           : null,
       completedAt: DbTime.tryParse(map['completed_at']),
+      departureAt: DbTime.tryParse(map['departure_at']),
+      meetingPoint: meetingFromMap(map),
       interestsCount: (map['interests_count'] as num?)?.toInt() ?? 0,
       schedule: items,
       sponsors: sponsorList,

@@ -8,7 +8,6 @@ import '../models/stop_model.dart';
 import '../models/session_invite.dart';
 import '../models/event_model.dart';
 import '../utils/image_utils.dart';
-import 'supabase_notification_service.dart';
 import 'supabase_social_service.dart';
 import '../utils/db_time.dart';
 import '../utils/participant_rows.dart';
@@ -421,32 +420,8 @@ class SupabaseTripService {
       await _db.rpc('update_trips_count', params: {'p_user_id': _uid});
     } catch (_) {}
 
-    // Send trip_invite notifications to non-creator participants.
-    // Mesma lista que virou linha no banco: quem recebe convite e quem recebe
-    // notificação não podem divergir.
-    final invitedIds = ParticipantRows.invitedIds(_uid, participantIds);
-    if (invitedIds.isNotEmpty) {
-      try {
-        final creatorRow = await _db
-            .from('profiles')
-            .select('name')
-            .eq('id', _uid)
-            .single();
-        final creatorName = creatorRow['name'] as String? ?? 'Alguém';
-        await SupabaseNotificationService.sendInviteNotifications(
-          userIds: invitedIds,
-          type: 'trip_invite',
-          title: '$creatorName te convidou para uma viagem',
-          body: '$title · ${destination.address ?? destination.label ?? 'Destino'}',
-          data: {
-            'tripId': tripId,
-            'tripTitle': title,
-            'originAddress': origin.address ?? '',
-            'destinationAddress': destination.address ?? '',
-          },
-        );
-      } catch (_) {}
-    }
+    // O aviso aos convidados sai do banco: a linha `waiting` inserida acima
+    // dispara o trigger da migration 044.
 
     // Paradas (best-effort: a viagem já existe, não vale derrubar por isso).
     try {
@@ -523,30 +498,8 @@ class SupabaseTripService {
       } catch (_) {}
     }
 
-    // Notifica convidados novos (apenas os adicionados nesta edição)
-    final newlyInvited = toAdd.where((id) => id != _uid).toList();
-    if (newlyInvited.isNotEmpty) {
-      try {
-        final creatorRow = await _db
-            .from('profiles')
-            .select('name')
-            .eq('id', _uid)
-            .single();
-        final creatorName = creatorRow['name'] as String? ?? 'Alguém';
-        await SupabaseNotificationService.sendInviteNotifications(
-          userIds: newlyInvited,
-          type: 'trip_invite',
-          title: '$creatorName te convidou para uma viagem',
-          body: '$title · ${destination.address ?? destination.label ?? 'Destino'}',
-          data: {
-            'tripId': tripId,
-            'tripTitle': title,
-            'originAddress': origin.address ?? '',
-            'destinationAddress': destination.address ?? '',
-          },
-        );
-      } catch (_) {}
-    }
+    // Convidados novos são avisados pelo banco (trigger da migration 044),
+    // disparado pela inserção acima.
 
     // Paradas: substitui pelo conjunto atual do formulário.
     try {
@@ -565,6 +518,25 @@ class SupabaseTripService {
         .delete()
         .eq('id', tripId)
         .eq('creator_id', _uid);
+  }
+
+  // ── Convidar para uma viagem já criada ─────────────────────
+  /// Grava os convites de [userIds] em [tripId]. O aviso a cada um sai do
+  /// banco (trigger da migration 044) — não há mais notificação feita pelo app.
+  ///
+  /// Só o criador consegue (policy `trip_part_insert`, migration 040).
+  /// Quem já estava na viagem é ignorado pelo `ON CONFLICT`.
+  static Future<void> inviteParticipants(
+      String tripId, List<String> userIds) async {
+    final rows = ParticipantRows.invitedRows(
+      fkColumn: 'trip_id',
+      parentId: tripId,
+      creatorId: _uid,
+      participantIds: userIds,
+    );
+    if (rows.isEmpty) return;
+    await _db.from('trip_participants').upsert(rows,
+        onConflict: 'trip_id,user_id', ignoreDuplicates: true);
   }
 
   // ── Convites pendentes (participação 'waiting', não-criador) ───
@@ -773,6 +745,7 @@ class SupabaseTripService {
       estimatedDuration: r['estimated_duration'] as String?,
       coverImage: r['cover_image'] as String?,
       isPublic: r['is_public'] as bool? ?? true,
+      clubId: r['club_id'] as String?,
       createdAt: DbTime.parse(r['created_at']),
     );
   }

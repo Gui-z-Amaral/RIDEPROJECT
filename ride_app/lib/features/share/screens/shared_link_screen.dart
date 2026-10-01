@@ -14,6 +14,7 @@ import '../../../theme/app_text_styles.dart';
 import '../../events/screens/event_detail_screen.dart';
 import '../../rides/screens/ride_detail_screen.dart';
 import '../../trips/screens/trip_detail_screen.dart';
+import '../../../shared/widgets/formatted_text.dart';
 
 /// Porta de entrada dos links compartilhados (`/e/<id>`, `/v/<id>`, `/r/<id>`).
 ///
@@ -145,7 +146,7 @@ class _PublicPreviewState extends State<_PublicPreview> {
                     p.description != null &&
                     p.description!.trim().isNotEmpty) ...[
                   const SizedBox(height: AppSpacing.md),
-                  Text(p.description!,
+                  FormattedText(p.description!,
                       style: AppTextStyles.bodyMedium
                           .copyWith(color: AppColors.textSecondary)),
                 ],

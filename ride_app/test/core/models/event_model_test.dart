@@ -3,6 +3,8 @@
 // parsing das listas aninhadas (schedule/sponsors/participants) quebra, o
 // detalhe do evento aparece vazio sem erro.
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ride_app/core/models/location_model.dart';
+import 'package:ride_app/core/services/supabase_event_service.dart' show EventDeparture;
 import 'package:ride_app/core/models/event_model.dart';
 
 void main() {
@@ -264,6 +266,79 @@ void main() {
       final depois = e.copyWith(isInterested: true);
       expect(depois.clubId, 'c1');
       expect(depois.isPublic, isFalse);
+    });
+  });
+
+  group('EventModel — saída do rolê (migration 046)', () {
+    Map<String, dynamic> linha(Map<String, dynamic> extra) => {
+          'id': 'e1',
+          'creator_id': 'u1',
+          'title': 'Rolê MR MOTOR SHOW',
+          'starts_at': '2026-09-20T16:30:00Z',
+          ...extra,
+        };
+
+    test('sem colunas de saída, não há saída', () {
+      final e = EventModel.fromMap(linha({}));
+      expect(e.hasDeparture, isFalse);
+      expect(e.meetingPoint, isNull);
+      expect(e.meetingMapsUrl, isNull);
+    });
+
+    test('lê horário e ponto de encontro', () {
+      final e = EventModel.fromMap(linha({
+        'departure_at': '2026-09-20T16:30:00Z',
+        'meeting_label': 'Posto Simon',
+        'meeting_address': 'BR-101, Passo de Torres',
+        'meeting_lat': -29.31,
+        'meeting_lng': -49.72,
+      }));
+      expect(e.hasDeparture, isTrue);
+      expect(e.departureAt!.toUtc().hour, 16);
+      expect(e.meetingPoint!.label, 'Posto Simon');
+      expect(e.meetingMapsUrl, contains('-29.31,-49.72'));
+    });
+
+    test('nome sem coordenada não vira ponto de encontro', () {
+      // "Ver no mapa" precisa de lugar; só o nome não serve.
+      final e = EventModel.fromMap(linha({'meeting_label': 'Posto Simon'}));
+      expect(e.meetingPoint, isNull);
+    });
+
+    test('só o horário já conta como saída', () {
+      final e = EventModel.fromMap(
+          linha({'departure_at': '2026-09-20T16:30:00Z'}));
+      expect(e.hasDeparture, isTrue);
+    });
+
+    test('copyWith leva a saída junto', () {
+      final e = EventModel.fromMap(linha({
+        'departure_at': '2026-09-20T16:30:00Z',
+        'meeting_lat': -29.31,
+        'meeting_lng': -49.72,
+      }));
+      final depois = e.copyWith(isInterested: true);
+      expect(depois.departureAt, isNotNull);
+      expect(depois.meetingPoint, isNotNull);
+    });
+  });
+
+  group('EventDeparture.toDb', () {
+    test('grava as cinco colunas', () {
+      final m = EventDeparture(
+        at: DateTime.utc(2026, 9, 20, 16, 30),
+        meetingPoint: const LocationModel(
+            lat: -29.31, lng: -49.72, label: 'Posto Simon', address: 'BR-101'),
+      ).toDb();
+      expect(m['meeting_label'], 'Posto Simon');
+      expect(m['meeting_lat'], -29.31);
+      expect(m['departure_at'], isNotNull);
+    });
+
+    test('vazia manda null explícito — é assim que a edição apaga', () {
+      final m = const EventDeparture().toDb();
+      expect(m.length, 5);
+      expect(m.values.every((v) => v == null), isTrue);
     });
   });
 }

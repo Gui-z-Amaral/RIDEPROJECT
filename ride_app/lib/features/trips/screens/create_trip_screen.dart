@@ -726,8 +726,12 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         VisibilitySwitch(
           isPublic: vm.isPublic,
           onChanged: vm.setIsPublic,
-          publicHint: 'Aparece na busca e qualquer pessoa pode abrir o link',
-          privateHint: 'Só você, quem for convidado e o motoclube',
+          publicHint: vm.clubId != null
+              ? 'Quem visitar o motoclube vê, mesmo sem ser membro'
+              : 'Qualquer pessoa pode abrir o link',
+          privateHint: vm.clubId != null
+              ? 'Só membros do motoclube e quem for convidado'
+              : 'Só você e quem for convidado',
         ),
         const SizedBox(height: 24),
 

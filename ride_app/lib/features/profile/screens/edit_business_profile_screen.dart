@@ -10,6 +10,7 @@ import '../../../core/utils/storage_utils.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../viewmodels/profile_viewmodel.dart';
+import '../../../core/constants/text_limits.dart';
 
 class EditBusinessProfileScreen extends StatefulWidget {
   const EditBusinessProfileScreen({super.key});
@@ -247,7 +248,9 @@ class _EditBusinessProfileScreenState extends State<EditBusinessProfileScreen> {
                   // ── Razão social ──────────────────────────────
                   const _FieldLabel('RAZÃO SOCIAL OU NOME FANTASIA'),
                   _InputField(
-                      controller: _nameCtrl, hint: 'Nome da sua empresa'),
+                      controller: _nameCtrl,
+                      hint: 'Nome da sua empresa',
+                      maxLength: TextLimits.negocio),
                   const SizedBox(height: 20),
 
                   // ── Descrição ─────────────────────────────────
@@ -260,6 +263,7 @@ class _EditBusinessProfileScreenState extends State<EditBusinessProfileScreen> {
                     child: TextField(
                       controller: _descCtrl,
                       maxLines: 5,
+                      maxLength: TextLimits.negocioDesc,
                       style: AppTextStyles.bodyMedium,
                       decoration: InputDecoration(
                         hintText: 'Conte sobre seu negócio...',
@@ -474,11 +478,13 @@ class _InputField extends StatelessWidget {
   final String hint;
   final TextInputType? keyboardType;
   final List<TextInputFormatter>? inputFormatters;
+  final int? maxLength;
   const _InputField({
     required this.controller,
     required this.hint,
     this.keyboardType,
     this.inputFormatters,
+    this.maxLength,
   });
 
   @override
@@ -489,6 +495,9 @@ class _InputField extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: TextField(
+        maxLength: maxLength,
+        buildCounter: (_, {required currentLength, required isFocused, maxLength}) =>
+            null,
         controller: controller,
         keyboardType: keyboardType,
         inputFormatters: inputFormatters,

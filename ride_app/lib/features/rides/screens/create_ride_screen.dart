@@ -8,13 +8,10 @@ import '../../../shared/widgets/app_button.dart';
 import '../../../core/models/location_model.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/services/geocoding_service.dart';
-import '../../../core/services/supabase_notification_service.dart';
-import '../../../core/services/supabase_ride_service.dart';
 import '../../../core/utils/extensions.dart';
 import '../viewmodels/ride_viewmodel.dart';
 import '../../social/viewmodels/social_viewmodel.dart';
 import '../../active_session/viewmodels/active_session_viewmodel.dart';
-import '../../auth/viewmodels/auth_viewmodel.dart';
 
 class CreateRideScreen extends StatefulWidget {
   const CreateRideScreen({super.key});
@@ -88,44 +85,13 @@ class _CreateRideScreenState extends State<CreateRideScreen> {
 
   Future<void> _finish() async {
     final vm = context.read<RideViewModel>();
-    // Captura os IDs dos convidados antes do saveRide (que reseta o form).
-    final invitedIds = vm.participants.map((u) => u.id).toList();
-    final placeName = vm.title;
 
     final ride = await vm.saveRide();
     if (!mounted) return;
     if (ride != null) {
-      // Garante que os amigos estão em ride_participants e dispara
-      // notificações (mesma sequência usada no active_map_screen).
-      // createRide tenta inserir o batch mas cai num try/catch silencioso
-      // se o RLS bloquear — por isso chamamos inviteParticipants (RPC com
-      // SECURITY DEFINER) e sendInviteNotifications aqui.
-      if (invitedIds.isNotEmpty) {
-        final creatorName =
-            context.read<AuthViewModel>().user?.name ?? 'Alguém';
-        try {
-          await SupabaseRideService.inviteParticipants(ride.id, invitedIds);
-        } catch (e) {
-          debugPrint('[CreateRideScreen] inviteParticipants falhou: $e');
-        }
-        try {
-          await SupabaseNotificationService.sendInviteNotifications(
-            userIds: invitedIds,
-            type: 'ride_invite',
-            title: 'Convite para rolê',
-            body: '$creatorName te convidou para um rolê em "$placeName"',
-            data: {
-              'rideId': ride.id,
-              'place': placeName,
-              'address': ride.meetingPoint.address,
-              'lat': ride.meetingPoint.lat,
-              'lng': ride.meetingPoint.lng,
-            },
-          );
-        } catch (e) {
-          debugPrint('[CreateRideScreen] sendInviteNotifications falhou: $e');
-        }
-      }
+      // Os convidados já entraram em ride_participants dentro do createRide,
+      // e cada linha `waiting` dispara o aviso no banco (migration 044). Antes
+      // esta tela repetia o convite por RPC e gravava a notificação ela mesma.
 
       if (!mounted) return;
       context.read<ActiveSessionViewModel>().startSession(

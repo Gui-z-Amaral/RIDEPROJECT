@@ -272,6 +272,7 @@ final router = GoRouter(
         return MapSelectScreen(
           title: extra?['title'] ?? 'Selecionar local',
           onSelected: extra?['onSelected'],
+          initialQuery: extra?['initialQuery'] as String?,
         );
       },
     ),

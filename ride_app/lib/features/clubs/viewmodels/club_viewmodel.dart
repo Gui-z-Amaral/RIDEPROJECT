@@ -6,6 +6,7 @@ import '../../../core/models/trip_model.dart';
 import '../../../core/services/supabase_club_service.dart';
 import '../../../core/services/supabase_event_service.dart';
 import '../../../core/services/supabase_trip_service.dart';
+import '../../../core/utils/db_errors.dart';
 
 class ClubViewModel extends ChangeNotifier {
   // Aba Clubes
@@ -158,6 +159,10 @@ class ClubViewModel extends ChangeNotifier {
   /// ou rede. A mensagem crua do banco não vai — ela descreve tabela e coluna.
   @visibleForTesting
   static String mensagemDeErro(Object e) {
+    // Regra de texto do banco (migration 045) vem antes: ela diz exatamente o
+    // que corrigir, e o código genérico não.
+    final texto = DbErrors.textoInvalido(e);
+    if (texto != null) return texto;
     if (e is PostgrestException) {
       final code = e.code;
       if (code == '42501') {
@@ -313,7 +318,8 @@ class ClubViewModel extends ChangeNotifier {
       return club;
     } catch (e) {
       debugPrint('❌ ClubViewModel.create: $e');
-      _saveError = 'Não foi possível criar o motoclube. Tente novamente.';
+      _saveError = DbErrors.mensagem(e,
+          fallback: 'Não foi possível criar o motoclube. Tente novamente.');
       _isSaving = false;
       notifyListeners();
       return null;

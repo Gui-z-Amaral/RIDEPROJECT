@@ -25,6 +25,19 @@ extension DateTimeExt on DateTime {
 }
 
 extension StringExt on String {
+  /// Texto de busca seguro para entrar num filtro `.or('col.ilike.%$q%')`.
+  ///
+  /// Dentro do `.or()` do PostgREST, vírgula, parêntese, aspas e dois-pontos
+  /// são sintaxe: buscar "Silva, João" quebrava a consulta, e um texto montado
+  /// de propósito acrescentava condições ao filtro. `%` e `*` são curinga do
+  /// ilike. Tudo isso sai; o limite de 50 evita busca gigante.
+  String get paraBusca {
+    final limpo = replaceAll(RegExp(r'[,()"\\:%*]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    return limpo.length > 50 ? limpo.substring(0, 50).trim() : limpo;
+  }
+
   String get capitalize =>
       isEmpty ? '' : '${this[0].toUpperCase()}${substring(1)}';
 

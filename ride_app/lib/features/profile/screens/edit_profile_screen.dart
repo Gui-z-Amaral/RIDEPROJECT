@@ -8,6 +8,7 @@ import '../../../theme/app_text_styles.dart';
 import '../viewmodels/profile_viewmodel.dart';
 import '../../../core/utils/extensions.dart';
 import '../../../core/utils/storage_utils.dart';
+import '../../../core/constants/text_limits.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -252,7 +253,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
                   // ── Nome ──────────────────────────────────────
                   _FieldLabel('NOME'),
-                  _InputField(controller: _nameCtrl, hint: 'Seu nome'),
+                  _InputField(
+                      controller: _nameCtrl,
+                      hint: 'Seu nome',
+                      maxLength: TextLimits.nome),
                   const SizedBox(height: 20),
 
                   // ── Biografia ─────────────────────────────────
@@ -265,6 +269,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     child: TextField(
                       controller: _bioCtrl,
                       maxLines: 5,
+                      maxLength: TextLimits.bio,
                       style: AppTextStyles.bodyMedium,
                       decoration: InputDecoration(
                         hintText: 'Conte sobre você...',
@@ -281,7 +286,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   _FieldLabel('CIDADE E ESTADO QUE RESIDE'),
                   _InputField(
                       controller: _cityCtrl,
-                      hint: 'Ex: Florianópolis, SC'),
+                      hint: 'Ex: Florianópolis, SC',
+                      maxLength: TextLimits.cidade),
                   const SizedBox(height: 28),
 
                   // ── Preferências ──────────────────────────────
@@ -395,7 +401,9 @@ class _FieldLabel extends StatelessWidget {
 class _InputField extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
-  const _InputField({required this.controller, required this.hint});
+  final int? maxLength;
+  const _InputField(
+      {required this.controller, required this.hint, this.maxLength});
 
   @override
   Widget build(BuildContext context) {
@@ -405,6 +413,9 @@ class _InputField extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: TextField(
+        maxLength: maxLength,
+        buildCounter: (_, {required currentLength, required isFocused, maxLength}) =>
+            null,
         controller: controller,
         style: AppTextStyles.bodyMedium,
         decoration: InputDecoration(

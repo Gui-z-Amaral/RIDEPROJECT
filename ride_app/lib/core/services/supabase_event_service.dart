@@ -1,9 +1,28 @@
+import '../models/location_model.dart';
 import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/event_model.dart';
 import '../models/user_model.dart';
 import '../utils/storage_utils.dart';
 import '../utils/db_time.dart';
+import '../utils/extensions.dart';
+
+/// Saída de um evento de motoclube: horário e ponto de encontro
+/// (migration 046). Um par, porque sempre se grava junto.
+class EventDeparture {
+  final DateTime? at;
+  final LocationModel? meetingPoint;
+  const EventDeparture({this.at, this.meetingPoint});
+
+  /// As cinco colunas, com null explícito: é assim que a edição apaga.
+  Map<String, dynamic> toDb() => {
+        'departure_at': at == null ? null : DbTime.toDb(at!),
+        'meeting_label': meetingPoint?.label,
+        'meeting_address': meetingPoint?.address,
+        'meeting_lat': meetingPoint?.lat,
+        'meeting_lng': meetingPoint?.lng,
+      };
+}
 
 class SupabaseEventService {
   static SupabaseClient get _db => Supabase.instance.client;
@@ -36,11 +55,13 @@ class SupabaseEventService {
     /// Marcado na tela de criação. Antes vinha do motoclube por trigger — o
     /// trigger foi removido na 034, então o valor enviado aqui é o que vale.
     bool isPublic = true,
+    EventDeparture? saida,
     List<EventScheduleItem> schedule = const [],
     List<EventSponsor> sponsors = const [],
     List<String> participantIds = const [],
   }) async {
     final row = await _db.from('events').insert({
+      if (saida != null) ...saida.toDb(),
       'creator_id': _uid,
       'title': title,
       'description': description,
@@ -79,6 +100,10 @@ class SupabaseEventService {
     String? city,
     DateTime? startsAt,
     DateTime? endsAt,
+    bool? isPublic,
+    /// Quando vem, grava a saída INTEIRA — inclusive nulos, que é como se
+    /// apaga o ponto de encontro. Ausente = não mexe.
+    EventDeparture? saida,
     List<EventScheduleItem>? schedule,
     List<EventSponsor>? sponsors,
     List<String>? participantIds,
@@ -86,6 +111,10 @@ class SupabaseEventService {
     bool notifyInterested = false,
   }) async {
     final updates = <String, dynamic>{};
+    // Antes a edição não mandava a visibilidade: o interruptor aparecia na
+    // tela e o que se escolhia ali era ignorado.
+    if (isPublic != null) updates['is_public'] = isPublic;
+    if (saida != null) updates.addAll(saida.toDb());
     if (title != null) updates['title'] = title;
     if (description != null) updates['description'] = description;
     if (bannerUrl != null) updates['banner_url'] = bannerUrl;
@@ -108,51 +137,23 @@ class SupabaseEventService {
     }
 
     if (notifyInterested) {
-      await _notifyInterestedOfUpdate(eventId, title);
+      await _notifyInterestedOfUpdate(eventId);
     }
     return getEventById(eventId);
   }
 
-  /// Notifica (best-effort) todos que marcaram interesse de que o evento foi
-  /// alterado. Não notifica o próprio criador.
-  static Future<void> _notifyInterestedOfUpdate(
-      String eventId, String? title) async {
+  /// Avisa (best-effort) quem marcou interesse que o evento mudou.
+  ///
+  /// Quem grava a notificação é o banco (migration 044): a função confere se
+  /// quem chama pode editar o evento e monta o texto com o título atual. O app
+  /// não grava mais em `notifications` — era o que deixava qualquer conta
+  /// mandar push com qualquer texto.
+  static Future<void> _notifyInterestedOfUpdate(String eventId) async {
     try {
-      final rows = await _db
-          .from('event_interests')
-          .select('user_id')
-          .eq('event_id', eventId);
-      final userIds = (rows as List)
-          .map((r) => r['user_id'] as String)
-          .where((id) => id != _uid)
-          .toList();
-      if (userIds.isEmpty) return;
-
-      // Busca o título atual caso não tenha sido passado.
-      var eventTitle = title;
-      if (eventTitle == null) {
-        final e = await _db
-            .from('events')
-            .select('title')
-            .eq('id', eventId)
-            .maybeSingle();
-        eventTitle = e?['title'] as String? ?? 'um evento';
-      }
-
-      await _db.from('notifications').insert(
-            userIds
-                .map((uid) => {
-                      'user_id': uid,
-                      'type': 'event_update',
-                      'title': 'Evento atualizado',
-                      'body':
-                          'O evento "$eventTitle" que você tem interesse foi atualizado.',
-                      'data': {'eventId': eventId},
-                    })
-                .toList(),
-          );
+      await _db.rpc('notificar_interessados_evento',
+          params: {'p_event': eventId});
     } catch (_) {
-      // best-effort: não derruba a edição se a notificação falhar
+      // best-effort: não derruba a edição se o aviso falhar
     }
   }
 
@@ -213,8 +214,10 @@ class SupabaseEventService {
         .from('events')
         .select(_select)
         .eq('state_uf', uf)
-        // is_public: eventos públicos (empresa/pessoal sempre; clube só se o
-        // dono marcou "eventos públicos"). Privados de clube ficam no mural.
+        // A aba Eventos é a vitrine de empresas e prefeituras. Evento de
+        // motoclube mora só na página do clube — público ou privado — e não
+        // se mistura aqui.
+        .isFilter('club_id', null)
         .eq('is_public', true)
         .gte('starts_at', DbTime.nowForDb())
         .order('starts_at', ascending: true)
@@ -225,12 +228,17 @@ class SupabaseEventService {
   // ── Busca de eventos (pela busca global) ───────────────────
   static Future<List<EventModel>> searchEvents(String query,
       {int limit = 20}) async {
-    final q = query.trim();
+    final q = query.paraBusca;
     if (q.isEmpty) return [];
     final rows = await _db
         .from('events')
         .select(_select)
         .or('title.ilike.%$q%,description.ilike.%$q%,city.ilike.%$q%,location_label.ilike.%$q%')
+        // Mesma regra da aba Eventos: evento de motoclube fica só na página do
+        // clube. Sem o filtro de clube, a RLS ainda deixava o MEMBRO ver o
+        // evento privado do próprio clube no meio da busca geral.
+        .isFilter('club_id', null)
+        .eq('is_public', true)
         .gte('starts_at', DbTime.nowForDb())
         .order('starts_at', ascending: true)
         .limit(limit);
@@ -404,7 +412,7 @@ class SupabaseEventService {
 
   /// Usuários cadastrados pra buscar como participantes extras.
   static Future<List<UserModel>> searchUsers(String query) async {
-    final q = query.trim();
+    final q = query.paraBusca;
     if (q.isEmpty) return [];
     final rows = await _db
         .from('profiles')

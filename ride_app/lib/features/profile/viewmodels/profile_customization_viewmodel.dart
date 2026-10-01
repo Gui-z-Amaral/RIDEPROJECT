@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../../core/models/profile_customization.dart';
 import '../../../core/services/supabase_profile_customization_service.dart';
+import '../../../core/utils/db_errors.dart';
 
 /// Personalização visual do PRÓPRIO usuário (banner, moldura, cores).
 /// Compartilhado entre a tela de perfil e a de Configurações > Aparência,
@@ -41,7 +42,8 @@ class ProfileCustomizationViewModel extends ChangeNotifier {
       return true;
     } catch (e) {
       debugPrint('❌ ProfileCustomizationViewModel.save: $e');
-      _saveError = 'Não foi possível salvar. Tente novamente.';
+      _saveError = DbErrors.mensagem(e,
+          fallback: 'Não foi possível salvar. Tente novamente.');
       _isSaving = false;
       notifyListeners();
       return false;

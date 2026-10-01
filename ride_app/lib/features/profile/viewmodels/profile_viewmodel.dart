@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/services/supabase_auth_service.dart';
 import '../../../core/services/supabase_rider_service.dart';
+import '../../../core/utils/db_errors.dart';
 
 class ProfileViewModel extends ChangeNotifier {
   // Sentinel para distinguir "não alterar" vs "setar para null" em updates.
@@ -90,9 +91,10 @@ class ProfileViewModel extends ChangeNotifier {
     } catch (e) {
       debugPrint('❌ ProfileViewModel.updateProfile: $e');
       final msg = e.toString();
-      _saveError = msg.contains('network') || msg.contains('SocketException')
-          ? 'Sem conexão. Verifique sua internet e tente novamente.'
-          : 'Não foi possível salvar. Tente novamente.';
+      _saveError = DbErrors.textoInvalido(e) ??
+          (msg.contains('network') || msg.contains('SocketException')
+              ? 'Sem conexão. Verifique sua internet e tente novamente.'
+              : 'Não foi possível salvar. Tente novamente.');
     }
 
     _isSaving = false;

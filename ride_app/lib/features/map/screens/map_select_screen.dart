@@ -34,7 +34,12 @@ class MapSelectScreen extends StatefulWidget {
   final String title;
   final void Function(LocationModel)? onSelected;
 
-  const MapSelectScreen({super.key, required this.title, this.onSelected});
+  /// Busca que já abre digitada — ex.: o ponto de encontro que a pessoa
+  /// escreveu na descrição do evento. Ela só confirma o lugar certo.
+  final String? initialQuery;
+
+  const MapSelectScreen(
+      {super.key, required this.title, this.onSelected, this.initialQuery});
 
   @override
   State<MapSelectScreen> createState() => _MapSelectScreenState();
@@ -57,6 +62,15 @@ class _MapSelectScreenState extends State<MapSelectScreen> {
   void initState() {
     super.initState();
     _fetchLocation();
+    final q = widget.initialQuery?.trim();
+    if (q != null && q.isNotEmpty) {
+      _searchCtrl.text = q;
+      // Depois do primeiro quadro: a busca chama setState, e dentro do
+      // initState isso seria setState durante o build.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _onSearchChanged(q);
+      });
+    }
   }
 
   Future<void> _fetchLocation() async {
