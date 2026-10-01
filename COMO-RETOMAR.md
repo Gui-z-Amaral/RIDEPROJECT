@@ -5,7 +5,7 @@ cada coisa e como subir tudo de novo.
 
 **Prazo de guarda dos dados pessoais: até 01/04/2027.** Se o app não voltar
 até lá, os dados dos usuários precisam ser apagados (ver "Apagar de vez").
-Contato informado aos usuários: contato@rideapp.com
+Contato informado aos usuários: comercial@rideapp.cloud
 
 ---
 
